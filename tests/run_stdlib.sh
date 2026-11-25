@@ -40,11 +40,13 @@ for arg in "$@"; do
     --add) add=--add ;;
   esac
 done
+# TEQ_CASES names the programs of the run alone (tests/support/cases.sh): its line says so, no list is written
+. tests/support/cases.sh
+cases_filter_begin stdlib tests/cases TEQ_CASES "$@"
 pass=0
 fail=0
 passing=""
-for src in tests/cases/*.scala tests/cases/*/; do
-  src=${src%/}
+for src in $(case_sources tests/cases TEQ_CASES); do
   name=$(basename "$src" .scala)
   expected="tests/cases/$name.expected"
   [ -f "$expected" ] || continue
@@ -99,4 +101,12 @@ awk 'FILENAME == ARGV[1] { d[$1]; next }
   { print }' "$out/summaries-differ.txt" "$out/results.txt" > "$out/results.judged"
 echo "stdlib: $(grep -c '^pass ' "$out/results.judged") passed, $(grep -c '^fail ' "$out/results.judged") failed$([ -z "$nojar" ] || echo ", $(grep -c '^skip ' "$out/results.judged") not run")"
 # The run held to the list of the programs expected to fail (tests/support/pending.py).
+if [ -n "$CASES_FILTERED" ]; then
+  held=$(python3 tests/support/pending.py stdlib "$out/results.judged" --partial)
+  code=$?
+  cases_judged "$out/results.judged" || code=1
+  printf '%s\n' "$held" | sed '$d'
+  cases_line "$(printf '%s\n' "$held" | tail -1)"
+  exit $code
+fi
 python3 tests/support/pending.py stdlib "$out/results.judged" $update $add

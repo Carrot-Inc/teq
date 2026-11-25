@@ -47,6 +47,9 @@ for arg in "$@"; do
   esac
 done
 suite=$(basename "$dir")
+# TEQ_CASES names the programs of the run alone (tests/support/cases.sh): its line says so, no list is written
+. tests/support/cases.sh
+cases_filter_begin "$suite" "$dir" TEQ_CASES "$@"
 [ "$dir" = tests/cases ] || out=$out-$suite
 mkdir -p "$out"
 : > "$out/results.txt"
@@ -54,8 +57,7 @@ declare -A listed
 while IFS=$'\t' read -r listed_name _; do [ -n "$listed_name" ] && listed[$listed_name]=1; done < <(cat "tests/pending/$suite.txt" 2> /dev/null)
 pass=0
 fail=0
-for src in "$dir"/*.scala "$dir"/*/; do
-  src=${src%/}
+for src in $(case_sources "$dir" TEQ_CASES); do
   name=$(basename "$src" .scala)
   expected="$dir/$name.expected"
   if [ "$dir" != tests/cases ] && [ ! -f "$expected" ]; then
@@ -116,4 +118,12 @@ echo "$pass passed, $fail failed"
 # A machine without python3 (the floor's container of bench/cross-ship.sh) names TEQ_TEST_PENDING=later: the one
 # that started it holds $out/results.txt to the list.
 [ "${TEQ_TEST_PENDING:-}" != later ] || exit 0
+if [ -n "$CASES_FILTERED" ]; then
+  held=$(python3 tests/support/pending.py "$suite" "$out/results.txt" --partial)
+  code=$?
+  cases_judged "$out/results.txt" || code=1
+  printf '%s\n' "$held" | sed '$d'
+  cases_line "$(printf '%s\n' "$held" | tail -1)"
+  exit $code
+fi
 python3 tests/support/pending.py "$suite" "$out/results.txt" $update $add

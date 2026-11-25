@@ -88,6 +88,12 @@ while read -r name cmd; do
   [ -n "$name" ] || continue
   started=$(now)
   log=$gate/${name//\//of}.log
+  # a run over named programs alone (tests/support/cases.sh's TEQ_CASES, TEQ_ERRORS) is never a gate's line
+  if [ -n "${TEQ_CASES:-}${TEQ_ERRORS:-}" ]; then
+    echo "FAIL: a filter of the programs is set in this machine's environment (${TEQ_CASES:+TEQ_CASES=$TEQ_CASES }${TEQ_ERRORS:+TEQ_ERRORS=$TEQ_ERRORS}): a gate's line runs its suite whole" > $log
+    step $name 1 $started $log
+    continue
+  fi
   if [ "$name" = cargo-test ] && ! wait $test_build; then
     cp $gate/cargo-test.build.log $log
     step $name 1 $started $log

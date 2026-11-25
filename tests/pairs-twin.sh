@@ -27,6 +27,11 @@ for arg in "$@"; do
     --add) add=--add ;;
   esac
 done
+# TEQ_CASES names cases alone (tests/support/cases.sh), the helper's --only: the line says so, no list is written
+. tests/support/cases.sh
+cases_filter_begin pairs-twin tests/cases TEQ_CASES "$@"
+only=()
+[ -z "$CASES_FILTERED" ] || only=(--only "$(for n in $TEQ_CASES; do printf 'cases/%s,' "$n"; done | sed 's/,$//')")
 if [ ! -f "$SL" ]; then
   echo "skip: scala-library 3.8.4 is not in the coursier cache"
   echo "pairs-twin: 0 passed, 0 failed, $(python3 -c 'import sys; sys.path.insert(0, "tests/support"); import pairs_programs as pp; print(len(list(pp.case_programs(".", ["js", "jvm"]))))') not run"
@@ -34,8 +39,16 @@ if [ ! -f "$SL" ]; then
 fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/teq-pairs-twin.XXXXXX") || exit 2
 trap 'rm -rf "${out:?}"' EXIT
-python3 tests/support/pairs_twin.py --head "$TEQ" --out "$out/builds" --cases --sl "$SL" --results "$out/results.txt" --discard --jobs "${JOBS:-4}" > "$out/twin.txt"
+python3 tests/support/pairs_twin.py --head "$TEQ" --out "$out/builds" --cases "${only[@]}" --sl "$SL" --results "$out/results.txt" --discard --jobs "${JOBS:-4}" > "$out/twin.txt"
 code=$?
 [ $code -ne 2 ] && [ -s "$out/results.txt" ] || { cat "$out/twin.txt"; echo "pairs-twin: the twin held nothing (exit $code)"; exit 2; }
 tail -n 1 "$out/twin.txt"
+if [ -n "$CASES_FILTERED" ]; then
+  held=$(python3 tests/support/pending.py pairs-twin "$out/results.txt" --partial)
+  code=$?
+  cases_judged "$out/results.txt" || code=1
+  printf '%s\n' "$held" | sed '$d'
+  cases_line "$(printf '%s\n' "$held" | tail -1)"
+  exit $code
+fi
 python3 tests/support/pending.py pairs-twin "$out/results.txt" $update $add

@@ -42,6 +42,10 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+# TEQ_ERRORS names the programs of the run alone (tests/support/cases.sh): its line says so, no list is written,
+# and --write, which writes their expectations, is refused with --update and --add
+. tests/support/cases.sh
+cases_filter_begin errors tests/errors TEQ_ERRORS $update $add ${write_base:+--write}
 python3 tests/support/expects.py test || fail=1
 python3 tests/support/rewording.py test || fail=1
 # run_program <teq> <records>: the program at $src under <teq>, its exit and output to <records>/<name>.out ($out,
@@ -77,8 +81,7 @@ declare -A listed
 while IFS=$'\t' read -r listed_name _; do [ -n "$listed_name" ] && listed[$listed_name]=1; done < <(cat tests/pending/errors.txt 2> /dev/null)
 # said <line>: a failure's line, unless the program is on the list
 said() { [ -n "${listed[$name]:-}" ] || echo "$1"; }
-for src in tests/errors/*.scala tests/errors/*/; do
-  src=${src%/}
+for src in $(case_sources tests/errors TEQ_ERRORS); do
   name=$(basename "$src" .scala)
   why=
   run_program "$TEQ" "$records"
@@ -156,7 +159,13 @@ if [ -n "$write_base" ]; then
   exit $?
 fi
 # The programs held to the list of those expected to fail.
-python3 tests/support/pending.py errors "$records/results.txt" $update $add || fail=1
+python3 tests/support/pending.py errors "$records/results.txt" ${CASES_FILTERED:+--partial} $update $add || fail=1
+cases_judged "$records/results.txt" || fail=1
+if [ -n "$CASES_FILTERED" ]; then
+  cases_skipped "the warnings' suites (unused imports and kinds, matches, the policy, workers' diagnostics, the source version)"
+  if [ $fail = 0 ]; then cases_line "error tests passed"; else cases_line "error tests failed"; fi
+  exit $fail
+fi
 # The unused-import warning against scalac's on dotty's corpus and the probes (its own script).
 unused=$(./tests/warnings/unused-imports.sh 2>&1)
 [ $? -ne 0 ] && fail=1

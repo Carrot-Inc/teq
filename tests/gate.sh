@@ -479,6 +479,12 @@ local_line() {
   local file=$out/local.results s code side
   selected "$1" || return 0
   s=$(now)
+  # a run over named programs alone (tests/support/cases.sh's TEQ_CASES, TEQ_ERRORS) is never a gate's line
+  if [ -n "${TEQ_CASES:-}${TEQ_ERRORS:-}" ]; then
+    echo "FAIL: a filter of the programs is set in the gate's environment (${TEQ_CASES:+TEQ_CASES=$TEQ_CASES }${TEQ_ERRORS:+TEQ_ERRORS=$TEQ_ERRORS}): a gate's line runs its suite whole" > "$out/$1.filter.log"
+    result "$1" local 0 1 "$(cat "$out/$1.filter.log")" "$file"
+    return 0
+  fi
   case $1 in
     records)
       # every project's record against master's committed one, independently of any run

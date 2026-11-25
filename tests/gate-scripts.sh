@@ -1231,6 +1231,19 @@ check "driver: a machine naming a kind is dealt by that kind's rows and never bu
 check "driver: a named kind without a line's row is charged its row of eight over the kind's speed, never 120" "$log" eval '[ $code = 0 ] &&
   row fold m1 "$log" | grep -q " ok " && row planted m2 "$log" | grep -q " ok "'
 git -C "$landing" reset -q --hard "$base"
+# A run over named programs alone (tests/support/cases.sh's TEQ_CASES, TEQ_ERRORS) is never a gate's line: a dealt
+# line on a machine whose environment sets one reads red with the filter named, and so does a local line under a
+# gate whose own environment sets one.
+GATE_ENV_m1="export TEQ_CASES=x" gate "$work/driver-filter.log" "$(printf 'm1 free')" --only fold
+code=$?
+log=$work/driver-filter.log
+check "driver: a dealt line on a machine whose environment sets TEQ_CASES reads red, the filter named" "$log" eval '[ $code != 0 ] &&
+  row fold m1 "$log" | grep -q " FAIL .*a filter of the programs is set in this machine.s environment (TEQ_CASES=x )"'
+TEQ_ERRORS=y gate "$work/driver-filter-local.log" "$(printf 'm1 free')" --only tree-paths
+code=$?
+log=$work/driver-filter-local.log
+check "driver: a local line under a gate whose environment sets TEQ_ERRORS reads red, the filter named" "$log" eval '[ $code != 0 ] &&
+  row tree-paths local "$log" | grep -q "a filter of the programs is set in the gate.s environment (TEQ_ERRORS=y)"'
 fi
 if piece_has driver-off; then
 piece_ran driver-off
@@ -2537,6 +2550,109 @@ mkdir -p "$oc/allsh/tests" && cp tests/all.sh tests/gate.sh "$oc/allsh/tests/"
 code=$?
 check "outcomes: all.sh given only a name it refuses runs no suite and fails, the name said" "$oc/allsh.log" eval '[ $code = 1 ] &&
   [ "$(cat "$oc/allsh.log")" = "FAIL  cases.1/2: cases runs whole, in no pieces" ] && [ ! -s "$oc/allsh/out/all/times.txt" ]'
+# A run over named programs alone (tests/support/cases.sh): the filter's programs in their order, a name of no
+# program an error before anything runs, --update refused, the run's line saying the filter and its count, and a
+# named program the suite's own rules leave out said on that line and failing it. Over a planted directory, then the cases suite over one case of the tree (its outputs apart), and each of the seven runners
+# wired to it.
+fd=$work/filter
+mkdir -p "$fd/d/c3" && touch "$fd/d/a.scala" "$fd/d/b.scala" "$fd/d/a.expected"
+( . tests/support/cases.sh
+  echo "all $(case_sources "$fd/d" TEQ_CASES | sed 's|.*/||' | tr '\n' ' ')"
+  TEQ_CASES='c3 b' cases_filter_begin cases "$fd/d" TEQ_CASES; TEQ_CASES='c3 b'
+  echo "named $(case_sources "$fd/d" TEQ_CASES | sed 's|.*/||' | tr '\n' ' ')"
+  cases_line "1 passed, 0 failed" ) > "$fd/sources.log" 2>&1
+(. tests/support/cases.sh; TEQ_CASES='b nosuch'; cases_filter_begin cases "$fd/d" TEQ_CASES; echo ran) > "$fd/nosuch.log" 2>&1
+nosuch=$?
+(. tests/support/cases.sh; TEQ_CASES=b; cases_filter_begin cases "$fd/d" TEQ_CASES --update; echo ran) > "$fd/update.log" 2>&1
+refused=$?
+printf 'pass b\n' > "$fd/results-one"; printf 'pass b\nskip d/c3\tnot run\n' > "$fd/results-both"
+( . tests/support/cases.sh; TEQ_CASES='c3 b'; cases_filter_begin stdlib "$fd/d" TEQ_CASES
+  cases_judged "$fd/results-one"; echo "judged $?"; cases_line "1 passed, 0 failed"
+  CASES_UNJUDGED=; cases_judged "$fd/results-both"; echo "judged $?"; cases_line "1 passed, 0 failed" ) > "$fd/judged.log" 2>&1
+check "outcomes: a filter of the programs takes its names alone, in the glob's order, its line saying the filter and the count" "$fd/sources.log" eval '
+  [ "$(sed -n 1p "$fd/sources.log")" = "all a.scala b.scala c3 " ] && [ "$(sed -n 2p "$fd/sources.log")" = "named b.scala c3 " ] &&
+  [ "$(sed -n 3p "$fd/sources.log")" = "cases: 2 of 3 by TEQ_CASES: 1 passed, 0 failed" ]'
+check "outcomes: a filter's name that names no program is an error before anything runs; --update under a filter is refused" "$fd/nosuch.log" eval '
+  [ $nosuch = 2 ] && [ "$(cat "$fd/nosuch.log")" = "cases: TEQ_CASES names no program of $fd/d: nosuch" ] &&
+  [ $refused = 2 ] && grep -q -x "cases: --update refused under TEQ_CASES: a filtered run writes no list" "$fd/update.log"'
+check "outcomes: a named program a suite takes no test of (its own rules) is said on its line and fails it, a skip being a test" "$fd/judged.log" eval '
+  [ "$(cat "$fd/judged.log")" = "$(printf "judged 1\nstdlib: 2 of 3 by TEQ_CASES, this suite taking no test of c3: 1 passed, 0 failed\njudged 0\nstdlib: 2 of 3 by TEQ_CASES: 1 passed, 0 failed")" ] &&
+  [ -z "$(for f in run.sh run_interp.sh run_jvm.sh run_stdlib.sh run_errors.sh pairs-twin.sh; do grep -q "^ *cases_judged " "tests/$f" || echo "$f"; done)" ] &&
+  grep -q "^ *cases_judged <(.*split_programs" tests/split.sh'
+one=$(awk -F'\t' '$2 == "pass" { print $1 }' tests/board/suites/cases.tsv | while read -r n; do [ -f "tests/cases/$n.scala" ] && ! grep -q -E '^// (jars|os):' "tests/cases/$n.scala" && { echo "$n"; break; }; done)
+TEQ_TEST_OUT=$fd/out TEQ_CASES=$one timeout 120 tests/run.sh > "$fd/run.log" 2>&1
+code=$?
+TEQ_TEST_OUT=$fd/out TEQ_CASES="$one nosuch_case" timeout 60 tests/run.sh > "$fd/run-nosuch.log" 2>&1
+code2=$?
+check "outcomes: the cases suite over one named case: its line says the filter and its count, and a mistyped name fails it" "$fd/run.log" eval '[ $code = 0 ] &&
+  tail -1 "$fd/run.log" | grep -q "^cases: 1 of [0-9]* by TEQ_CASES: cases: 1 pass, " && [ $code2 = 2 ] && grep -q "names no program of tests/cases: nosuch_case" "$fd/run-nosuch.log"'
+unwired=$(for f in run.sh run_interp.sh run_jvm.sh run_stdlib.sh split.sh run_errors.sh pairs-twin.sh; do
+  grep -q '^\. tests/support/cases.sh$' "tests/$f" && grep -q 'cases_filter_begin ' "tests/$f" && grep -q 'case_sources tests/\(cases\|errors\)\|cases_line ' "tests/$f" || echo "$f"; done)
+check "outcomes: the seven runners over tests/cases and tests/errors take the filter (tests/support/cases.sh)" /dev/null [ -z "$unwired" ]
+# tests/new-cases.sh --plan over planted histories: a change adding a case each suite kind reaches (a plain case, an
+# *export* case, a case of tasty-exec's closure, a case whose JVM row passes, an errors program, a module), a case
+# the JVM's platform keeps from split (its own rule) and a file of tests/cases no suite takes, and the line naming all
+# fifteen suites; the same change run over stand-ins of the suites (one red, one reading its stdin); and a change
+# adding nothing any suite takes, every one not reached by its rule.
+nc=$work/newcases
+mkdir -p "$nc/tests/support" "$nc/tests/board/suites" "$nc/tests/pending" "$nc/tests/tasty/exec" "$nc/tests/cases" "$nc/tests/errors" "$nc/tests/modules" "$nc/tests/interop"
+cp tests/new-cases.sh "$nc/tests/" && cp tests/support/new_cases.py tests/support/board_names.py tests/support/pairs_programs.py "$nc/tests/support/"
+: > "$nc/tests/pending/cases.txt"; : > "$nc/tests/pending/modules.txt"; echo in_closure > "$nc/tests/tasty/exec/closure.txt"
+printf '@main def m() = println(1)\n' > "$nc/tests/cases/old.scala"; echo 1 > "$nc/tests/cases/old.expected"; touch "$nc/tests/interop/.keep" "$nc/tests/errors/.keep" "$nc/tests/modules/.keep"
+rows() { for l in cases interp jvm stdlib interop errors modules pairs-twin; do printf '# test\tverdict\tthe other ways\tthe first line of the difference\n' > "$nc/tests/board/suites/$l.tsv"; done
+  for n in "$@"; do for l in cases interp stdlib; do printf '%s\tpass\t-\t\n' "${n#*:}" >> "$nc/tests/board/suites/$l.tsv"; done
+    printf '%s\tpass\t-\t\n' "${n#*:}" >> "$nc/tests/board/suites/jvm.tsv"; printf 'cases/%s\tpass\t-\t\n' "${n#*:}" >> "$nc/tests/board/suites/pairs-twin.tsv"; done; }
+rows old
+(cd "$nc" && git init -q && git add -A && git -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m base)
+for n in plain foo_export in_closure on_jvm; do printf '@main def m() = println(2)\n' > "$nc/tests/cases/$n.scala"; echo 2 > "$nc/tests/cases/$n.expected"; done
+sed -i '1i //> using platform jvm' "$nc/tests/cases/on_jvm.scala"; echo loose > "$nc/tests/cases/loose.txt"
+printf 'object E { val x: Int = "" }\n' > "$nc/tests/errors/e_new.scala"; mkdir -p "$nc/tests/modules/m_new"; printf 'object M\n' > "$nc/tests/modules/m_new/a.scala"
+rows old plain foo_export in_closure on_jvm
+printf 'e_new\tpass\t-\t\n' >> "$nc/tests/board/suites/errors.tsv"; printf 'm_new\tpass\t-\t\n' >> "$nc/tests/board/suites/modules.tsv"
+(cd "$nc" && git add -A && git -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m cases)
+(cd "$nc" && timeout 120 bash tests/new-cases.sh HEAD~1 --plan) > "$nc/plan.log" 2>&1
+code=$?
+check "outcomes: new-cases.sh's plan routes a part's new programs to every suite that makes tests of them, its last line naming all fifteen" "$nc/plan.log" eval '[ $code = 0 ] &&
+  grep -q -x "new-cases: new programs over HEAD~1: 4 cases, 1 errors programs, 1 modules" "$nc/plan.log" &&
+  grep -q -x "board rows: every list over the tree.s programs has their rows" "$nc/plan.log" &&
+  ( for s in cases interp jvm jvm-21 stdlib; do grep -q -x "$s: would run named: foo_export in_closure on_jvm plain" "$nc/plan.log" || exit 1; done ) &&
+  grep -q -x "split: would run named: foo_export in_closure plain" "$nc/plan.log" && ! grep -q loose "$nc/plan.log" &&
+  grep -q -x "errors: would run named: e_new" "$nc/plan.log" && grep -q -x "modules: would run named: m_new" "$nc/plan.log" &&
+  grep -q -x "pairs-twin: would run named: cases/foo_export,cases/in_closure,cases/on_jvm,cases/plain" "$nc/plan.log" &&
+  grep -q -x "tasty-exec: would run named: in_closure" "$nc/plan.log" &&
+  ( for s in workers split-watch jvm-watch analysis-bytes; do grep -q -x "$s: would run whole" "$nc/plan.log" || exit 1; done ) &&
+  grep -q -x "cargo-test: not reached (it reads the whole tree whatever is new: the gate runs it)" "$nc/plan.log" &&
+  tail -1 "$nc/plan.log" | grep -q -x "new-cases: would run 14: cases interp jvm jvm-21 stdlib split errors pairs-twin modules tasty-exec workers split-watch jvm-watch analysis-bytes; not reached by rule 1: cargo-test (.*)"'
+# The run over stand-ins: each suite's command, its variable and arguments, logged; red, jvm-watch's line followed by
+# a failure, workers' by a bound's kill (124), and analysis-bytes' run that printed nothing; the cases suite's reading
+# its stdin (the plan is never a suite's input).
+printf '%s\n' '#!/bin/bash' 'echo "${0##*/} TEQ_CASES=${TEQ_CASES:-} TEQ_ERRORS=${TEQ_ERRORS:-}: $*" >> "$NC_STUBS"' \
+  '[ "${0##*/}" != run.sh ] || cat >> "$NC_STUBS.stdin"' '[ "${0##*/}" = analysis-bytes.sh ] || echo "stand-in ${0##*/}: its line"' \
+  '[ "${0##*/}" != workers.sh ] || exit 124' '[ "${0##*/}" != jvm-watch.sh ]' > "$nc/stub"
+chmod +x "$nc/stub"
+for s in run.sh run_interp.sh run_jvm.sh run_stdlib.sh split.sh run_errors.sh pairs-twin.sh modules.sh workers.sh split-watch.sh jvm-watch.sh analysis-bytes.sh; do
+  cp "$nc/stub" "$nc/tests/$s"; done
+cp "$nc/stub" "$nc/teq"; : > "$nc/stubs.log"; : > "$nc/stubs.log.stdin"
+(cd "$nc" && NC_STUBS=$nc/stubs.log timeout 120 bash tests/new-cases.sh HEAD~1) > "$nc/run.log" 2>&1
+code=$?
+check "outcomes: new-cases.sh runs each suite the plan reaches on its names, never on its stdin, a red one failing it and named last" "$nc/run.log" eval '[ $code = 1 ] &&
+  [ "$(grep -c -x "[a-z0-9-]*: stand-in [a-z_.-]*: its line" "$nc/run.log")" = 11 ] &&
+  grep -q -x "jvm-watch: stand-in jvm-watch.sh: its line (exit 1)" "$nc/run.log" && grep -q -x "workers: stand-in workers.sh: its line (exit 124)" "$nc/run.log" &&
+  grep -q -x "analysis-bytes: no line of its own" "$nc/run.log" && [ ! -s "$nc/stubs.log.stdin" ] &&
+  [ "$(printf "%s\n" "run.sh TEQ_CASES=foo_export in_closure on_jvm plain TEQ_ERRORS=: " "run_interp.sh TEQ_CASES=foo_export in_closure on_jvm plain TEQ_ERRORS=: " \
+    "run_jvm.sh TEQ_CASES=foo_export in_closure on_jvm plain TEQ_ERRORS=: " "run_jvm.sh TEQ_CASES=foo_export in_closure on_jvm plain TEQ_ERRORS=: --java-output-version=21" \
+    "run_stdlib.sh TEQ_CASES=foo_export in_closure on_jvm plain TEQ_ERRORS=: " "split.sh TEQ_CASES=foo_export in_closure plain TEQ_ERRORS=: " \
+    "run_errors.sh TEQ_CASES= TEQ_ERRORS=e_new: " "pairs-twin.sh TEQ_CASES=foo_export in_closure on_jvm plain TEQ_ERRORS=: " "modules.sh TEQ_CASES= TEQ_ERRORS=: m_new" \
+    "teq TEQ_CASES= TEQ_ERRORS=: interp tests/tasty-exec.scala -- in_closure" "workers.sh TEQ_CASES= TEQ_ERRORS=: " "split-watch.sh TEQ_CASES= TEQ_ERRORS=: " \
+    "jvm-watch.sh TEQ_CASES= TEQ_ERRORS=: " "analysis-bytes.sh TEQ_CASES= TEQ_ERRORS=: ")" = "$(cat "$nc/stubs.log")" ] &&
+  tail -1 "$nc/run.log" | grep -q -x "new-cases: ran 14: cases interp jvm jvm-21 stdlib split errors pairs-twin modules tasty-exec workers split-watch jvm-watch analysis-bytes; not reached by rule 1: cargo-test (.*); red: workers jvm-watch analysis-bytes"'
+mkdir -p "$nc/tests/fixtures" && echo x > "$nc/tests/fixtures/x.txt"
+(cd "$nc" && git add -A && git -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m fixture)
+(cd "$nc" && timeout 120 bash tests/new-cases.sh HEAD~1 --plan) > "$nc/none.log" 2>&1
+code=$?
+check "outcomes: new-cases.sh over a change adding no program a suite takes: all fifteen not reached, each by its rule" "$nc/none.log" eval '[ $code = 0 ] &&
+  grep -q -x "new-cases: new programs over HEAD~1: 0 cases, 0 errors programs, 0 modules" "$nc/none.log" &&
+  [ "$(grep -c ": not reached (" "$nc/none.log")" = 15 ] && tail -1 "$nc/none.log" | grep -q "^new-cases: would run 0: none; not reached by rule 15: cases (no new case);"'
 # a project's test the oracle's run ignored: not run, no pass
 printf '{}\n' > "$oc/r/bench/probe/pin.json"
 printf '{"cases_count":2,"modules":{"probe.js":{"cases":{"Success":["p.Ran.a"],"Ignored":["p.Unrun.b"]}}}}\n' > "$oc/r/bench/probe/tests.json"
@@ -2622,7 +2738,7 @@ code=$?
 check "outcomes: a fails-only entry leaves its list by a line naming it passing" "$oc/pending.log" eval '[ $code = 0 ] && [ ! -s "$oc/r/tests/pending/e.txt" ]'
 # the stdlib suite without the jar: every case cannot run on the board under --update, no earlier pass kept
 st=$oc/st; mkdir -p "$st/tests/support" "$st/tests/cases" "$st/tests/pending" "$st/tests/board/suites"
-cp tests/run_stdlib.sh "$st/tests/" && cp tests/support/jars.sh tests/support/pending.py "$st/tests/support/"
+cp tests/run_stdlib.sh "$st/tests/" && cp tests/support/jars.sh tests/support/pending.py tests/support/cases.sh "$st/tests/support/"
 printf '@main def m() = println(1)\n' > "$st/tests/cases/one.scala"; printf '1\n' > "$st/tests/cases/one.expected"; : > "$st/tests/stdlib-summaries.txt"
 printf '# test\tverdict\tthe other ways\tthe first line of the difference\none\tpass\t-\t\n' > "$st/tests/board/suites/stdlib.tsv"
 (cd "$st" && COURSIER_CACHE=$oc/empty-cache timeout 120 bash tests/run_stdlib.sh --update) > "$oc/stdlib.log" 2>&1

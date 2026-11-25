@@ -48,6 +48,9 @@ for arg in "$@"; do
     --add) add=--add ;;
   esac
 done
+# TEQ_CASES names the cases of the run alone (tests/support/cases.sh): its line says so, no list is written
+. tests/support/cases.sh
+cases_filter_begin interp tests/cases TEQ_CASES "$@"
 out=out/interp-tests
 rm -rf "$out"
 mkdir -p "$out"
@@ -134,7 +137,7 @@ run_one() {
 export -f run_one
 export TEQ
 
-for src in tests/cases/*.scala tests/cases/*/; do echo "${src%/}"; done | xargs -P "$JOBS" -I{} bash -c 'run_one {}'
+case_sources tests/cases TEQ_CASES | xargs -P "$JOBS" -I{} bash -c 'run_one {}'
 
 cat "$out"/*.result | sort > "$out/results.txt"
 status=0
@@ -163,7 +166,9 @@ awk 'FILENAME == ARGV[1] { os[$1]; next } FILENAME == ARGV[2] { nojar[$1]; next 
   $1 == "skip" { print "skip " $2 "\tits expectation is Scala.js'"'"'s"; next }
   $1 == "pass" { print "pass " $2; next }
   { print "fail " $2 "\t" $1 }' "$out/otheros.txt" "$out/nojar.txt" "$out/otherstd.txt" "$out/results.txt" > "$out/pending.txt"
-python3 tests/support/pending.py interp "$out/pending.txt" $update $add || status=1
+python3 tests/support/pending.py interp "$out/pending.txt" ${CASES_FILTERED:+--partial} $update $add || status=1
+cases_judged "$out/pending.txt" || status=1
+if [ -z "$CASES_FILTERED" ]; then
 exit_out=$(timeout 30 "$TEQ" interp tests/cases/sys_exit_status.scala -- exit 2> "$out/sys_exit_status.exit.err")
 exit_code=$?
 if [ $exit_code != 2 ] || [ "$exit_out" != "before the exit" ] || [ "$(cat "$out/sys_exit_status.exit.err")" != "usage: sys_exit_status" ]; then
@@ -256,6 +261,9 @@ for src in tests/using/*.scala; do
     status=1
   fi
 done
+else
+  cases_skipped "sys_exit_status's exit, the cases run again with input and signals, tests/using"
+fi
 count() { grep -c "^$1 " "$out/results.txt"; }
-echo "$(count pass) passed, $(count unsupported) unsupported, $(count compile) compile, $(count exception) exception, $(count output) output, $(count timeout) timeout, $(count skip) skipped"
+cases_line "$(count pass) passed, $(count unsupported) unsupported, $(count compile) compile, $(count exception) exception, $(count output) output, $(count timeout) timeout, $(count skip) skipped"
 exit $status

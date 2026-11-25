@@ -71,8 +71,19 @@ for arg in "$@"; do
   case $arg in --update | --add) pending_args+=("$arg") ;; *) plain_args+=("$arg") ;; esac
 done
 set -- "${plain_args[@]}"
+case ${1:-} in --piece | --pieces) [ -z "${TEQ_CASES:-}" ] || { echo "split: TEQ_CASES and $1 refused together"; exit 2; } ;; esac
 ! pieces_option split "$1" "$2" || shift 2
 [ $# = 0 ] || pieces_usage
+# TEQ_CASES names cases of tests/cases alone (tests/support/cases.sh): the run is their units, as a piece is, its
+# line says so and no list is written; never with --piece
+. tests/support/cases.sh
+cases_filter_begin split tests/cases TEQ_CASES "${pending_args[@]}"
+if [ -n "$CASES_FILTERED" ]; then
+  cases_units=" $(for s in $(case_sources tests/cases TEQ_CASES); do unit_of "$s"; echo "$unit"; done | tr '\n' ' ') "
+  piece_has() { [[ $cases_units == *" $1 "* ]]; }
+  piece_holds() { [[ $cases_units == *" $1 "* ]]; }
+  cases_judged <(for s in $(split_programs); do unit_of "$s"; echo "takes $unit"; done)
+fi
 TEQ=${TEQ:-./target/release/teq}
 teq=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
 . tests/support/jars.sh
@@ -83,7 +94,7 @@ pass=0
 fail=0
 . tests/support/pending.sh
 pending_begin split "$so" "${pending_args[@]}"
-[ -z "$PIECE" ] || PENDING_PARTIAL=1
+[ -z "$PIECE$CASES_FILTERED" ] || PENDING_PARTIAL=1
 # The program of tests/split whose checks are running, and each such program's first failure.
 own=
 declare -A own_seen own_failed own_skipped
@@ -844,7 +855,8 @@ for name in "${!own_seen[@]}"; do
   else pending_pass "$name"; fi
 done
 pending_end || fail=$((fail + 1))
-echo "$pass passed, $fail failed$([ $skipped = 0 ] || echo ", $skipped not run")"
+[ -z "$CASES_UNJUDGED" ] || fail=$((fail + 1))
+cases_line "$pass passed, $fail failed$([ $skipped = 0 ] || echo ", $skipped not run")"
 # Whether the modules parse is a verdict of the whole suite's, apart from the counts.
 if [ $parsed = ok ]; then counts="passed=$((pass - 1)) failed=$fail"; else counts="passed=$pass failed=$((fail - 1))"; fi
 [ $skipped = 0 ] || counts="$counts not_run=$skipped"

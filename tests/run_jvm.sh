@@ -83,6 +83,9 @@ for arg in "$@"; do
     --java-output-version=*) VERSION=${arg#*=} ;;
   esac
 done
+# TEQ_CASES names the cases of the run alone (tests/support/cases.sh): its line says so, no list is written
+. tests/support/cases.sh
+cases_filter_begin jvm tests/cases TEQ_CASES "$@"
 [ -n "$VERSION" ] && out=$out-$VERSION
 rm -rf "$out"
 mkdir -p "$out"
@@ -153,7 +156,7 @@ run_one() {
 export -f run_one
 export TEQ VERSION out JDK_MAJOR
 
-for src in tests/cases/*.scala tests/cases/*/; do echo "${src%/}"; done | xargs -P "$JOBS" -I{} bash -c 'run_one {}'
+case_sources tests/cases TEQ_CASES | xargs -P "$JOBS" -I{} bash -c 'run_one {}'
 
 cat "$out"/*.result | sort > "$out/results.txt"
 status=0
@@ -180,7 +183,8 @@ awk 'FILENAME == ARGV[1] { os[$1]; next } FILENAME == ARGV[2] { nojar[$1]; next 
   $1 == "skip" { print "skip " $2 "\tits expectation is Scala.js'"'"'s"; next }
   $1 == "pass" { print "pass " $2; next }
   { print "fail " $2 "\t" $1 }' "$out/otheros.txt" "$out/nojar.txt" "$out/otherstd.txt" "$out/results.txt" > "$out/pending.txt"
-python3 tests/support/pending.py jvm "$out/pending.txt" $update $add || status=1
+python3 tests/support/pending.py jvm "$out/pending.txt" ${CASES_FILTERED:+--partial} $update $add || status=1
+cases_judged "$out/pending.txt" || status=1
 
 # aux_not_run <check> <why>: an auxiliary check below whose prerequisite is absent before anything is tried (a tool
 # or a jar not in the coursier cache): its skip line, which the gate fails, and the count of checks not run; never
@@ -408,7 +412,9 @@ abi_layout() {
   python3 tests/support/pending.py jvm-abi "$out/abi/results.txt" $update $add || fails=1
   return $fails
 }
-if [ -z "$VERSION" ]; then
+if [ -n "$CASES_FILTERED" ]; then
+  cases_skipped "the auxiliary checks (same_jars to abi_layout, jvm-abi's list)"
+elif [ -z "$VERSION" ]; then
   same_jars || status=1
   forwarder_order || status=1
   trait_inits || status=1
@@ -423,5 +429,5 @@ if [ -z "$VERSION" ]; then
   abi_layout || status=1
 fi
 count() { grep -c "^$1 " "$out/results.txt"; }
-echo "$(count pass) passed, $(count backend) backend, $(count compile) compile, $(count verify) verify, $(count exception) exception, $(count output) output, $(count timeout) timeout, $(count nojar) not run for a jar, $aux_not_run checks not run, $(count skip) skipped"
+cases_line "$(count pass) passed, $(count backend) backend, $(count compile) compile, $(count verify) verify, $(count exception) exception, $(count output) output, $(count timeout) timeout, $(count nojar) not run for a jar, $aux_not_run checks not run, $(count skip) skipped"
 exit $status
