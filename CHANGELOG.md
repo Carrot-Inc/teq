@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A value class's `super.equals(x)` is `false` for every argument, as scalac's (Object's equals of a box nothing else
+  holds), where it was `true` for `this` on JavaScript and in the interpreter, and on the JVM from a lambda or a local
+  def.
 - A cycle of singleton types (`val a: b.type = b; val b: a.type = a`, of vals, lazy vals, givens or defs, in an
   object, a class, a trait or a package's top level) is refused as scalac refuses it ("Cyclic reference involving val
   a", at the reference that closes the cycle), where a check, a run or a build of it never ended, an import of the

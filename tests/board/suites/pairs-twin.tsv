@@ -3350,6 +3350,7 @@ cases/value_class_right_assoc_written_object_path	pass	-
 cases/value_class_scala2_library_equality	pass	-	
 cases/value_class_scala2_source_equality	pass	-	
 cases/value_class_signature_only	pass	-	
+cases/value_class_super_equals	pass	-	
 cases/value_class_synthesized_equality	pass	-	
 cases/value_class_synthesized_members	pass	-	
 cases/value_classes	pass	-	

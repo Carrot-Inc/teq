@@ -1402,7 +1402,8 @@ impl<'a> Worker<'a> {
     /// trait the class that mixes the trait in may still have a definition behind it, so the call
     /// is bound there. A value class's members are extension methods over the underlying value,
     /// which no `invokespecial` takes (scalac calls a super accessor on a box it makes): there the
-    /// call stays on `this`.
+    /// call stays on `this`, and `equals` is the argument evaluated, then `false`: Object's
+    /// equals of a box nothing else holds.
     #[cold]
     fn apply_super_any_member(
         &mut self,
@@ -1444,7 +1445,13 @@ impl<'a> Worker<'a> {
             (names::CLONE, []) => helper(self, "$cloneObject($0)", self.b.t_any_ref),
             (names::EQUALS, [list]) if list.args.len() == 1 && list.args[0].ast().is_some() => {
                 let (that, _) = self.type_expr(list.args[0].ast().unwrap(), None);
-                let te = self.prog.add(TExpr::Prim(PrimOp::Same, this, that));
+                let te = if self.syms.class(c).value_class {
+                    let stmts = self.prog.stmts.push_slice(&[TStmt::Expr(that)]);
+                    let no = self.prog.add(TExpr::Bool(false));
+                    self.prog.add(TExpr::Block(stmts, no))
+                } else {
+                    self.prog.add(TExpr::Prim(PrimOp::Same, this, that))
+                };
                 if self.capturing() {
                     self.capture_form(te, Form::SuperOp(name));
                 }

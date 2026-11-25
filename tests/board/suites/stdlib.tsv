@@ -3356,6 +3356,7 @@ value_class_right_assoc_written_object_path	pass	-
 value_class_scala2_library_equality	pass	-	
 value_class_scala2_source_equality	pass	-	
 value_class_signature_only	pass	-	
+value_class_super_equals	pass	-	
 value_class_synthesized_equality	pass	-	
 value_class_synthesized_members	pass	-	
 value_classes	pass	-	

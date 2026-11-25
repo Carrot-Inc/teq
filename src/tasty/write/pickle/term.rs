@@ -1067,6 +1067,14 @@ impl<'w, 'a> P<'w, 'a> {
                 None => self.block(e, stmts, res),
                 Some(Form::Op(n)) => self.builtin_block(e, n, stmts, res),
                 Some(Form::CaseCopy) => self.case_copy(e, stmts, res, recs.targs),
+                // A value class's `super.equals(that)`, the argument then `false`.
+                Some(Form::SuperOp(n)) => match *self.w.prog.stmt_list(stmts) {
+                    [crate::tir::TStmt::Expr(that)] => {
+                        let name = self.name(n);
+                        self.universal(&name, |p| p.super_ref(), &[], &[that])
+                    }
+                    _ => self.fail("a value class's super.equals's shape".to_string()),
+                },
                 // `x.asInstanceOf[Unit]`, the cast's operand then `()`.
                 Some(Form::Cast(t)) => match *self.w.prog.stmt_list(stmts) {
                     [crate::tir::TStmt::Expr(x)] => self.cast_to(t, |p| p.term(x)),
