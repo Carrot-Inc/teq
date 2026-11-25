@@ -557,10 +557,11 @@ impl<'a> Worker<'a> {
         r
     }
 
-    /// `isLateInitialized`: a lazy val, not an object.
-    fn is_late_initialized(&self, s: SymId) -> bool {
+    /// `isLateInitialized`: a lazy val, not an object, nor a given instance without parameters,
+    /// which dotty makes a module (`Parsers.givenDef`'s `ModuleDef`).
+    fn is_late_initialized(&mut self, s: SymId) -> bool {
         let info = self.syms.sym(s);
-        info.mods & mods::LAZY != 0 && !matches!(info.kind, SymKind::Object(_))
+        info.mods & mods::LAZY != 0 && !matches!(info.kind, SymKind::Object(_)) && self.given_object_type(s).is_none()
     }
 
     /// `realizability` of a type (`dealias` first): a path's `TermRef` with its prefix; a

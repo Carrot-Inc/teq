@@ -238,7 +238,7 @@ extension-methods.scala	marks: 4 errors where 5 are marked
 extension-specificity2.scala	check: diagnostic 1 of 1: scalac's is error extension-specificity2.scala:10:3 Found:    (1 : Int); teq's is error extension-specificity2.scala:10:3 ambiguous extension methods: both bla2 and bla1 provide foo on 1
 extensions-can-only-have-defs.scala	check: diagnostic 1 of 1: scalac's is error extensions-can-only-have-defs.scala:3:5 values are not allowed inside extensions; teq's is error extensions-can-only-have-defs.scala:3:5 only defs are allowed in an extension
 extensions-can-only-have-using.scala	marks: 2 errors where 1 are marked: extensions-can-only-have-using.scala:1:19: an extension needs exactly one receiver parameter
-extmethod-overload.scala	marks: 2 errors where 1 are marked: extmethod-overload.scala:11:11: ambiguous extension methods: both a and b provide |+| on Int
+extmethod-overload.scala	check: diagnostic 1 of 1: scalac's is error extmethod-overload.scala:11:11 Found:    (1 : Int); teq's is error extmethod-overload.scala:11:11 ambiguous extension methods: both a and b provide |+| on Int
 extmethod-override.scala	check: diagnostic 1 of 2: scalac's is error extmethod-override.scala:6:35 error overriding method f in class A of type (x: Int)(y: Int): Int;; teq's is error extmethod-override.scala:6:35 method f overrides nothing
 f-interpolator-tests.scala	marks: no error where 2 are marked
 fEscapes.scala	marks: no error where 1 are marked

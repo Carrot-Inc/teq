@@ -4509,7 +4509,13 @@ impl<'a> Worker<'a> {
     /// value's type (`env.api` of an `Env[A]`), as a member selected on a path is.
     pub(super) fn import_entry_ret(&mut self, entry: (SymId, Option<ClassId>, Option<super::ValueImport>)) -> TypeId {
         let (v, module, through) = entry;
-        let ret = self.sig_of(v).ret;
+        // A given instance without parameters is an object (`Parsers.givenDef`'s `ModuleDef`): its
+        // members are its class's, as a selection reads them (`given_object_type`), not only its
+        // declared type's.
+        let ret = match self.given_object_type(v) {
+            Some(class) => class,
+            None => self.sig_of(v).ret,
+        };
         if let Some(prev) = through {
             if !matches!(self.syms.sym(v).kind, SymKind::Object(_)) {
                 let pre = self.import_value_ret(prev);

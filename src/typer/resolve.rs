@@ -350,6 +350,11 @@ impl<'a> Worker<'a> {
         if !matches!(self.syms.sym(s).kind, SymKind::Val | SymKind::Param | SymKind::Given) || self.syms.sym(s).by_name {
             return None;
         }
+        // A given with clauses is no stable path: the ordinary import's statement check refuses
+        // it (`checkLegalImportOrExportPath`), as it refuses a wildcard over it.
+        if self.is_given_with_clauses(s) {
+            return None;
+        }
         // A local object or one nested in a class is imported from as an object is, its types
         // included.
         if self.local_module_of_sym(s).is_some() || self.inner_object_of_sym(s).is_some() {
@@ -1223,7 +1228,8 @@ impl<'a> Worker<'a> {
             _ => return None,
         };
         let info = self.syms.sym(s);
-        let stable = matches!(info.kind, SymKind::Val | SymKind::Param | SymKind::Given) && !info.by_name && info.mods & ast::mods::MUTABLE == 0;
+        // An enum's singleton case is a stable val of the enum's type (`DesugarEnums`' `val A: E`).
+        let stable = matches!(info.kind, SymKind::Val | SymKind::Param | SymKind::Given | SymKind::EnumValue(_)) && !info.by_name && info.mods & ast::mods::MUTABLE == 0;
         let stable = stable || self.is_stable_forwarder(s);
         (stable && !self.is_given_with_clauses(s)).then_some((s, module, None))
     }

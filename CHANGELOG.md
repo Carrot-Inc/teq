@@ -7,6 +7,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- An import in a block that selects on a given with clauses (`given h(using DummyImplicit): AnyRef with ...; import
+  h.{f}`) is refused in scalac's words ("h is not a valid import prefix, since it is not an immutable path"), as one
+  over all its members was, where it was taken and failed at run ("the local h is not in scope").
+- An enum's singleton case is an import's qualifier (`import E.A.given`, `import E.A.f`), as scalac takes it, where it
+  was refused ("A is not an object or a package").
+- An import over a given instance without parameters (`given h: AnyRef with { def f = 3 }`; `import h.*`, `import h.given`,
+  a selection, a renaming, an exclusion, a nested object's path), from the top level, an object, a class's instance, a
+  trait's or a block, brings the members of its class, as an import over an object does, where they were not found
+  ("Not found: f"). Such a given in a class or a trait, with a parent, is a legal path, where it was "not a legal path
+  since it refers to nonfinal given instance h".
 - On the JVM a for comprehension's variable of a value class bound in an alias that a guard follows (`(n, v) = (k,
   new V(7L)); if n > 1` or `v = new V(..); if ...`) is the value scalac reads, where it threw `ClassCastException`
   (`V cannot be cast to class java.lang.Long`).

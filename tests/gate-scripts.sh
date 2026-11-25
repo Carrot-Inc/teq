@@ -2819,6 +2819,11 @@ check "export-given-body: the table's templates" "$work/export-given-body.log" \
 check "pkgobj-given-import: the table's templates and its judge's planted tables judged as they must be" "$work/pkgobj-given-import.log" \
   eval 'python3 tests/support/pkgobj_given_import.py --self-test > "$work/pkgobj-given-import.log" 2>&1'
 
+# The table of an import over a given instance and the other stable values a qualifier names
+# (tests/support/given_instance_import.py, run by tests/support/pkgobj-given-import.sh): its templates.
+check "given-instance-import: the table's templates" "$work/given-instance-import.log" \
+  eval 'python3 tests/support/given_instance_import.py --self-test > "$work/given-instance-import.log" 2>&1'
+
 fi
 echo "gate-scripts: $pass passed, $fail failed"
 pieces_end $((fail > 0)) passed=$pass failed=$fail
