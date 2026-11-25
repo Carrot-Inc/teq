@@ -36,20 +36,13 @@ pub(super) enum ObjectInits {
 }
 
 impl<'a> Gen<'a> {
-    /// Runs a lowering with the writers refusing.
-    /// Writes the body of the method begun as the tree `compose` makes of it: a body the back
-    /// end composes itself, with no typed IR behind it.
-    pub(super) fn body(&mut self, compose: impl FnOnce(&mut Self) -> LirId) {
-        let tree = self.lowering(compose);
-        self.write_body(tree);
-    }
-
     /// The method's parameter at the position, at its declared type.
     pub(super) fn param(&mut self, i: usize) -> LirId {
         let ty = self.m.params[i].1.clone();
         self.lir.push(Kind::Param(i as u32), ty)
     }
 
+    /// Runs a lowering with the writers refusing.
     pub(super) fn lowering<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         let was = self.code.frozen;
         // A lowering the writer starts stands where the writer is: the locals an earlier lowering

@@ -283,32 +283,9 @@ impl<'a> Gen<'a> {
 
     // ---- methods ----
 
-    /// Starts a method of the class being written, by its flags, its name and its signature as
-    /// a class file spells it: `this` in slot 0 unless static, then the parameters. The types
-    /// the code holds its parameters at are not always the signature's: a method that implements
-    /// a class file's holds a value class's underlying value as the erasure marks it
-    /// (`Gen::linked_mref`).
-    ///
-    /// The method joins the class's plan here, unless the class holds one of its name and
-    /// signature already: the first one begun is the class's. A later one's code is written all
-    /// the same and left out at its end (`end_method`).
-    pub fn begin_method(&mut self, flags: MethodFlags, name: &str, desc: &str, this_uninit: bool, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId]) {
-        self.begin_method_at(flags, name, desc, this_uninit, params, ret, roots, MethodSite::default());
-    }
-
-    /// `begin_method` of a method whose definition the writer knows (`MethodSite`).
-    #[allow(clippy::too_many_arguments)]
-    pub fn begin_method_at(&mut self, flags: MethodFlags, name: &str, desc: &str, this_uninit: bool, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId], site: MethodSite) {
-        let method = begun_method_def(flags, name, desc, params, &ret);
-        let m = self.method_cx(&method, site, params, ret, roots);
-        self.lir.clear();
-        self.lower_declared.clear();
-        self.open_method(method, m, this_uninit);
-    }
-
     /// The context a method's code is lowered and written in: its parameters' slots, `this` first unless it is
     /// static, its result, the locals of `roots` that live in cells, and where it is defined. Every method with code
-    /// passes here before its body is lowered, now (`Gen::begin_method_at`) or for a lifted body to be written later
+    /// passes here before its body is lowered, when its member is held (`Gen::held_context`) or for a lifted body to be written later
     /// (`Gen::lower_lifted`), and so passes the class file's gate here.
     fn method_cx(&mut self, method: &MethodDef, site: MethodSite, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId]) -> MethodCx {
         self.check_method(method, &site);
@@ -331,7 +308,13 @@ impl<'a> Gen<'a> {
         m
     }
 
-    /// Starts the code of `method` in the context `m`, its first frame holding `this` and the parameters.
+    /// Starts the code of `method` in the context `m`, its first frame holding `this` and the parameters: `this` in
+    /// slot 0 unless static, then the parameters. The types the code holds its parameters at are not always the
+    /// signature's: a method that implements a class file's holds a value class's underlying value as the erasure marks
+    /// it (`Gen::linked_mref`).
+    ///
+    /// The method joins the class's plan here, unless the class holds one of its name and signature already: the first
+    /// one begun is the class's. A later one's code is written all the same and left out at its end (`end_method`).
     fn open_method(&mut self, method: MethodDef, mut m: MethodCx, this_uninit: bool) {
         let is_static = method.flags.is_static;
         m.repeated = if self.plan.has_method(&method.name, &method.desc) {
@@ -357,7 +340,7 @@ impl<'a> Gen<'a> {
         self.m = m;
     }
 
-    /// The one gate of a method of the class file, whatever writes it (`Gen::begin_method_at`,
+    /// The one gate of a method of the class file, whatever writes it (`Gen::held_context`,
     /// `Gen::abstract_method_at`). Where the site says the method is dotty's (`Dotty::Writes`): dotty's check of its
     /// name and descriptor together where dotty writes no generic signature (BCodeSkelBuilder.scala 748-753; of a
     /// mirror's forwarder, BCodeHelpers.scala 368-372, nothing after the method's own: scalac 3.8.4 gives the one
@@ -417,7 +400,7 @@ impl<'a> Gen<'a> {
 
     /// Ends the method begun: its code goes to the class file under the plan's header. A
     /// method whose code could not be written is none of the class's, and leaves the plan. The
-    /// code of a method the class held already (`begin_method`) is dropped, after it was written
+    /// code of a method the class holds already (`Gen::open_method`'s repeat) is dropped, after it was written
     /// for all that writing it leaves in the class: the constants and the bootstrap methods its
     /// instructions name, the names it takes and the lifted bodies it asks for (a closure's copy, a thunk:
     /// `defer`, the memos of what is lifted), the interfaces its `super` calls go to
@@ -719,8 +702,8 @@ impl<'a> Gen<'a> {
     }
 
     /// A member of the class whose body is the tree `compose` lowers, held and written at once where a writer would
-    /// have begun it: its context made at the class file's gate (`Gen::method_cx`, `site` as `begin_method_at` takes
-    /// it), the tree lowered while no method is open, then opened, written and ended (`Gen::write_held`). `what`
+    /// have begun it: its context made at the class file's gate (`Gen::method_cx`, `site` where the member is
+    /// defined), the tree lowered while no method is open, then opened, written and ended (`Gen::write_held`). `what`
     /// names the member kind in a refusal. The closures and local defs its tree names enter the class's lifted table
     /// as it is held (`Gen::ask_lifted`), in the order the writer meets them.
     #[allow(clippy::too_many_arguments)]
@@ -731,8 +714,7 @@ impl<'a> Gen<'a> {
 
     /// `hold_member`'s first half: the member's plan entry, its context made at the class file's gate and set as the
     /// generator's, the lowering's state cleared. A kind that sets more of the context (the slots of what its method
-    /// is given, a local's cell) does it here, between this and `hold_tree`, where its writer did it after
-    /// `begin_method`.
+    /// is given, a local's cell) does it here, between this and `hold_tree`, before the tree is lowered.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn held_context(&mut self, flags: MethodFlags, name: &str, desc: &str, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId], site: MethodSite) -> MethodDef {
         let method = begun_method_def(flags, name, desc, params, &ret);
@@ -851,16 +833,6 @@ impl<'a> Gen<'a> {
             }
         }
         self.end_method();
-    }
-
-    /// The body in return position, as a loop when the def calls itself in tail position and
-    /// nothing can override it. A def that a closure it makes returns from is dotty's
-    /// `NonLocalReturns.nonLocalReturnTry` tree (`Gen::lower_keyed_body`): the key made first, then
-    /// the loop's head, which stands inside the `try`, as TailRec runs before NonLocalReturns
-    /// (Compiler.scala 122, 127).
-    pub fn method_body(&mut self, sym: SymId, params: &[SymId], body: TExprId) {
-        let body = self.lower_method_body(sym, params, body);
-        self.write_method_body(body);
     }
 
     /// A def's body lowered (`Gen::write_method_body`); the def loops where it calls itself in tail position and
@@ -1494,16 +1466,13 @@ impl<'a> Gen<'a> {
         let ext_desc = method_desc(&ext_types, &m.ret);
         let ext_name = format!("{}$extension", m.name);
         let ext_site = MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_extension(c, fun.sym), ..MethodSite::default() };
-        self.begin_method_at(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &ext_name, &ext_desc, false, &ext_params, m.ret.clone(), &[body], ext_site);
+        let method = self.held_context(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &ext_name, &ext_desc, &ext_params, m.ret.clone(), &[body], ext_site);
         self.m.this_slot = Some(0);
         self.m.this_underlying = Some(u.clone());
-        self.code.line(cx.line_of(info.file, info.span.start));
-        self.method_body(fun.sym, &fun.params, body);
-        self.end_method();
-        self.begin_method_at(MethodFlags::PUBLIC, &m.name, &m.desc, false, params, m.ret.clone(), &[], site);
+        self.hold_def(method, "value class's static extension", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
         let this = self.class_type(c);
         let extension = method_ref(Invoke::Static, &self.this_name.clone(), false, &ext_name, &ext_types, &m.ret);
-        self.body(|g| {
+        self.hold_member(MethodFlags::PUBLIC, &m.name, &m.desc, params, m.ret.clone(), &[], site, "value class box's method", |g| {
             let instance = g.lir.this(this);
             let mut args = vec![g.lower_vc_unbox(c, instance, &u)];
             for i in 0..params.len() {
@@ -1512,7 +1481,6 @@ impl<'a> Gen<'a> {
             let result = g.lir.static_call(&extension, &args);
             g.lir.ret(result)
         });
-        self.end_method();
     }
 
     /// A method of the box of value class `c`, `name(params)`, calling the companion's
@@ -1522,12 +1490,11 @@ impl<'a> Gen<'a> {
         let module: Rc<str> = Rc::from(self.cx.companion_name(c));
         let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|(_, t)| (None, t.clone())).collect();
         let own: Vec<ErasedType> = params.iter().map(|(_, t)| t.clone()).collect();
-        self.begin_method_at(MethodFlags::PUBLIC, name, &method_desc(&own, ret), false, &typed, ret.clone(), &[], site);
         let mut types = vec![u.clone()];
         types.extend(own.iter().cloned());
         let extension = method_ref(Invoke::Virtual, &module, false, target, &types, ret);
         let this = self.class_type(c);
-        self.body(|g| {
+        self.hold_member(MethodFlags::PUBLIC, name, &method_desc(&own, ret), &typed, ret.clone(), &[], site, "value class box's forwarder", |g| {
             let receiver = g.lir.module(&module);
             let instance = g.lir.this(this.clone());
             let mut args = vec![g.lower_value_class(instance, &this, c, EMPTY_LIST, false, &u, None)];
@@ -1537,7 +1504,6 @@ impl<'a> Gen<'a> {
             let result = g.lir.call(&extension, receiver, &args);
             g.lir.ret(result)
         });
-        self.end_method();
     }
 
     /// A member overrides the members of the ancestors that share its name; where the erased

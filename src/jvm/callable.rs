@@ -1247,25 +1247,22 @@ impl<'a> Gen<'a> {
             let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
             if let Some(body) = fun.body {
                 let site = super::classes::MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_extension(c, fun.sym), ..Default::default() };
-                self.begin_method_at(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", m.name), &method_desc(&types, &m.ret), false, &params, m.ret.clone(), &[body], site);
+                let method = self.held_context(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", m.name), &method_desc(&types, &m.ret), &params, m.ret.clone(), &[body], site);
                 self.m.this_slot = Some(1);
                 self.m.this_underlying = Some(u.clone());
-                self.code.line(cx.line_of(info.file, info.span.start));
-                self.method_body(fun.sym, &fun.params, body);
-                self.end_method();
+                self.hold_def(method, "value class's extension method", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
             }
             for (i, d) in fun.own_defaults() {
                 let shape = self.default_getter_shape(fun.sym, i);
                 let (before, ret) = (shape.before, shape.ret.clone());
                 let getter = format!("{}$default${}$extension", self.source_method_name(fun.sym), shape.index);
-                self.begin_method(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &getter, &method_desc(&types[..before + 1], &ret), false, &params[..before + 1], ret.clone(), &[d]);
+                let method = self.held_context(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &getter, &method_desc(&types[..before + 1], &ret), &params[..before + 1], ret.clone(), &[d], super::classes::MethodSite::default());
                 self.m.this_slot = Some(1);
                 self.m.this_underlying = Some(u.clone());
-                self.body(|g| {
+                self.hold_tree(method, "value class extension's default getter", false, |g| {
                     let value = g.lower_default_value(d, shape.by_name, &ret);
                     g.lir.ret(value)
                 });
-                self.end_method();
             }
         }
         // The members scalac synthesizes, `hashCode$extension(u)`, `equals$extension(u, that)` and
@@ -1275,20 +1272,20 @@ impl<'a> Gen<'a> {
             types.extend(params.iter().cloned());
             let typed: Vec<(Option<SymId>, ErasedType)> = types.iter().map(|t| (None, t.clone())).collect();
             self.context = format!("{}.{}$extension", self.this_name, member);
-            self.begin_method(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", member), &method_desc(&types, &ret), false, &typed, ret.clone(), &[]);
-            self.body(|g| g.vc_member_tree(c, member, &u, super::classes::Underlying::Param(0), 1));
-            self.end_method();
+            let flags = MethodFlags { is_final: true, ..MethodFlags::PUBLIC };
+            self.hold_member(flags, &format!("{}$extension", member), &method_desc(&types, &ret), &typed, ret.clone(), &[], super::classes::MethodSite::default(), "value class's extension member", |g| {
+                g.vc_member_tree(c, member, &u, super::classes::Underlying::Param(0), 1)
+            });
         }
         if cx.is_case_class(c) {
             let x = cx.input.syms.class(c).ctor.first().and_then(|cl| cl.params.first()).map(|p| self.sym_type(p.sym)).unwrap_or_else(|| u.clone());
             for (name, params, answered) in [("copy$extension", vec![u.clone(), x.clone()], 1), ("copy$default$1$extension", vec![u.clone()], 0), ("_1$extension", vec![u.clone()], 0)] {
                 let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|t| (None, t.clone())).collect();
-                self.begin_method(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, name, &method_desc(&params, &u), false, &typed, u.clone(), &[]);
-                self.body(|g| {
+                let flags = MethodFlags { is_final: true, ..MethodFlags::PUBLIC };
+                self.hold_member(flags, name, &method_desc(&params, &u), &typed, u.clone(), &[], super::classes::MethodSite::default(), "value class's extension copy", |g| {
                     let value = g.param(answered);
                     g.lir.ret(value)
                 });
-                self.end_method();
             }
         }
         self.drain_pending();
