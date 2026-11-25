@@ -3222,6 +3222,7 @@ cases/type_test_class_pattern	pass	-
 cases/type_test_erased_bound	pass	-	
 cases/type_test_erased_shapes	pass	-	
 cases/type_test_literal_tag	pass	-	
+cases/type_test_local_trait	pass	-	
 cases/type_test_null_guard	pass	-	
 cases/type_test_null_scrutinee	pass	-	
 cases/type_test_null_shapes	pass	-	

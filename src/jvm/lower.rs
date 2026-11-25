@@ -4,7 +4,7 @@
 //! written is the output's bytes.
 
 use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Refusal, Relation, TempId, Unlowered};
-use super::gen::{rank_type, CallRoute, CaptureArgument, ConcatRoute, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
+use super::gen::{rank_type, CallRoute, CaptureArgument, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::names::*;
 use crate::ast::ListRef;
 use crate::classfile::ACC_STATIC;
@@ -115,10 +115,7 @@ impl<'a> Gen<'a> {
             }
         }
         match prog.expr(e) {
-            TExpr::Block(stmts, res) => match self.block_lowers(stmts) {
-                Ok(()) => self.lower_block(stmts, res, want),
-                Err(why) => self.lower_legacy(e, want, why),
-            },
+            TExpr::Block(stmts, res) => self.lower_block(stmts, res, want),
             TExpr::If(c, t, els) => self.lower_if(c, t, els, want),
             TExpr::Match(scrut, cases) => self.lower_match(scrut, cases, Some(want)),
             TExpr::Throw(inner, _) => {
@@ -253,7 +250,7 @@ impl<'a> Gen<'a> {
             TExpr::ClassOf(c, dims) => self.lower_class_of(e, c, dims),
             TExpr::Cast(inner, op, _) => self.lower_cast(inner, op),
             TExpr::ToStr(inner, conv) => self.lower_to_str(inner, conv),
-            TExpr::StrConcat(items) => return self.lower_str_concat(items),
+            TExpr::StrConcat(items) => self.lower_str_concat(items),
             TExpr::This | TExpr::Super(_) => self.lower_instance(),
             TExpr::Static(s) => self.lower_static(s),
             TExpr::Field(r, s) => return self.lower_field_read(r, s),
@@ -525,7 +522,7 @@ impl<'a> Gen<'a> {
             TExpr::Bool(_) => unreachable!("a constant, reduced above"),
             // A block's result is a condition too, at its own place: an inline method's expansion is written whole
             // as a value (`Gen::write_cond`), its result's line entry where `lower_expr` would mark it.
-            TExpr::Block(stmts, res) if self.block_lowers(stmts).is_ok() => {
+            TExpr::Block(stmts, res) => {
                 let nodes = self.lower_block_statements(stmts);
                 let result = self.lower_cond(res);
                 let node = &mut self.lir.nodes[result.0 as usize];
@@ -554,25 +551,23 @@ impl<'a> Gen<'a> {
             TExpr::Prim(..) | TExpr::Unary(..) | TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
             | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::Field(..)
             | TExpr::CallStatic(..) | TExpr::CallMethod(..) | TExpr::CallClosure(..) | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Default(..)
-            | TExpr::Lambda(..) | TExpr::If(..) | TExpr::While(..) | TExpr::Block(..) | TExpr::Assign(..) | TExpr::Match(..)
+            | TExpr::Lambda(..) | TExpr::If(..) | TExpr::While(..) | TExpr::Assign(..) | TExpr::Match(..)
             | TExpr::StrConcat(_) | TExpr::ToStr(..) | TExpr::Js(..) | TExpr::Cast(..) | TExpr::ClassOf(..) | TExpr::SeqLit(_)
             | TExpr::ArrayLit(_) | TExpr::Index(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_)
             | TExpr::Spread(_) | TExpr::Return(_) | TExpr::Throw(..) | TExpr::Try(_) | TExpr::Splice(_) => self.lower_expr(e, &ErasedType::Z),
         }
     }
 
-    /// `inner.isInstanceOf[T]` as a condition: the value in a temporary and its test
-    /// (`Gen::lower_test_on`), or `Kind::Test` where the test is a constant. No cast to the static
-    /// type: `box.fruit.isInstanceOf[Apple]` asks because the static type may be wrong. The tested
-    /// type goes with the test, as a pattern's does: an array's test reads its element there.
+    /// `inner.isInstanceOf[T]`: the value in a temporary and its test (`Gen::lower_test_on`), a constant where
+    /// erasure decides it (`x.isInstanceOf[Matchable]`, a class no program of the build makes), the temporary's
+    /// block then written in a condition as the constant tested (`Gen::write_cond`). No cast to the static type:
+    /// `box.fruit.isInstanceOf[Apple]` asks because the static type may be wrong. The tested type goes with the
+    /// test, as a pattern's does: an array's test reads its element there.
     fn lower_test(&mut self, inner: TExprId, test: TestId, tested: TypeId) -> LirId {
         let object = ErasedType::object();
         let init = self.lower_expr(inner, &object);
         let temp = self.lir.temp();
         let result = self.lower_test_on(temp, &object, test, Some(tested));
-        if let Kind::Bool(_) = self.lir.node(result).kind {
-            return self.lir.push(Kind::Test { value: init, test, tested }, ErasedType::Z);
-        }
         let held = self.lir.push(Kind::Let { temp, init }, ErasedType::V);
         let stmts = self.lir.list(&[held]);
         self.lir.push(Kind::Block { stmts, result }, ErasedType::Z)
@@ -677,19 +672,16 @@ impl<'a> Gen<'a> {
                 let otherwise = Some(self.lower_tail(els));
                 Kind::If { cond, then, otherwise }
             }
-            TExpr::Block(stmts, res) if !boxed_whole => match self.block_lowers(stmts) {
-                Ok(()) => {
-                    let mut nodes = Vec::new();
-                    self.lower_lazy_holders(stmts, &mut nodes);
-                    for &s in &prog.stmts[stmts.range()] {
-                        self.lower_statement(s, &mut nodes);
-                    }
-                    let result = self.lower_tail(res);
-                    let stmts = self.lir.list(&nodes);
-                    Kind::Block { stmts, result }
+            TExpr::Block(stmts, res) if !boxed_whole => {
+                let mut nodes = Vec::new();
+                self.lower_lazy_holders(stmts, &mut nodes);
+                for &s in &prog.stmts[stmts.range()] {
+                    self.lower_statement(s, &mut nodes);
                 }
-                Err(why) => Kind::LegacyTail(e, why),
-            },
+                let result = self.lower_tail(res);
+                let stmts = self.lir.list(&nodes);
+                Kind::Block { stmts, result }
+            }
             TExpr::Match(scrut, cases) if !boxed_whole => {
                 let id = self.lower_match(scrut, cases, None);
                 self.lir.nodes[id.0 as usize].of = Some(e);
@@ -768,7 +760,7 @@ impl<'a> Gen<'a> {
         Kind::SelfTailCall { receiver, args }
     }
 
-    /// A block whose statements are lowered whole (`Gen::block_lowers`), its result at `want`.
+    /// A block, its statements lowered (`Gen::lower_block_statements`), its result at `want`.
     fn lower_block(&mut self, stmts: ListRef, res: TExprId, want: &ErasedType) -> LirId {
         let prog = self.cx.input.prog;
         let nodes = self.lower_block_statements(stmts);
@@ -778,8 +770,7 @@ impl<'a> Gen<'a> {
         self.lir.push(Kind::Block { stmts, result }, want.clone())
     }
 
-    /// The statements of a block the lowering takes whole (`Gen::block_lowers`): the holders of its
-    /// lazy vals, then each statement.
+    /// The statements of a block: the holders of its lazy vals, then each statement.
     fn lower_block_statements(&mut self, stmts: ListRef) -> Vec<LirId> {
         let prog = self.cx.input.prog;
         let mut nodes = Vec::new();
@@ -790,8 +781,8 @@ impl<'a> Gen<'a> {
         nodes
     }
 
-    /// A statement of a block as the nodes it is, in order; a pattern definition is not lowered
-    /// yet (`Gen::block_statements`).
+    /// A statement of a block as the nodes it is, in order; a pattern definition by the branch of dotty's
+    /// `makePatDef` the typer took for it (`PatDefForm`).
     pub(super) fn lower_statement(&mut self, s: TStmt, nodes: &mut Vec<LirId>) {
         let cx = self.cx;
         let prog = cx.input.prog;
@@ -814,9 +805,12 @@ impl<'a> Gen<'a> {
             }
             TStmt::Pat(pat, init, PatDefForm::General) => self.lower_variables_definition(pat, init, false, nodes),
             TStmt::Pat(pat, init, PatDefForm::ForAlias) => self.lower_variables_definition(pat, init, true, nodes),
+            TStmt::Pat(pat, init, PatDefForm::SimpleTuple) if self.xxl_definition_items(pat).is_some() => self.lower_simple_xxl_definition(pat, init, nodes),
             TStmt::Pat(pat, init, PatDefForm::SimpleTuple) => self.lower_simple_tuple_definition(pat, init, nodes),
             TStmt::Pat(pat, init, PatDefForm::MatchableTuple) if self.xxl_definition_items(pat).is_some() => self.lower_xxl_definition(pat, init, nodes),
-            TStmt::Pat(pat, init, _) => self.lower_tuple_definition(pat, init, nodes),
+            TStmt::Pat(pat, init, PatDefForm::MatchableTuple) => self.lower_tuple_definition(pat, init, nodes),
+            // `IdPattern`'s definition is a plain val: the parser gives an identifier alone no pattern (`Parser::parse_val`).
+            TStmt::Pat(_, _, PatDefForm::Id) => unreachable!("an identifier's definition is a plain val (`Parser::parse_val`)"),
         }
     }
 
@@ -992,32 +986,34 @@ impl<'a> Gen<'a> {
     /// `ArraySeq.ofRef` takes an array of references, the std's `ArraySeq` an array of any kind.
     /// Refused where the library has no such class.
     fn lower_seq_literal(&mut self, e: TExprId, items: ListRef) -> LirId {
-        let Some(seq) = self.cx.input.array_seq else { return self.lower_refused(Refusal::VarargsWithoutArraySeq) };
+        if self.cx.input.array_seq.is_none() {
+            return self.lower_refused(Refusal::VarargsWithoutArraySeq);
+        }
+        let elem = self.seq_literal_element(e);
+        let held = if elem.is_ref() { ErasedType::object() } else { elem };
+        let items: Vec<TExprId> = self.cx.input.prog.expr_list(items).to_vec();
+        let values: Vec<LirId> = items.into_iter().map(|item| self.lower_expr(item, &held)).collect();
+        self.lower_varargs_values(&values, &held)
+    }
+
+    /// The argument of a Scala varargs parameter made of `values`, each of the type `held` (`Object` where the
+    /// elements erase to a reference, else their primitive type; an `Int` among `Double`s already brought to
+    /// `Double`, which the typer leaves implicit): the values boxed into an array of references, and the sequence
+    /// class (`cx.input.array_seq`) made over it. The one writer of a varargs argument the lowered path has.
+    pub(super) fn lower_varargs_values(&mut self, values: &[LirId], held: &ErasedType) -> LirId {
+        let seq = self.cx.input.array_seq.expect("a varargs argument where the build has the sequence class (`Gen::lower_seq_literal`)");
         let name = self.class_name(seq);
         let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
-        let elem = self.seq_literal_element(e);
-        let boxed = self.lower_boxed_array(items, &elem);
-        let param = if self.cx.linked_class(seq) { array.clone() } else { ErasedType::object() };
+        let object = ErasedType::object();
+        let boxed: Vec<LirId> = values.iter().map(|&value| self.lower_adapt(value, held, &object)).collect();
+        let items = self.lir.list(&boxed);
+        let boxed = self.lir.push(Kind::ArrayOf { elem: object.clone(), items }, array.clone());
+        let param = if self.cx.linked_class(seq) { array.clone() } else { object };
         let wrapped = self.lower_adapt(boxed, &array, &param);
         let args = self.lir.list(&[wrapped]);
         let desc = method_desc(std::slice::from_ref(&param), &ErasedType::V);
         let ctor = Rc::new(MethodRef { owner: name.clone(), owner_is_interface: false, name: "<init>".to_string(), params: vec![param], ret: ErasedType::V, desc, kind: Invoke::Special });
         self.lir.push(Kind::New { touch: None, ctor, args }, ErasedType::L(name))
-    }
-
-    /// An array of references holding the items boxed, each brought to `elem` first: an `Int`
-    /// where the sequence's elements are `Double`s is a `Double`, which the typer leaves implicit.
-    fn lower_boxed_array(&mut self, items: ListRef, elem: &ErasedType) -> LirId {
-        let object = ErasedType::object();
-        let held = if elem.is_ref() { &object } else { elem };
-        let items: Vec<TExprId> = self.cx.input.prog.expr_list(items).to_vec();
-        let mut lowered = Vec::with_capacity(items.len());
-        for item in items {
-            let value = self.lower_expr(item, held);
-            lowered.push(self.lower_adapt(value, held, &object));
-        }
-        let items = self.lir.list(&lowered);
-        self.lir.push(Kind::ArrayOf { elem: object, items }, ErasedType::L(Rc::from(OBJECT_ARRAY)))
     }
 
     /// A new array of the class `array` holding the items, each at its elements' type.
@@ -1135,15 +1131,11 @@ impl<'a> Gen<'a> {
     }
 
     /// A concatenation, in a block where the head of its chain brings statements: they run
-    /// before the first operand, and their locals end with the concatenation. Not where one of
-    /// them is not lowered yet (`Gen::str_concat`).
-    fn lower_str_concat(&mut self, items: ListRef) -> Result<LirId, Unlowered> {
-        let (statements, operands) = match self.concat_route(items) {
-            ConcatRoute::Lowered(statements, operands) => (statements, operands),
-            ConcatRoute::Statements(why, ..) => return Err(why),
-        };
+    /// before the first operand, and their locals end with the concatenation.
+    fn lower_str_concat(&mut self, items: ListRef) -> LirId {
+        let (statements, operands) = self.concat_route(items);
         if statements.is_empty() {
-            return Ok(self.lower_concat(&operands));
+            return self.lower_concat(&operands);
         }
         let prog = self.cx.input.prog;
         let mut nodes = Vec::new();
@@ -1156,7 +1148,7 @@ impl<'a> Gen<'a> {
         let result = self.lower_concat(&operands);
         let ty = self.lir.ty(result).clone();
         let stmts = self.lir.list(&nodes);
-        Ok(self.lir.push(Kind::Block { stmts, result }, ty))
+        self.lir.push(Kind::Block { stmts, result }, ty)
     }
 
     /// `a + b + c` on strings over the chain's operands (`Gen::concat_route`): a string

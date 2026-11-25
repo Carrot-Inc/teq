@@ -3227,6 +3227,7 @@ type_test_class_pattern	pass	-
 type_test_erased_bound	pass	-	
 type_test_erased_shapes	pass	-	
 type_test_literal_tag	pass	-	
+type_test_local_trait	pass	-	
 type_test_null_guard	pass	-	
 type_test_null_scrutinee	pass	-	
 type_test_null_shapes	pass	-	

@@ -1778,11 +1778,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Whether a val is lazy, which `Gen::local_val` gives a holder.
-    pub(super) fn lazy_val(&self, s: SymId) -> bool {
-        self.cx.input.syms.sym(s).mods & mods::LAZY != 0
-    }
-
     /// How many of the arguments a class passes to the local trait `b` are the values of the
     /// block its body reads, and those values as `$init$` takes them.
     fn trait_init_proxies(&mut self, b: ClassId) -> Option<(usize, Vec<SymId>, Vec<SymId>)> {

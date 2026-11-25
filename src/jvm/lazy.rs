@@ -43,24 +43,6 @@ impl<'a> Gen<'a> {
         ErasedType::L(self.lazy_holder_class(s).0)
     }
 
-    /// `val x$lzyN = new LazyX()`, the local `s` standing for its holder (`Gen::lower_lazy_holder`).
-    pub fn new_lazy_holder(&mut self, s: SymId) {
-        let holder = self.lowering(|g| g.lower_lazy_holder(s));
-        self.write(holder);
-    }
-
-    /// The holders of the lazy vals a statement list declares (`Gen::lower_lazy_holders`).
-    pub fn hoist_lazy_holders(&mut self, stmts: ListRef) {
-        let holders = self.lowering(|g| {
-            let mut nodes = Vec::new();
-            g.lower_lazy_holders(stmts, &mut nodes);
-            nodes
-        });
-        for holder in holders {
-            self.write(holder);
-        }
-    }
-
     /// The class file holding the accessor and the initialiser of the local lazy val `s`, and whether it is an
     /// interface: the class whose code declares the val (`Cx::local_home`), wherever that code is written (a value
     /// class's methods in its companion, a constructor's defaults), or for a file's top-level code that file's module

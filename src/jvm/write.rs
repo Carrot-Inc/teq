@@ -189,7 +189,7 @@ impl<'a> Gen<'a> {
                 self.code.pop();
             }
             // A condition as a value: one or zero by which way it goes.
-            Kind::And(..) | Kind::Or(..) | Kind::Compare { .. } | Kind::Test { .. } => {
+            Kind::And(..) | Kind::Or(..) | Kind::Compare { .. } => {
                 let no = self.code.new_label();
                 let done = self.code.new_label();
                 self.write_cond(id, no, false);
@@ -272,10 +272,6 @@ impl<'a> Gen<'a> {
                     let vt = self.vt(&ty);
                     self.code.push(vt);
                 }
-            }
-            Kind::LegacyTail(e, why) => {
-                self.m.unlowered.push(why);
-                self.tail_legacy(e)
             }
             Kind::FieldStore { receiver, owner, name, value } => {
                 self.write(receiver);
@@ -617,7 +613,7 @@ impl<'a> Gen<'a> {
     /// break or a loop with no condition, nor after a block that ends in one or a conditional whose branches both do.
     fn falls_through(&self, id: LirId) -> bool {
         match &self.lir.node(id).kind {
-            Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::LegacyTail(..) | Kind::Break { .. } | Kind::While { cond: None, .. } => false,
+            Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::Break { .. } | Kind::While { cond: None, .. } => false,
             Kind::Legacy(e, _) => !self.legacy_ends(*e),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| self.falls_through(self.lir.lists[(stmts.start + i) as usize])) && self.falls_through(*result),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.falls_through(*then) || self.falls_through(*otherwise),
@@ -669,7 +665,7 @@ impl<'a> Gen<'a> {
     /// the def's jump back (a match's case at `Unit`) leaves it dead.
     fn completes(&self, id: LirId) -> bool {
         match &self.lir.node(id).kind {
-            Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::LegacyTail(..) => false,
+            Kind::Return(_) | Kind::SelfTailCall { .. } => false,
             Kind::If { then, otherwise: Some(otherwise), .. } => self.completes(*then) || self.completes(*otherwise),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| {
                 let stmt = self.lir.lists[(stmts.start + i) as usize];
@@ -838,14 +834,6 @@ impl<'a> Gen<'a> {
                 }
                 self.code.locals_release(mark);
                 (self.line_floor, self.line_hold) = lines;
-            }
-            Kind::Test { value, test, tested } => {
-                let boxed = self.lir.ty(value).clone();
-                let mark = self.code.locals_mark();
-                self.write(value);
-                let slot = self.store_new(&boxed);
-                self.test(test, slot, &boxed, Some(tested), target, jump_if);
-                self.code.locals_release(mark);
             }
             // The loop's jump (`&&`'s or `||`'s right operand under a `return`) leaves: no branch
             // follows it, and the dead code after it is verified against the operands under it.

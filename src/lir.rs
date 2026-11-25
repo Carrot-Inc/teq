@@ -6,8 +6,8 @@
 //! end generates from the typed IR as it did before (docs/LIR.md).
 
 use crate::source::FileId;
-use crate::tir::{StrRef, TExprId, TestId};
-use crate::types::{ClassId, SymId, TypeId};
+use crate::tir::{StrRef, TExprId};
+use crate::types::{ClassId, SymId};
 use std::rc::Rc;
 
 /// An erased type: a primitive, or a class or interface by its binary name with `/` between
@@ -252,13 +252,10 @@ pub struct Node {
     pub of: Option<TExprId>,
 }
 
-/// Why a form of the typed IR is not lowered yet: what an escape node (`Kind::Legacy`,
-/// `Kind::LegacyTail`) carries, so that the forms the old generator still writes
-/// are this list (docs/LIR.md, "How the extraction goes").
+/// Why a form of the typed IR is not lowered yet: what an escape node (`Kind::Legacy`) carries, so that the forms
+/// the old generator still writes are this list (docs/LIR.md, "How the extraction goes").
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Unlowered {
-    /// `val (a, b) = p`, a definition by a pattern, among a block's statements.
-    PatternDefinition,
     /// `return x` where it is not the def's result: a statement, an operand, inside a `try`.
     ReturnInValuePosition,
     /// `return x` inside a lambda, which leaves the def around it by a throw.
@@ -331,12 +328,6 @@ pub enum Kind {
     Or(LirId, LirId),
     /// A boolean: the relation between two operands.
     Compare { relation: Relation, how: Comparing, left: LirId, right: LirId },
-    /// A boolean: a type test of the program that erasure makes constant (`x.isInstanceOf[Matchable]`,
-    /// a class no program of the build makes), on a reference, written by `Gen::test`, which folds
-    /// it. Transitional: a block in a condition whose result is a constant is written as the
-    /// constant tested (`Gen::write_cond`), which this test's temporary in a block would be; it
-    /// ends when the two take one form.
-    Test { value: LirId, test: TestId, tested: TypeId },
     /// The runtime's helper applied: the arguments are evaluated in order, then the helper's
     /// object, which is not an operand.
     Helper { method: Rc<MethodRef>, args: List },
@@ -356,9 +347,6 @@ pub enum Kind {
     /// it: the node's type is the one its place wants, the operands under it dropped; as a
     /// condition (`&&`'s or `||`'s right operand) nothing tests it.
     SelfTailCall { receiver: Option<LirId>, args: List },
-    /// A block not lowered, in return position, and why: the generator of the typed IR writes it,
-    /// each of its results returned. Transitional.
-    LegacyTail(TExprId, Unlowered),
     /// A field of an instance assigned.
     FieldStore { receiver: LirId, owner: Rc<str>, name: Rc<str>, value: LirId },
     /// A class's static field read.
@@ -609,7 +597,7 @@ impl Kind {
     /// (`Body::typed_ir_left`). Every kind is listed, so that a new one is classified.
     fn leaves_typed_ir(&self) -> bool {
         match self {
-            Kind::Legacy(..) | Kind::LegacyTail(..) | Kind::Test { .. } => true,
+            Kind::Legacy(..) => true,
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => false,
             Kind::Local(_) | Kind::Param(_) | Kind::Block { .. } | Kind::Val { .. } | Kind::Assign { .. } | Kind::Module(_) | Kind::ClassOf(_) | Kind::This => false,
             Kind::Field { .. } | Kind::Binary { .. } | Kind::Neg(_) | Kind::Not(_) | Kind::And(..) | Kind::Or(..) | Kind::Compare { .. } => false,
@@ -722,7 +710,7 @@ impl Body {
     pub fn operands(&self, id: LirId) -> Vec<LirId> {
         let mut out = Vec::new();
         match &self.node(id).kind {
-            Kind::Legacy(..) | Kind::LegacyTail(..) => {}
+            Kind::Legacy(..) => {}
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => {}
             Kind::Local(_) | Kind::Param(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This | Kind::StaticField { .. } => {}
             Kind::ReturnKey | Kind::LazyKey(_) | Kind::GivenInstance(_) | Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
@@ -731,7 +719,7 @@ impl Body {
                 out.push(*result);
             }
             Kind::Val { init: value, .. } | Kind::Assign { value, .. } | Kind::StaticFieldStore { value, .. } | Kind::Let { init: value, .. } | Kind::SetTemp { value, .. } => out.push(*value),
-            Kind::Field { receiver: value, .. } | Kind::Neg(value) | Kind::Not(value) | Kind::Test { value, .. } | Kind::Throw(value) | Kind::Return(value) => out.push(*value),
+            Kind::Field { receiver: value, .. } | Kind::Neg(value) | Kind::Not(value) | Kind::Throw(value) | Kind::Return(value) => out.push(*value),
             Kind::Underlying { value, .. } | Kind::Typed(value) | Kind::ArrayLength(value) | Kind::ArrayClone(value) | Kind::NewArray { length: value } => out.push(*value),
             Kind::Cast { value, .. } | Kind::StringOf { value } | Kind::Adapt { value, .. } | Kind::Is { value, .. } => out.push(*value),
             Kind::LazyCas { object, expected, new, .. } => out.extend([*object, *expected, *new]),
@@ -780,7 +768,7 @@ impl Body {
     pub fn holds_return(&self, id: LirId, escaped: &dyn Fn(TExprId) -> bool) -> bool {
         match &self.node(id).kind {
             Kind::Return(_) => true,
-            Kind::Legacy(e, _) | Kind::LegacyTail(e, _) => escaped(*e),
+            Kind::Legacy(e, _) => escaped(*e),
             _ => self.operands(id).into_iter().any(|o| self.holds_return(o, escaped)),
         }
     }
@@ -805,7 +793,7 @@ impl Body {
 
     /// Whether the node's code holds an escape node, whose typed IR the tree does not see into.
     pub fn holds_escape(&self, id: LirId) -> bool {
-        matches!(self.node(id).kind, Kind::Legacy(..) | Kind::LegacyTail(..)) || self.operands(id).into_iter().any(|o| self.holds_escape(o))
+        matches!(self.node(id).kind, Kind::Legacy(..)) || self.operands(id).into_iter().any(|o| self.holds_escape(o))
     }
 }
 

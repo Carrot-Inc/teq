@@ -3,8 +3,7 @@
 //! nested `if`s.
 
 use crate::lir::{Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LabelId, LirId, MethodRef, Relation, TempId};
-use super::classfile::*;
-use super::gen::Gen;
+use super::gen::{Gen, MAX_TUPLE_ARITY};
 use super::names::*;
 use crate::ast::ListRef;
 use crate::tir::*;
@@ -21,36 +20,6 @@ impl<'a> Gen<'a> {
             (crate::types::Type::Union(a, b, _), false) | (crate::types::Type::Inter(a, b), true) => (Some(a), Some(b)),
             _ => (tested, tested),
         }
-    }
-
-    /// The tests and the bindings of a pattern definition's pattern over the value in `slot`,
-    /// leaving through `fail`, as the lowering makes them (`Gen::lower_pattern`), the slot read as a
-    /// temporary and `fail` the end of a labelled block. Transitional:
-    /// the failure stands before the tests (`Gen::block_statements`), which no labelled block
-    /// says; it ends when the failure follows the tests, a change of the class files of its own.
-    pub(super) fn definition_pattern(&mut self, pat: TPatId, slot: u16, ty: &ErasedType, fail: Label) {
-        let temp = self.lir.temp();
-        self.m.temps.insert(temp, slot);
-        let label = self.lir.label();
-        self.m.labels.insert(label, fail);
-        let nodes = self.lowering(|g| {
-            let mut nodes = Vec::new();
-            g.lower_pattern(pat, temp, ty, label, &mut nodes);
-            nodes
-        });
-        for node in nodes {
-            self.write(node);
-        }
-    }
-
-    /// Jumps to `target` when the test of the reference in `slot` comes out as `jump_if`: the
-    /// test as the lowering makes it (`Gen::lower_test_on`), the slot read as a temporary of the
-    /// lowering.
-    pub fn test(&mut self, test: TestId, slot: u16, ty: &ErasedType, tested: Option<crate::types::TypeId>, target: Label, jump_if: bool) {
-        let temp = self.lir.temp();
-        self.m.temps.insert(temp, slot);
-        let passes = self.lowering(|g| g.lower_test_on(temp, ty, test, tested));
-        self.write_cond(passes, target, jump_if)
     }
 
     /// The condition that the reference in `temp`, of the type `ty`, passes the test `test` of the
@@ -396,47 +365,58 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// A pattern definition `Gen::lowered_tuple_definition` takes, as scalac writes it (dotty's
-    /// `makePatDef`, `MatchableTuple`, `Desugar.scala` 1568-1605 and 1622-1671 at 3.8.4, `val $1 =
-    /// init match { case $t @ (x1, .., xn) => $t }` then `val xi = $1._i`): `val $1`'s slot first, the scrutinee
-    /// held, a labelled block left where it is null, each element read into the pattern's own
-    /// binder, the scrutinee the value of the labelled match, its `MatchError` after; then `$1`,
-    /// and each variable read from it.
+    /// A pattern definition of `makePatDef`'s `MatchableTuple` (the typer's form, `Ast::patdef_tuple`), as scalac
+    /// writes it (`Desugar.scala` 1568-1605 and 1622-1671 at 3.8.4, `val $1 = init match { case $t @ (x1, .., xn) =>
+    /// $t }` then `val xi = $1._i`): `val $1`'s slot first, the scrutinee
+    /// held, a labelled block left where it is null (or, where the right side's static type does not prove the
+    /// tuple's class, where it is not one, the value cast into a temporary), each element read into the pattern's own
+    /// binder, the value at the class the value of the labelled match, its `MatchError` after; then `$1`, and each
+    /// variable read from it.
     pub(super) fn lower_tuple_definition(&mut self, pat: TPatId, init: TExprId, nodes: &mut Vec<LirId>) {
         let cx = self.cx;
         let prog = cx.input.prog;
-        let TPat::Class(c, ct, _, subs) = prog.pats[pat.idx()] else { unreachable!("a tuple of variables (`Gen::lowered_tuple_definition`)") };
+        let TPat::Class(c, ct, _, subs) = prog.pats[pat.idx()] else { unreachable!("a tuple of variables (the typer's `MatchableTuple`, `Ast::patdef_tuple`)") };
         let subs = prog.pat_lists[subs.range()].to_vec();
         let name = self.class_name(c);
         let tuple = ErasedType::L(name.clone());
         let elems = self.tuple_definition_elements(ct);
         let held = self.lir.temp();
         nodes.push(self.lir.push(Kind::Reserve { temp: held, ty: tuple.clone() }, ErasedType::V));
-        let value = self.lower_expr(init, &tuple);
+        // The right side's static type proves the class (a null test alone), or the class is tested and the value
+        // cast as a class pattern's is (`Gen::lower_class_instance`).
+        let static_type = self.static_type(init);
+        let t = if static_type == tuple { tuple.clone() } else { static_type };
+        let value = self.lower_expr(init, &t);
         let x1 = self.lir.temp();
         nodes.push(self.lir.push(Kind::Let { temp: x1, init: value }, ErasedType::V));
         let fail = self.lir.label();
         let done = self.lir.label();
         let mut tests = Vec::new();
-        let scrutinee = self.lir.push(Kind::Temp(x1), tuple.clone());
-        let null = self.lir.push(Kind::Null, ErasedType::object());
-        let there = self.lir.compare(Relation::Ne, Comparing::Identity, scrutinee, null);
-        self.lower_fail_unless(there, fail, &mut tests);
+        let instance = if t == tuple {
+            let scrutinee = self.lir.push(Kind::Temp(x1), tuple.clone());
+            let null = self.lir.push(Kind::Null, ErasedType::object());
+            let there = self.lir.compare(Relation::Ne, Comparing::Identity, scrutinee, null);
+            self.lower_fail_unless(there, fail, &mut tests);
+            Some(x1)
+        } else {
+            self.lower_class_instance(c, x1, &t, true, fail, &mut tests)
+        };
         for (i, &sub) in subs.iter().enumerate() {
+            let Some(source) = instance else { break };
             match prog.pats[sub.idx()] {
                 TPat::Wildcard => {}
                 TPat::Bind(sym, None) => {
-                    let read = self.lower_tuple_element(x1, &name, &elems, i, Some(sym));
+                    let read = self.lower_tuple_element(source, &name, &elems, i, Some(sym));
                     let binder = self.lir.temp();
                     tests.push(self.lir.push(Kind::Let { temp: binder, init: read }, ErasedType::V));
                 }
                 _ => {
                     // A typed element: held, tested, then its variable.
-                    let Some((test, tested, sym)) = super::gen::typed_element(prog, sub) else { unreachable!("a typed element (`Gen::lowered_tuple_definition`)") };
-                    let read = self.lower_tuple_element(x1, &name, &elems, i, None);
+                    let Some((test, tested, sym)) = super::gen::typed_element(prog, sub) else { unreachable!("a typed element (the typer's `MatchableTuple`, `Ast::patdef_tuple`)") };
+                    let read = self.lower_tuple_element(source, &name, &elems, i, None);
                     let element = self.lir.temp();
                     tests.push(self.lir.push(Kind::Let { temp: element, init: read }, ErasedType::V));
-                    // None where its type proves it, else the test as `Gen::test` writes it
+                    // None where its type proves it, else the test as `Gen::lower_test_on` makes it
                     // (`AnyVal`: that it is not null, as the scrutinee's).
                     match prog.tests[test.idx()] {
                         TypeTest::Always => {}
@@ -460,15 +440,20 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+        // `$t`, the case's binder of the whole: the value at the class (none of a class no module makes, whose test
+        // leaves the block every time).
         let bound = self.lir.temp();
-        let whole = self.lir.push(Kind::Temp(x1), tuple.clone());
+        let whole = match instance {
+            Some(source) => self.lir.push(Kind::Temp(source), tuple.clone()),
+            None => self.lir.push(Kind::Null, tuple.clone()),
+        };
         tests.push(self.lir.push(Kind::Let { temp: bound, init: whole }, ErasedType::V));
         let yielded = self.lir.push(Kind::Temp(bound), tuple.clone());
         let leave = self.lir.push(Kind::Break { label: done, value: Some(yielded) }, ErasedType::V);
         let stmts = self.lir.list(&tests);
         let body = self.lir.push(Kind::Block { stmts, result: leave }, ErasedType::V);
         let tested = self.lir.push(Kind::Labeled { label: fail, body }, ErasedType::V);
-        let failure = self.lower_match_error(x1, &tuple, &tuple);
+        let failure = self.lower_match_error(x1, &t, &tuple);
         let stmts = self.lir.list(&[tested]);
         let body = self.lir.push(Kind::Block { stmts, result: failure }, tuple.clone());
         let matched = self.lir.push(Kind::Labeled { label: done, body }, tuple.clone());
@@ -481,28 +466,39 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// A pattern definition of the general match `Gen::lowered_variables_definition` takes, as scalac
+    /// A pattern definition of the general match (`makePatDef`'s `None`) or a for-comprehension's alias, as scalac
     /// writes it (dotty's `makePatDef`, `None`, `Desugar.scala` 1590-1671 at 3.8.4): the scrutinee
     /// held, a labelled block left where the pattern does not match (`Gen::lower_pattern`, binding
     /// the variables), its value the case's, its `MatchError` after. Without a variable the match
     /// alone; with one, `val x` is the match, its slot taken first (`Kind::LocalAt`); with more, `val $1` is the tuple
-    /// of the variables (`specialised_tuple`'s class, else `TupleN$.apply`), its slot taken first,
-    /// and each variable is read from it. A for-comprehension's alias (`alias`) is the general match
-    /// over `x$1 @ pat` (`makeFor`'s `makeIdPat`, `Desugar.scala` 2214 at 3.8.4): its first element
+    /// of the variables (`specialised_tuple`'s class, else `TupleN$.apply`, past `MAX_TUPLE_ARITY` a `TupleXXL`), its
+    /// slot taken first, and each variable is read from it (past `MAX_TUPLE_ARITY` by `productElement(i)`, dotty's
+    /// `$1.apply(i)` selector, `Desugar.scala` 1650-1654 at 3.8.4). A for-comprehension's alias (`alias`) is the
+    /// general match over `x$1 @ pat` (`makeFor`'s `makeIdPat`, `Desugar.scala` 2214 at 3.8.4): its first element
     /// the scrutinee itself, read back into a temporary of its own (dotty's `x$1`, which teq's pack
     /// does not read).
     pub(super) fn lower_variables_definition(&mut self, pat: TPatId, init: TExprId, alias: bool, nodes: &mut Vec<LirId>) {
-        let vars = self.definition_variables(pat).expect("the variables `Gen::lowered_variables_definition` took");
+        let vars = self.definition_variables(pat);
         let parts: Vec<Option<SymId>> = alias.then_some(None).into_iter().chain(vars.iter().map(|&v| Some(v))).collect();
         let n = parts.len();
         let right = self.static_type(init);
         // A Unit right side is matched as its box.
         let t = if right == ErasedType::V { ErasedType::L(Rc::from(BOXED_UNIT)) } else { right.clone() };
         let elems: Vec<ErasedType> = parts.iter().map(|p| p.map_or_else(|| t.clone(), |v| self.sym_type(v))).collect();
+        // A variable of a value class is its underlying value; in a tuple of several it is its box (erasure's
+        // `Boxing.box` of the element, `Erasure.scala` 272-290 at 3.8.4), read back out of it by the opening.
+        let tuple_elems: Vec<ErasedType> = parts
+            .iter()
+            .zip(&elems)
+            .map(|(p, e)| match (*p).and_then(|v| self.sym_value_class(v)).filter(|_| n > 1) {
+                Some((c, _)) => self.class_type(c),
+                None => e.clone(),
+            })
+            .collect();
         let ty = match n {
             0 => ErasedType::V,
             1 => elems[0].clone(),
-            _ => Self::made_tuple_type(&elems),
+            _ => Self::made_tuple_type(&tuple_elems),
         };
         let held = self.lir.temp();
         if n > 0 {
@@ -517,16 +513,22 @@ impl<'a> Gen<'a> {
         let mut tests = Vec::new();
         self.lower_pattern(pat, x1, &t, fail, &mut tests);
         let mut reads: Vec<LirId> = Vec::with_capacity(n);
-        for (p, e) in parts.iter().zip(&elems) {
+        for (k, (p, e)) in parts.iter().zip(&elems).enumerate() {
             reads.push(match p {
-                Some(v) => self.lir.push(Kind::Local(*v), e.clone()),
+                Some(v) => {
+                    let local = self.lir.push(Kind::Local(*v), e.clone());
+                    match self.sym_value_class(*v).filter(|_| n > 1) {
+                        Some((c, args)) => self.lower_value_class(local, e, c, args, false, &tuple_elems[k], None),
+                        None => local,
+                    }
+                }
                 None => self.lir.push(Kind::Temp(x1), e.clone()),
             });
         }
         let yielded = match n {
             0 => None,
             1 => Some(reads[0]),
-            _ => Some(self.lower_made_tuple(&reads, &elems)),
+            _ => Some(self.lower_made_tuple(&reads, &tuple_elems)),
         };
         let leave = self.lir.push(Kind::Break { label: done, value: yielded }, ErasedType::V);
         let stmts = self.lir.list(&tests);
@@ -540,21 +542,41 @@ impl<'a> Gen<'a> {
             0 => nodes.push(matched),
             1 => {
                 nodes.push(self.lir.push(Kind::Let { temp: held, init: matched }, ErasedType::V));
-                if let Some(v) = parts[0] {
-                    self.lower_declared.insert(v, (elems[0].clone(), false));
-                    nodes.push(self.lir.push(Kind::LocalAt { sym: v, temp: held, ty: elems[0].clone() }, ErasedType::V));
+                match parts[0] {
+                    // A variable in a cell is declared as every variable is (`Gen::lower_declare`).
+                    Some(v) if self.m.cells.contains(&v) => {
+                        let value = self.lir.push(Kind::Temp(held), elems[0].clone());
+                        self.lower_declare(v, value, elems[0].clone(), nodes);
+                    }
+                    Some(v) => {
+                        self.lower_declared.insert(v, (elems[0].clone(), false));
+                        nodes.push(self.lir.push(Kind::LocalAt { sym: v, temp: held, ty: elems[0].clone() }, ErasedType::V));
+                    }
+                    None => {}
+                }
+            }
+            _ if n > MAX_TUPLE_ARITY => {
+                nodes.push(self.lir.push(Kind::Let { temp: held, init: matched }, ErasedType::V));
+                let object = ErasedType::object();
+                for (i, p) in parts.iter().enumerate() {
+                    match *p {
+                        Some(v) => self.lower_xxl_variable(held, &ty, i, v, nodes),
+                        None => {
+                            let read = self.lower_xxl_element(held, &ty, i, nodes);
+                            let init = self.lower_adapt(read, &object, &elems[i]);
+                            let binder = self.lir.temp();
+                            nodes.push(self.lir.push(Kind::Let { temp: binder, init }, ErasedType::V));
+                        }
+                    }
                 }
             }
             _ => {
                 nodes.push(self.lir.push(Kind::Let { temp: held, init: matched }, ErasedType::V));
                 let owner: Rc<str> = Rc::from(format!("scala/Tuple{n}"));
                 for (i, p) in parts.iter().enumerate() {
-                    let read = self.lower_tuple_element(held, &owner, &elems, i, *p);
+                    let read = self.lower_tuple_element(held, &owner, &tuple_elems, i, *p);
                     match *p {
-                        Some(v) => {
-                            self.lower_declared.insert(v, (elems[i].clone(), false));
-                            nodes.push(self.lir.push(Kind::Val { sym: v, init: read, cell: None }, ErasedType::V));
-                        }
+                        Some(v) => self.lower_declare(v, read, elems[i].clone(), nodes),
                         None => {
                             let binder = self.lir.temp();
                             nodes.push(self.lir.push(Kind::Let { temp: binder, init: read }, ErasedType::V));
@@ -596,22 +618,62 @@ impl<'a> Gen<'a> {
         let body = self.lir.push(Kind::Block { stmts, result: failure }, t.clone());
         let matched = self.lir.push(Kind::Labeled { label: done, body }, t.clone());
         nodes.push(self.lir.push(Kind::Let { temp: held, init: matched }, ErasedType::V));
-        let owner: Rc<str> = Rc::from("scala/runtime/TupleXXL");
+        for (i, &item) in items.iter().enumerate() {
+            let Some(sym) = super::gen::tuple_variable(prog, item) else { continue };
+            self.lower_xxl_variable(held, &t, i, sym, nodes);
+        }
+    }
+
+    /// The variable `sym` declared with the element `i` of the `TupleXXL` in `held` (a value of the type `ty`), as
+    /// scalac reads it (`$1.apply(i)`, `Desugar.scala` 1650-1654 at 3.8.4): `productElement(i)` cast to the element's
+    /// type (`TupleOptimizations.scala` 154-155), a value class's opening the cast's, with no null test.
+    fn lower_xxl_variable(&mut self, held: TempId, ty: &ErasedType, i: usize, sym: SymId, nodes: &mut Vec<LirId>) {
+        let object = ErasedType::object();
+        let read = self.lower_xxl_element(held, ty, i, nodes);
+        let (init, declared) = match self.sym_value_class(sym) {
+            Some((c, args)) => {
+                let declared = self.sym_type(sym);
+                (self.lower_value_class(read, &object, c, args, false, &declared, None), declared)
+            }
+            None => self.lower_to_sym(read, &object, sym),
+        };
+        self.lower_declare(sym, init, declared, nodes);
+    }
+
+    /// The tuple past `MAX_TUPLE_ARITY` the general match makes of its variables, as scalac writes the varargs call
+    /// `TupleXXL.apply(elems: Any*)` (dotty's `makeTuple`, typed as `TupleXXL(xs*)`): the module, then the variables as
+    /// the argument of a varargs parameter of `Any` (`Gen::lower_varargs_values`, the lowered path's one writer of
+    /// such an argument).
+    fn lower_made_xxl(&mut self, reads: &[LirId], elems: &[ErasedType]) -> LirId {
+        let object = ErasedType::object();
+        let module: Rc<str> = Rc::from(format!("{TUPLE_XXL}$"));
+        let receiver = self.lir.push(Kind::Module(module.clone()), ErasedType::L(module.clone()));
+        let values: Vec<LirId> = reads.iter().zip(elems).map(|(&r, t)| self.lower_adapt(r, t, &object)).collect();
+        let made = self.lower_varargs_values(&values, &object);
+        let seq = ErasedType::L(Rc::from(SEQ));
+        let made_type = self.lir.ty(made).clone();
+        let argument = self.lower_adapt(made, &made_type, &seq);
+        let ret = ErasedType::L(Rc::from(TUPLE_XXL));
+        let desc = method_desc(std::slice::from_ref(&seq), &ret);
+        let apply = Rc::new(MethodRef { owner: module, owner_is_interface: false, name: "apply".to_string(), params: vec![seq], ret, desc, kind: Invoke::Virtual });
+        self.lir.call(&apply, receiver, &[argument])
+    }
+
+    /// The element `i` of the `TupleXXL` in `held` (a value of the type `ty`), as `Tuple.apply`'s inline expansion
+    /// leaves it (`TupleOptimizations.scala` 143-155 at 3.8.4): the tuple copied into a temporary first, then
+    /// `productElement(i)` of the copy, an `Object`.
+    fn lower_xxl_element(&mut self, held: TempId, ty: &ErasedType, i: usize, nodes: &mut Vec<LirId>) -> LirId {
+        let owner: Rc<str> = Rc::from(TUPLE_XXL);
         let xxl = ErasedType::L(owner.clone());
         let object = ErasedType::object();
         let method = Rc::new(MethodRef { owner, owner_is_interface: false, name: "productElement".to_string(), params: vec![ErasedType::I], ret: object.clone(), desc: method_desc(&[ErasedType::I], &object), kind: Invoke::Virtual });
-        for (i, &item) in items.iter().enumerate() {
-            let Some(sym) = super::gen::tuple_variable(prog, item) else { continue };
-            let whole = self.lir.push(Kind::Temp(held), t.clone());
-            let whole = self.lower_adapt(whole, &t, &xxl);
-            let copy = self.lir.temp();
-            nodes.push(self.lir.push(Kind::Let { temp: copy, init: whole }, ErasedType::V));
-            let receiver = self.lir.push(Kind::Temp(copy), xxl.clone());
-            let index = self.lir.int(i as i32);
-            let read = self.lir.call(&method, receiver, &[index]);
-            let (init, declared) = self.lower_to_sym(read, &object, sym);
-            self.lower_declare(sym, init, declared, nodes);
-        }
+        let whole = self.lir.push(Kind::Temp(held), ty.clone());
+        let whole = self.lower_adapt(whole, ty, &xxl);
+        let copy = self.lir.temp();
+        nodes.push(self.lir.push(Kind::Let { temp: copy, init: whole }, ErasedType::V));
+        let receiver = self.lir.push(Kind::Temp(copy), xxl);
+        let index = self.lir.int(i as i32);
+        self.lir.call(&method, receiver, &[index])
     }
 
     /// A pattern definition of `makePatDef`'s `SimpleTuple` the typer left as a statement (a typed one, `val (c, d): T =
@@ -619,7 +681,7 @@ impl<'a> Gen<'a> {
     /// `val c = $1._1`, ...): `val $1`'s slot first, the right side at the tuple's class, each variable read from it.
     pub(super) fn lower_simple_tuple_definition(&mut self, pat: TPatId, init: TExprId, nodes: &mut Vec<LirId>) {
         let prog = self.cx.input.prog;
-        let TPat::Class(c, ct, _, subs) = prog.pats[pat.idx()] else { unreachable!("a tuple pattern (`Gen::lowered_simple_tuple_definition`)") };
+        let TPat::Class(c, ct, _, subs) = prog.pats[pat.idx()] else { unreachable!("a tuple pattern (the typer's `SimpleTuple`, `Ast::patdef_tuple`)") };
         let subs = prog.pat_lists[subs.range()].to_vec();
         let name = self.class_name(c);
         let tuple = ErasedType::L(name.clone());
@@ -636,10 +698,31 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// A typed `SimpleTuple` past 22 elements the typer left as a statement (`val (a1, .., an): T = (e1, .., en)`, its
+    /// pattern the typer's `TupleXXL` one, `Gen::xxl_definition_items`), as scalac writes it (`Desugar.scala` 1638-1662
+    /// at 3.8.4: no match, `val $1: T = rhs`, then `val ai = $1.apply(i)`): `val $1`'s slot first, the right side at
+    /// `TupleXXL`, each variable read from it by `Gen::lower_xxl_variable`.
+    pub(super) fn lower_simple_xxl_definition(&mut self, pat: TPatId, init: TExprId, nodes: &mut Vec<LirId>) {
+        let prog = self.cx.input.prog;
+        let items = self.xxl_definition_items(pat).expect("a tuple pattern past 22 (`Gen::xxl_definition_items`)");
+        let xxl = ErasedType::L(Rc::from(TUPLE_XXL));
+        let held = self.lir.temp();
+        nodes.push(self.lir.push(Kind::Reserve { temp: held, ty: xxl.clone() }, ErasedType::V));
+        let value = self.lower_expr(init, &xxl);
+        nodes.push(self.lir.push(Kind::Let { temp: held, init: value }, ErasedType::V));
+        for (i, &item) in items.iter().enumerate() {
+            let Some(sym) = super::gen::tuple_variable(prog, item) else { continue };
+            self.lower_xxl_variable(held, &xxl, i, sym, nodes);
+        }
+    }
+
     /// The tuple the general match makes of its variables, as `SpecializeTuples` leaves it:
     /// `new Tuple2$mcII$sp(a, b)`-like where `specialised_tuple` names a class, else
     /// `TupleN$.MODULE$.apply` of the variables as objects.
     fn lower_made_tuple(&mut self, reads: &[LirId], elems: &[ErasedType]) -> LirId {
+        if reads.len() > MAX_TUPLE_ARITY {
+            return self.lower_made_xxl(reads, elems);
+        }
         let made = Self::made_tuple_type(elems);
         if let Some(class) = super::gen::specialised_tuple(elems) {
             let owner: Rc<str> = Rc::from(class.as_str());
@@ -662,6 +745,9 @@ impl<'a> Gen<'a> {
 
     /// The class of the tuple `Gen::lower_made_tuple` makes of variables of the types `elems`.
     fn made_tuple_type(elems: &[ErasedType]) -> ErasedType {
+        if elems.len() > MAX_TUPLE_ARITY {
+            return ErasedType::L(Rc::from(TUPLE_XXL));
+        }
         match super::gen::specialised_tuple(elems) {
             Some(class) => ErasedType::L(Rc::from(class.as_str())),
             None => ErasedType::L(Rc::from(format!("scala/Tuple{}", elems.len()))),
@@ -680,6 +766,30 @@ impl<'a> Gen<'a> {
             Some(sym) => self.lower_to_sym(read, &t, sym).0,
             None => self.lower_adapt(read, &t, &elems[i]),
         }
+    }
+
+    /// The test of a class pattern of the class `c` on the value in `temp`, of the type `ty` (`Kind::Is`, leaving the
+    /// labelled block `fail` where it does not hold; none of a class the program never makes, unless another module
+    /// may), and with `cast` the value at the class in a temporary of its own, which it gives.
+    pub(super) fn lower_class_instance(&mut self, c: ClassId, temp: TempId, ty: &ErasedType, cast: bool, fail: LabelId, out: &mut Vec<LirId>) -> Option<TempId> {
+        let cx = self.cx;
+        if !ty.is_ref() || !cx.input.reach.classes[c.idx()] && !cx.linked_class(c) && !cx.input.open_world {
+            out.push(self.lir.push(Kind::Break { label: fail, value: None }, ErasedType::V));
+            return None;
+        }
+        let name = self.class_name(c);
+        let value = self.lir.push(Kind::Temp(temp), ty.clone());
+        let is = self.lir.push(Kind::Is { value, class: name.clone() }, ErasedType::Z);
+        self.lower_fail_unless(is, fail, out);
+        if !cast {
+            return None;
+        }
+        let class_type = ErasedType::L(name);
+        let value = self.lir.push(Kind::Temp(temp), ty.clone());
+        let init = if *ty != class_type { self.lir.push(Kind::Cast { value, op: crate::lir::Cast::Checked }, class_type) } else { value };
+        let instance = self.lir.temp();
+        out.push(self.lir.push(Kind::Let { temp: instance, init }, ErasedType::V));
+        Some(instance)
     }
 
     /// A jump out of the labelled block `fail` where the condition does not hold.
@@ -786,24 +896,11 @@ impl<'a> Gen<'a> {
                         return;
                     }
                 }
-                // No instance of a class the program never makes, unless another module may.
-                if !ty.is_ref() || !cx.input.reach.classes[c.idx()] && !cx.linked_class(c) && !cx.input.open_world {
-                    return out.push(self.lir.push(Kind::Break { label: fail, value: None }, ErasedType::V));
-                }
-                let name = self.class_name(c);
-                let value = self.lir.push(Kind::Temp(temp), ty.clone());
-                let is = self.lir.push(Kind::Is { value, class: name.clone() }, ErasedType::Z);
-                self.lower_fail_unless(is, fail, out);
                 let fields = prog.sym_list(fields);
                 let subs = &prog.pat_lists[subs.range()];
-                if subs.iter().all(|&s| matches!(prog.pats[s.idx()], TPat::Wildcard)) {
-                    return;
-                }
-                let class_type = ErasedType::L(name);
-                let value = self.lir.push(Kind::Temp(temp), ty.clone());
-                let init = if *ty != class_type { self.lir.push(Kind::Cast { value, op: crate::lir::Cast::Checked }, class_type.clone()) } else { value };
-                let instance = self.lir.temp();
-                out.push(self.lir.push(Kind::Let { temp: instance, init }, ErasedType::V));
+                let cast = !subs.iter().all(|&s| matches!(prog.pats[s.idx()], TPat::Wildcard));
+                let Some(instance) = self.lower_class_instance(c, temp, ty, cast, fail, out) else { return };
+                let class_type = ErasedType::L(self.class_name(c));
                 for (&field, &sub) in fields.iter().zip(subs) {
                     if matches!(prog.pats[sub.idx()], TPat::Wildcard) {
                         continue;

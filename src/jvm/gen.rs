@@ -141,17 +141,6 @@ pub enum NewRoute {
     Instance(CtorArguments),
 }
 
-/// The way a concatenation is generated: one decision (`Gen::concat_route`), read by the
-/// lowering and by `Gen::str_concat`. Each holds the statements of the blocks the head of the
-/// chain brings (`Program::chain_head`), which run before the first operand, and the operands:
-/// a chain's own, those behind a block's result, or the head as one operand.
-pub enum ConcatRoute {
-    /// The statements lower whole (`Gen::block_lowers`), or there are none.
-    Lowered(Vec<ListRef>, Vec<TExprId>),
-    /// A statement is not lowered yet, and why: a pattern definition, a lazy val.
-    Statements(Unlowered, Vec<ListRef>, Vec<TExprId>),
-}
-
 /// How the arguments of a secondary constructor are passed: one decision
 /// (`Gen::via_arguments_route`), read by the lowering.
 pub enum ViaArguments {
@@ -788,15 +777,8 @@ pub struct Gen<'a> {
     erasing_params: Vec<TParamId>,
 }
 
-#[derive(Clone, Copy)]
-pub enum Mode<'t> {
-    Value(&'t ErasedType),
-    /// Return position: every path ends in a return or in a jump of the tail loop.
-    Tail,
-}
-
 /// The arity of the largest tuple class, above which a tuple is a `TupleXXL`.
-const MAX_TUPLE_ARITY: usize = 22; // dotty's `Definitions.MaxTupleArity`
+pub(super) const MAX_TUPLE_ARITY: usize = 22; // dotty's `Definitions.MaxTupleArity`
 
 impl<'a> Gen<'a> {
     pub fn new(cx: &'a Cx<'a>) -> Gen<'a> {
@@ -2414,7 +2396,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The value class `s` holds the underlying value of, where it is one and not by name.
-    fn sym_value_class(&self, s: SymId) -> Option<(ClassId, TList)> {
+    pub(super) fn sym_value_class(&self, s: SymId) -> Option<(ClassId, TList)> {
         let info = self.cx.input.syms.sym(s);
         if info.by_name {
             return None;
@@ -2567,6 +2549,14 @@ impl<'a> Gen<'a> {
                 Some(self.lir.push(kind, ty))
             }
             Kind::Local(s) if syms.sym(s).kind != SymKind::Var && !self.m.cells.contains(&s) => Some(self.lir.push(kind, ty)),
+            // `scala.TupleN`'s own `_i` (a stable member) on a receiver read again, as a pattern definition's
+            // variables read their tuple (`$1._i`, `Desugar.scala` 1650-1654 at 3.8.4): `exprPurity`'s `Select`, the
+            // member's `refPurity` (a stable val, `PurePath`) under the qualifier's (`TreeInfo.scala` 597-599 and
+            // 684-697 at 3.8.4), idempotent where the qualifier is (`isIdempotentExpr`, 649-650).
+            Kind::Call { method, receiver, args, order: None, at: None } if args.len == 0 && is_tuple_accessor(&method) => match self.lower_read_again(receiver, None) {
+                Some(again) => Some(self.lir.call(&method, again, &[])),
+                None => of.filter(|&e| in_place(e)).and_then(|e| self.lower_node(e).ok()),
+            },
             _ => of.filter(|&e| in_place(e)).and_then(|e| self.lower_node(e).ok()),
         }
     }
@@ -3653,8 +3643,7 @@ impl<'a> Gen<'a> {
         match prog.expr(e) {
             TExpr::If(..) => unreachable!("lowered (`Gen::lower_if`)"),
             TExpr::Match(..) => unreachable!("lowered (`Gen::lower_match`)"),
-            TExpr::Block(stmts, _) if self.block_lowers(stmts).is_ok() => unreachable!("lowered (`Gen::lower_block`)"),
-            TExpr::Block(stmts, res) => self.block(stmts, res, Mode::Value(want)),
+            TExpr::Block(..) => unreachable!("lowered (`Gen::lower_block`)"),
             TExpr::Throw(..) | TExpr::Try(_) => unreachable!("lowered (`Gen::lower_expr`)"),
             TExpr::Return(v) => self.return_(v, want),
             _ => {
@@ -3817,12 +3806,6 @@ impl<'a> Gen<'a> {
         self.code.line(cx.line_of(file, point));
     }
 
-    pub fn expr_static(&mut self, e: TExprId) -> ErasedType {
-        let t = self.static_type(e);
-        self.expr(e, &t);
-        t
-    }
-
     /// Emits the code of one node and returns what it leaves on the stack.
     fn node(&mut self, e: TExprId) -> ErasedType {
         let prog = self.cx.input.prog;
@@ -3849,8 +3832,7 @@ impl<'a> Gen<'a> {
                 self.lir.ty(closure).clone()
             }
             TExpr::Assign(..) => unreachable!("lowered (`Gen::lower_assign`)"),
-            TExpr::Prim(..) | TExpr::Unary(..) | TExpr::While(..) | TExpr::TypeTest(..) => unreachable!("lowered (`Gen::lower_node`)"),
-            TExpr::StrConcat(items) => self.str_concat(items),
+            TExpr::Prim(..) | TExpr::Unary(..) | TExpr::While(..) | TExpr::TypeTest(..) | TExpr::StrConcat(_) => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::Js(..) => unreachable!("lowered or refused (`Gen::lower_template`)"),
             TExpr::If(..) => unreachable!("lowered (`Gen::lower_if`)"),
             TExpr::Match(..) | TExpr::Block(..) => {
@@ -4262,32 +4244,17 @@ impl<'a> Gen<'a> {
         })
     }
 
-    /// A concatenation whose head brings a statement not lowered yet (`ConcatRoute::Statements`):
-    /// the statements are written here, before the first operand, and the operands are lowered
-    /// once their locals are declared.
-    fn str_concat(&mut self, items: ListRef) -> ErasedType {
-        let ConcatRoute::Statements(_, statements, operands) = self.concat_route(items) else { unreachable!("lowered (`Gen::lower_str_concat`)") };
-        let mark = self.code.locals_mark();
-        for stmts in statements {
-            self.block_statements(stmts);
-        }
-        let node = self.lowering(|g| g.lower_concat(&operands));
-        self.write(node);
-        self.code.locals_release(mark);
-        self.lir.ty(node).clone()
-    }
-
-    pub(super) fn concat_route(&mut self, items: ListRef) -> ConcatRoute {
+    /// The statements of the blocks the head of a concatenation's chain brings (`Program::chain_head`), which run
+    /// before the first operand, and the operands: a chain's own, those behind a block's result, or the head as one
+    /// operand.
+    pub(super) fn concat_route(&mut self, items: ListRef) -> (Vec<ListRef>, Vec<TExprId>) {
         let prog = self.cx.input.prog;
         let (mut statements, mut operands) = (Vec::new(), Vec::new());
         if let Some((&head, rest)) = prog.expr_list(items).split_first() {
             self.chain_head(head, &mut statements, &mut operands);
             operands.extend_from_slice(rest);
         }
-        match statements.iter().try_for_each(|&stmts| self.block_lowers(stmts)) {
-            Ok(()) => ConcatRoute::Lowered(statements, operands),
-            Err(why) => ConcatRoute::Statements(why, statements, operands),
-        }
+        (statements, operands)
     }
 
     fn chain_head(&self, head: TExprId, statements: &mut Vec<ListRef>, operands: &mut Vec<TExprId>) {
@@ -6565,125 +6532,6 @@ impl<'a> Gen<'a> {
 
     // ---- blocks ----
 
-    pub fn finish(&mut self, e: TExprId, mode: Mode) {
-        match mode {
-            Mode::Value(want) => self.expr(e, want),
-            Mode::Tail => self.tail(e),
-        }
-    }
-
-    /// Emits `e` in return position.
-    pub fn tail(&mut self, e: TExprId) {
-        let root = self.lowering(|g| g.lower_tail(e));
-        self.write_body(root);
-    }
-
-    /// A block the lowering does not take, in return position.
-    pub(super) fn tail_legacy(&mut self, e: TExprId) {
-        match self.cx.input.prog.expr(e) {
-            TExpr::Match(..) => unreachable!("lowered (`Gen::lower_match`)"),
-            TExpr::Block(stmts, res) => self.block(stmts, res, Mode::Tail),
-            _ => unreachable!("lowered (`Gen::lower_tail`)"),
-        }
-    }
-
-    pub fn block(&mut self, stmts: ListRef, res: TExprId, mode: Mode) {
-        let mark = self.code.locals_mark();
-        self.block_statements(stmts);
-        // The pure result of an ascribed block that is a statement is not evaluated (`Program::removed_bits`).
-        if !(matches!(mode, Mode::Value(ErasedType::V)) && self.cx.input.prog.is_removed(res)) {
-            self.finish(res, mode);
-        }
-        if matches!(mode, Mode::Value(_)) {
-            self.code.locals_release(mark);
-        }
-    }
-
-    /// Whether a block's statements are lowered whole, or why not: a pattern definition declares its
-    /// locals as it is written. A `lazy val` among them is a local lazy val (`Gen::is_lazy_local`): its
-    /// symbol is made by `Typer::enter_local_val` (Owner::Local, a `Val` or a `Var`), and no other
-    /// statement of a block is lazy (a hoisted temporary, a macro's `Symbol.newVal` are not).
-    pub(super) fn block_lowers(&mut self, stmts: ListRef) -> Result<(), Unlowered> {
-        let cx = self.cx;
-        cx.input.prog.stmts[stmts.range()].iter().try_for_each(|s| match *s {
-            TStmt::Pat(pat, init, PatDefForm::MatchableTuple) if self.lowered_tuple_definition(pat, init) => Ok(()),
-            TStmt::Pat(pat, _, PatDefForm::MatchableTuple) if self.xxl_definition_items(pat).is_some() => Ok(()),
-            TStmt::Pat(pat, _, PatDefForm::General) if self.lowered_variables_definition(pat) => Ok(()),
-            TStmt::Pat(pat, _, PatDefForm::SimpleTuple) if self.lowered_simple_tuple_definition(pat) => Ok(()),
-            TStmt::Pat(pat, _, PatDefForm::ForAlias) if self.lowered_alias_definition(pat) => Ok(()),
-            TStmt::Pat(..) => Err(Unlowered::PatternDefinition),
-            TStmt::Val(..) | TStmt::Expr(_) | TStmt::Fun(_) => Ok(()),
-        })
-    }
-
-    fn block_statements(&mut self, stmts: ListRef) {
-        let cx = self.cx;
-        let prog = cx.input.prog;
-        self.hoist_lazy_holders(stmts);
-        for s in &prog.stmts[stmts.range()] {
-            match *s {
-                // Its holder stands at the head of the list.
-                TStmt::Val(sym, _) if self.is_lazy_local(sym) => {}
-                TStmt::Val(sym, init) => self.local_val(sym, init),
-                // A definition the lowering takes is written by its nodes here too.
-                s @ TStmt::Pat(pat, init, PatDefForm::MatchableTuple) if self.lowered_tuple_definition(pat, init) => self.write_statement(s),
-                s @ TStmt::Pat(pat, _, PatDefForm::MatchableTuple) if self.xxl_definition_items(pat).is_some() => self.write_statement(s),
-                s @ TStmt::Pat(pat, _, PatDefForm::General) if self.lowered_variables_definition(pat) => self.write_statement(s),
-                s @ TStmt::Pat(pat, _, PatDefForm::SimpleTuple) if self.lowered_simple_tuple_definition(pat) => self.write_statement(s),
-                s @ TStmt::Pat(pat, _, PatDefForm::ForAlias) if self.lowered_alias_definition(pat) => self.write_statement(s),
-                TStmt::Pat(pat, init, _) => {
-                    let t = self.expr_static(init);
-                    let t = self.materialise_unit(t);
-                    let slot = self.store_new(&t);
-                    // The failure stands in front of the tests, so that the variables the
-                    // pattern binds are the locals of the code that follows it.
-                    let fail = self.code.new_label();
-                    let start = self.code.new_label();
-                    self.goto(start);
-                    self.code.bind(fail);
-                    self.match_error(slot, &t);
-                    self.code.bind(start);
-                    self.definition_pattern(pat, slot, &t, fail);
-                }
-                s @ (TStmt::Expr(_) | TStmt::Fun(_)) => self.write_statement(s),
-            }
-        }
-    }
-
-    /// Whether the lowering takes the pattern definition (`Gen::lower_tuple_definition`): a tuple of
-    /// variables over a right side of its class (`Gen::tuple_definition_class`), a primitive element
-    /// typed only as its type proves.
-    pub(super) fn lowered_tuple_definition(&mut self, pat: TPatId, init: TExprId) -> bool {
-        let cx = self.cx;
-        let prog = cx.input.prog;
-        let Some(c) = self.tuple_definition_class(pat, init) else { return false };
-        let TPat::Class(_, ct, _, subs) = prog.pats[pat.idx()] else { return false };
-        debug_assert!(tuple_arity(cx, c).is_some());
-        let elems = self.tuple_definition_elements(ct);
-        let subs = &prog.pat_lists[subs.range()];
-        elems.len() == subs.len()
-            && subs.iter().zip(&elems).all(|(&p, e)| match prog.pats[p.idx()] {
-                TPat::Wildcard | TPat::Bind(_, None) => true,
-                _ => typed_element(prog, p).is_some_and(|(test, _, _)| e.is_ref() || matches!(prog.tests[test.idx()], TypeTest::Always)),
-            })
-    }
-
-    /// The tuple class of a pattern definition of a tuple of variables (`Gen::lowered_tuple_definition`): a `TupleN` of
-    /// variables (a wildcard or a typed variable among them) over a right side whose static type
-    /// erases to that class (a named tuple's too).
-    pub(super) fn tuple_definition_class(&mut self, pat: TPatId, init: TExprId) -> Option<ClassId> {
-        let cx = self.cx;
-        let prog = cx.input.prog;
-        let TPat::Class(c, _, _, subs) = prog.pats[pat.idx()] else { return None };
-        let arity = tuple_arity(cx, c)?;
-        let subs = &prog.pat_lists[subs.range()];
-        if subs.len() != arity || !subs.iter().all(|&p| matches!(prog.pats[p.idx()], TPat::Wildcard | TPat::Bind(_, None)) || typed_element(prog, p).is_some()) {
-            return None;
-        }
-        let tuple = ErasedType::L(self.class_name(c));
-        (self.static_type(init) == tuple).then_some(c)
-    }
-
     /// The erased elements of the tuple type `ct`, a value class as no primitive (the
     /// specialisation does not take it, whatever it erases to).
     pub(super) fn tuple_definition_elements(&mut self, ct: TypeId) -> Vec<ErasedType> {
@@ -6714,12 +6562,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Whether the lowering takes a pattern definition of the general match (`Gen::lower_variables_definition`): its
-    /// variables those `Gen::definition_variables` takes.
-    pub(super) fn lowered_variables_definition(&self, pat: TPatId) -> bool {
-        self.definition_variables(pat).is_some()
-    }
-
     /// The elements of a tuple pattern past 22 (`case (a1, .., an)` on scalac's `TupleXXL`: the typer's
     /// `xxl_elements_pattern`, a test of the class over `TupleXXL.unapplySeq`'s `Some` of a sequence of exactly `n`)
     /// where each is a wildcard, a variable or a typed one: a `MatchableTuple` `Gen::lower_xxl_definition` lowers.
@@ -6739,68 +6581,11 @@ impl<'a> Gen<'a> {
         items.iter().all(|&p| matches!(prog.pats[p.idx()], TPat::Wildcard | TPat::Bind(_, None)) || typed_element(prog, p).is_some()).then_some(items)
     }
 
-    /// Whether the lowering takes a for-comprehension's alias (`Gen::lower_variables_definition`): its pattern's
-    /// variables those `Gen::definition_variables` takes, with `x$1` before them at most `MAX_TUPLE_ARITY`.
-    pub(super) fn lowered_alias_definition(&self, pat: TPatId) -> bool {
-        self.definition_variables(pat).is_some_and(|vars| vars.len() < MAX_TUPLE_ARITY)
-    }
-
-    /// Whether the lowering takes a pattern definition of `makePatDef`'s `SimpleTuple` the typer left as a
-    /// statement (`Gen::lower_simple_tuple_definition`): a tuple of variables, each a wildcard, a variable or a
-    /// typed one, of a tuple class of its arity.
-    pub(super) fn lowered_simple_tuple_definition(&self, pat: TPatId) -> bool {
-        let cx = self.cx;
-        let prog = cx.input.prog;
-        let TPat::Class(c, ct, _, subs) = prog.pats[pat.idx()] else { return false };
-        let subs = &prog.pat_lists[subs.range()];
-        let elements = match cx.input.types.get(cx.input.types.underlying(ct)) {
-            Type::Class(_, args) => cx.input.types.items(args).len(),
-            _ => return false,
-        };
-        tuple_arity(cx, c) == Some(subs.len())
-            && elements == subs.len()
-            && subs.iter().all(|&p| matches!(prog.pats[p.idx()], TPat::Wildcard | TPat::Bind(_, None)) || typed_element(prog, p).is_some())
-    }
-
-    /// The variables of a pattern definition of the general match, in `getVariables`' order: none if there are
-    /// more than `MAX_TUPLE_ARITY`, or one is held in a cell or is of a value class (whose definitions keep the old
-    /// form).
-    pub(super) fn definition_variables(&self, pat: TPatId) -> Option<Vec<SymId>> {
-        let cx = self.cx;
+    /// The variables of a pattern definition of the general match, in `getVariables`' order.
+    pub(super) fn definition_variables(&self, pat: TPatId) -> Vec<SymId> {
         let mut vars = Vec::new();
-        pattern_variables(cx.input.prog, pat, &mut vars);
-        let vc = |s: SymId| cx.input.syms.sym(s).sig.as_ref().is_some_and(|sig| self.value_class_of(sig.ret).is_some());
-        (vars.len() <= MAX_TUPLE_ARITY && !vars.iter().any(|&v| self.m.cells.contains(&v) || vc(v))).then_some(vars)
-    }
-
-    fn write_statement(&mut self, s: TStmt) {
-        let nodes = self.lowering(|g| {
-            let mut nodes = Vec::new();
-            g.lower_statement(s, &mut nodes);
-            nodes
-        });
-        for node in nodes {
-            self.write(node);
-        }
-    }
-
-    pub fn materialise_unit(&mut self, t: ErasedType) -> ErasedType {
-        if t == ErasedType::V {
-            self.unit_value();
-            ErasedType::L(Rc::from(BOXED_UNIT))
-        } else {
-            t
-        }
-    }
-
-    pub fn local_val(&mut self, sym: SymId, init: TExprId) {
-        // A block's lazy vals have their holders at its head (`hoist_lazy_holders`); a prelude's here.
-        if self.lazy_val(sym) {
-            self.an.lazy_inits.insert(sym, init);
-            self.new_lazy_holder(sym);
-            return;
-        }
-        self.write_statement(TStmt::Val(sym, init));
+        pattern_variables(self.cx.input.prog, pat, &mut vars);
+        vars
     }
 
     // ---- primitive operations ----
@@ -6822,17 +6607,6 @@ impl<'a> Gen<'a> {
         self.invoke_mref(m);
     }
 
-    /// `MatchError` of the value in `slot`, thrown: a pattern definition's failure.
-    fn match_error(&mut self, slot: u16, t: &ErasedType) {
-        self.new_object(MATCH_ERROR);
-        let object = ErasedType::object();
-        self.load(slot, t);
-        self.adapt(t, &object);
-        self.invoke(Invoke::Special, MATCH_ERROR, false, "<init>", &[object], &ErasedType::V);
-        self.code.op(op::ATHROW);
-        self.code.pop();
-        self.code.end_path();
-    }
 }
 
 /// `ScalaRunTime`'s method that does the operation `name` (`array_apply`, `array_update`,
@@ -6964,6 +6738,18 @@ pub(super) fn typed_element(prog: &Program, p: TPatId) -> Option<(TestId, TypeId
         },
         _ => None,
     }
+}
+
+/// Whether `method` is scala-library's own case accessor `_i` of `scala.TupleN` (`Gen::tuple_accessor` names it, a
+/// specialised `TupleN$mcXY$sp` one included): a stable member of a final class, which no class overrides. Another
+/// class's `_i` (a case class's, a `Product`'s) is not.
+fn is_tuple_accessor(method: &MethodRef) -> bool {
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    let Some(class) = method.owner.strip_prefix("scala/Tuple") else { return false };
+    let arity = class.split("$mc").next().unwrap_or("");
+    let name = method.name.split("$mc").next().unwrap_or("");
+    let specialised = class.len() > arity.len();
+    digits(arity) && (!specialised || class.ends_with("$sp")) && method.params.is_empty() && name.strip_prefix('_').is_some_and(digits)
 }
 
 /// The variable of an element of a tuple pattern `Gen::lower_tuple_definition` lowers.
