@@ -1992,7 +1992,6 @@ impl<'a> Gen<'a> {
             self.pair_bridges(tc);
             self.jar_bridges(c, tc.inherited_pairs());
             self.jar_trait_mixins(c);
-            self.inner_case_companion_getters(c);
             if let Some(k) = info.companion.filter(|_| info.inner_object.is_some()) {
                 self.inner_written_companion_members(k, c);
             }
@@ -2465,7 +2464,7 @@ impl<'a> Gen<'a> {
                 continue;
             }
             // The val of a made case companion the rule writes, its field and getter scalac's
-            // (`instance_case_companion_fields`, `inner_case_companion_getters`).
+            // (`instance_case_companion_fields`).
             if crate::tir::is_made_case_companion_val(syms, s) {
                 let made = syms.class(tc.id).nested.get(&syms.sym(s).name).and_then(|&k| syms.class(k).companion);
                 if made.is_some_and(|m| cx.made_case_companion(m)) {
@@ -3177,32 +3176,25 @@ impl<'a> Gen<'a> {
         let flags = MethodFlags { is_final, ..MethodFlags::PUBLIC };
         let mut holder = None;
         if f.lazy {
-            self.begin_method(flags, &f.name, &getter_desc, false, &[], f.ty.clone(), &f.init.filter(|_| thread_unsafe && f.lazy_owner.is_none()).into_iter().collect::<Vec<_>>());
-            if thread_unsafe {
-                let init = match (f.lazy_owner, f.init) {
-                    (Some(t), _) => Some(HolderInit::TraitStatic(self.class_name(t))),
-                    (None, Some(init)) => Some(HolderInit::Expr(init)),
-                    (None, None) => None,
-                };
-                if init.is_none() {
-                    self.unsupported("a lazy member without an initialiser");
-                }
-                self.thread_unsafe_getter(&f.name, &f.ty, init);
-            } else {
-                // `transformMemberDefThreadSafe`: the getter over the holder, the initialiser after it.
-                let init = match (f.lazy_owner, f.init) {
-                    (Some(t), _) => Some(HolderInit::TraitStatic(self.class_name(t))),
-                    (None, Some(init)) => Some(HolderInit::Expr(init)),
-                    (None, None) => None,
-                };
-                let h = self.lazy_holder(&f.name, &f.ty);
-                if init.is_none() {
-                    self.unsupported("a lazy member without an initialiser");
-                }
-                self.thread_safe_getter(&h);
-                holder = init.map(|init| (h, init));
+            let roots: Vec<TExprId> = f.init.filter(|_| thread_unsafe && f.lazy_owner.is_none()).into_iter().collect();
+            let method = self.held_context(flags, &f.name, &getter_desc, &[], f.ty.clone(), &roots, MethodSite::default());
+            let init = match (f.lazy_owner, f.init) {
+                (Some(t), _) => Some(HolderInit::TraitStatic(self.class_name(t))),
+                (None, Some(init)) => Some(HolderInit::Expr(init)),
+                (None, None) => None,
+            };
+            let h = (!thread_unsafe).then(|| self.lazy_holder(&f.name, &f.ty));
+            if init.is_none() {
+                self.unsupported("a lazy member without an initialiser");
             }
-            self.end_method();
+            match h {
+                None => self.thread_unsafe_getter(method, &f.name, &f.ty, init),
+                // `transformMemberDefThreadSafe`: the getter over the holder, the initialiser after it.
+                Some(h) => {
+                    self.hold_tree(method, "lazy val's getter", false, |g| g.lower_thread_safe_getter(&h));
+                    holder = init.map(|init| (h, init));
+                }
+            }
         } else {
             self.hold_member(flags, &f.name, &getter_desc, &[], f.ty.clone(), &[], MethodSite::default(), "accessor", |g| match (f.constant, f.init) {
                 (Some(constant), Some(init)) => {

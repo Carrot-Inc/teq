@@ -1031,36 +1031,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// In the class `c` being written, per class nested in it with the companion
-    /// `has_inner_case_companion` gives it, the lazy getter `C()`
-    /// of that module, over the holder `C$lzy`, as an object nested in a class has its own.
-    pub fn inner_case_companion_getters(&mut self, c: ClassId) {
-        let cx = self.cx;
-        let mut nested: Vec<(crate::intern::Name, ClassId)> = cx.input.syms.class(c).nested.iter().map(|(&n, &k)| (n, k)).collect();
-        nested.sort_by(|a, b| cx.input.interner.get(a.0).cmp(cx.input.interner.get(b.0)));
-        // A trait holds none: the classes mixing it in hold its companions' (`mixin`).
-        if cx.input.syms.class(c).kind == ClassKind::Trait {
-            return;
-        }
-        for (n, k) in nested {
-            if !cx.has_inner_case_companion(k) {
-                continue;
-            }
-            let getter = cx.input.interner.get(n).to_string();
-            let module: Rc<str> = Rc::from(cx.companion_name(k));
-            let ty = ErasedType::L(module.clone());
-            let desc = method_desc(&[], &ty);
-            if self.plan.has_method(&getter, &desc) {
-                continue;
-            }
-            // A module val, `Final`: a thread-safe lazy val here, where dotty makes it eagerly when
-            // `allOverriddenSymbols` finds nothing (`transformSyntheticModule`, a queued item).
-            let outer = self.this_name.clone();
-            self.thread_safe_member(&getter, &ty, super::classes::HolderInit::Module { class: module, outer }, MethodFlags { is_final: true, ..MethodFlags::PUBLIC });
-        }
-    }
-
-
     /// `O$K$`, the companion of a case class nested in a class, an object of each instance of the
     /// class (`has_instance_case_companion`): its enclosing instance in `$outer`, `apply`,
     /// `unapply`, `toString`, and as a `Mirror.Product` `fromProduct`, each case made with that

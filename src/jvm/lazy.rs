@@ -2,7 +2,7 @@
 //! 3.8.4), over scala-library's runtime: a local's holder of the `LazyRef` family, read through an accessor and
 //! computed by an initialiser under the holder's monitor (`transformLocalDef`, `transformStats`).
 
-use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodFlags, MethodRef, Relation, Visibility};
+use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodDef, MethodFlags, MethodRef, Relation, Visibility};
 use super::gen::*;
 use super::lifted::{Asker, Placed};
 use super::names::*;
@@ -257,9 +257,7 @@ impl<'a> Gen<'a> {
         let h = self.lazy_holder(getter, ty);
         self.field(FieldFlags { volatile: true, ..FieldFlags::PRIVATE }, &h.container, &ErasedType::object());
         let desc = method_desc(&[], ty);
-        self.begin_method(flags, getter, &desc, false, &[], ty.clone(), &[]);
-        self.thread_safe_getter(&h);
-        self.end_method();
+        self.hold_member(flags, getter, &desc, &[], ty.clone(), &[], super::classes::MethodSite::default(), "lazy member's getter", |g| g.lower_thread_safe_getter(&h));
         self.thread_safe_init(&h, &init);
     }
 
@@ -310,13 +308,13 @@ impl<'a> Gen<'a> {
     /// The getter of a `@threadUnsafe` member `getter` of the type `ty` over its container and flag
     /// (`mkThreadUnsafeDef`, LazyVals.scala 230-239): `if !flag then { container = rhs; flag = true }; container`,
     /// the right-hand side the member's own or a trait's static (`HolderInit::TraitStatic`), none where it has none
-    /// (reported by the caller).
-    pub fn thread_unsafe_getter(&mut self, getter: &str, ty: &ErasedType, init: Option<super::classes::HolderInit>) {
+    /// (reported by the caller), held in the context `method` (`Gen::hold_tree`).
+    pub fn thread_unsafe_getter(&mut self, method: MethodDef, getter: &str, ty: &ErasedType, init: Option<super::classes::HolderInit>) {
         use super::classes::HolderInit;
         let (container, flag) = self.thread_unsafe_names(getter);
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
-        self.body(|g| {
+        self.hold_tree(method, "@threadUnsafe lazy val's getter", false, |g| {
             let mut stmts = Vec::new();
             if let Some(init) = init {
                 let receiver = g.lir.this(this.clone());
@@ -347,16 +345,11 @@ impl<'a> Gen<'a> {
         });
     }
 
-    /// The getter's body over the holder (`mkThreadSafeDef` 374-389), returned (`Gen::lower_thread_safe_getter`).
-    pub fn thread_safe_getter(&mut self, h: &LazyHolder) {
-        self.body(|g| g.lower_thread_safe_getter(h));
-    }
-
-    /// The getter of a lazy member: `val r = container; if <r holds a value> then r.asInstanceOf[T] else if r eq
-    /// NullValue then null else x$lzyINITN()`, returned. A value is `r.isInstanceOf[T]`, or for a type a control
-    /// state's class derives from `r != null && !r.isInstanceOf[LazyValControlState]` (`immediateValueCondition`,
-    /// 367-371).
-    fn lower_thread_safe_getter(&mut self, h: &LazyHolder) -> LirId {
+    /// The getter of a lazy member over its holder (`mkThreadSafeDef` 374-389): `val r = container; if <r holds a
+    /// value> then r.asInstanceOf[T] else if r eq NullValue then null else x$lzyINITN()`, returned. A value is
+    /// `r.isInstanceOf[T]`, or for a type a control state's class derives from `r != null &&
+    /// !r.isInstanceOf[LazyValControlState]` (`immediateValueCondition`, 367-371).
+    pub(super) fn lower_thread_safe_getter(&mut self, h: &LazyHolder) -> LirId {
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
         let object = ErasedType::object();
@@ -417,9 +410,8 @@ impl<'a> Gen<'a> {
             self.unsupported(&format!("internal error: a second lazy initialiser {} in the class", h.init));
             return;
         }
-        self.begin_method(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, &h.init, "()Ljava/lang/Object;", false, &[], object, &roots);
-        self.body(|g| g.lower_thread_safe_init(h, rhs));
-        self.end_method();
+        let flags = MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC };
+        self.hold_member(flags, &h.init, "()Ljava/lang/Object;", &[], object, &roots, super::classes::MethodSite::default(), "lazy val's initialiser", |g| g.lower_thread_safe_init(h, rhs));
     }
 
     fn lower_thread_safe_init(&mut self, h: &LazyHolder, rhs: &super::classes::HolderInit) -> LirId {
