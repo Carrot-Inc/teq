@@ -2367,6 +2367,18 @@ impl<'a> Worker<'a> {
         if self.syms.sym(s).mods & crate::ast::mods::INLINE != 0 {
             return true;
         }
+        // A program's given whose signature is being completed is read from its definition, as
+        // dotty's parser decides it (`val a: b.type` beside `given b: a.type`, a cycle
+        // `singleton_cycle` reports).
+        let (in_progress, file, def) = {
+            let info = self.syms.sym(s);
+            (info.state().get() == crate::symbols::Completion::InProgress, info.file, info.def)
+        };
+        if let (true, Some(d)) = (in_progress, def) {
+            if let crate::ast::DefKind::Given(g) = &self.ast(file).def(d).kind {
+                return !g.clauses.is_empty() || !g.tparams.is_empty();
+            }
+        }
         let sig = self.sig_of(s);
         !sig.clauses.is_empty() || !sig.tparams.is_empty()
     }

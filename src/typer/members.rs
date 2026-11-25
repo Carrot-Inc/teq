@@ -1627,12 +1627,24 @@ impl<'a> Worker<'a> {
     /// progress it reads, which reads as an error (`CyclicReference`).
     pub fn widen_path(&mut self, t: TypeId) -> TypeId {
         let mut t = self.deref(t);
+        // A path met again is a cycle of singletons (`val a: b.type = b; val b: a.type = a`),
+        // which the signatures report (`singleton_cycle`): its widening is the error. Brent's
+        // walk finds it with no list: a mark moved to the path after each power of two of steps,
+        // which a cycle comes back to.
+        let (mut mark, mut power, mut steps) = (t, 1u32, 0u32);
         loop {
             match self.types.get(t) {
                 Type::This(_) | Type::Term(_) | Type::Select(..) => t = self.path_underlying(t),
                 _ => return t,
             }
             t = self.deref(t);
+            if t == mark {
+                return ERROR;
+            }
+            steps += 1;
+            if steps == power {
+                (mark, power, steps) = (t, power.saturating_mul(2), 0);
+            }
         }
     }
 

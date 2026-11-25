@@ -1342,7 +1342,7 @@ impl<'a> Worker<'a> {
 
     /// A given that takes type or term parameters, a method rather than a path (dotty's
     /// `Parsers.givenDef`).
-    fn is_given_with_clauses(&mut self, s: SymId) -> bool {
+    pub(super) fn is_given_with_clauses(&mut self, s: SymId) -> bool {
         self.syms.sym(s).kind == SymKind::Given && self.is_method_sym(s)
     }
 
@@ -6441,7 +6441,14 @@ impl<'a> Worker<'a> {
             // The path is typed as an expression (`Typer.typedSingletonTypeTree`): its term's
             // signature is read, which completes it, as `checkStable` reads the info of the
             // `TermRef` (`Types.isStable`, `isStableMember`).
-            Some(Ok(p)) if matches!(self.types.get(p), Type::Term(_) | Type::Select(..)) && self.reads_path_term(p) => self.singleton_type_read(p),
+            Some(Ok(p)) if matches!(self.types.get(p), Type::Term(_) | Type::Select(..)) && self.reads_path_term(p) => {
+                let (Type::Term(s) | Type::Select(_, s)) = self.types.get(p) else { return p };
+                let point = self.path_point(path, span);
+                match self.singleton_cycle(s, point) {
+                    true => ERROR,
+                    false => self.reading_singleton(s, point, |w| w.singleton_type_read(p)),
+                }
+            }
             // A local object stands for itself as its class type, as a top-level one does.
             Some(Ok(p)) => match self.types.get(p) {
                 Type::Term(s) => match self.local_module_of_sym(s) {
@@ -6450,14 +6457,140 @@ impl<'a> Worker<'a> {
                 },
                 _ => p,
             },
-            found => match found.and_then(|r| r.err()).and_then(|s| self.given_singleton(s, span)) {
-                Some(p) => p,
-                None => {
-                    self.error(span, "a singleton type needs a val, a parameter or an object");
-                    ERROR
+            found => {
+                let term = found.and_then(|r| r.err());
+                // A def's path is typed as the others (`def a: b.type = b; def b: a.type = a`):
+                // dotty reads its info, which closes a cycle of them.
+                let point = self.path_point(path, span);
+                if term.is_some_and(|s| self.singleton_cycle(s, point)) {
+                    return ERROR;
                 }
-            },
+                let met = self.singleton_cycles_met;
+                match term.and_then(|s| self.reading_singleton(s, point, |w| w.given_singleton(s, span))) {
+                    Some(p) => p,
+                    // The term's signature met a cycle, now or before, which is reported: dotty's
+                    // `CyclicReference` comes before the path's stability is checked.
+                    None if self.singleton_cycles_met != met || term.is_some_and(|s| self.syms.sym(s).sig.as_ref().is_some_and(|sig| sig.ret == ERROR)) => ERROR,
+                    None => {
+                        self.error(span, "a singleton type needs a val, a parameter or an object");
+                        ERROR
+                    }
+                }
+            }
         }
+    }
+
+    /// dotty's `CyclicReference` of a singleton type whose term's declared type is being resolved
+    /// (`val a: b.type = b; val b: a.type = a`): dotty types the path to read its term's info,
+    /// which completes the term's type in turn, and a term met again while its own type is
+    /// resolved (`singleton_chain`) closes a cycle: "Cyclic reference involving val a", at the
+    /// reference that closes it, the type there the error's. Whether it reported one.
+    fn singleton_cycle(&mut self, s: SymId, span: Span) -> bool {
+        let Some(i) = self.singleton_chain.iter().position(|&(c, _)| c == s) else { return false };
+        self.singleton_cycles_met += 1;
+        // Before the bodies a pass of teq's own began the cycle (a given index reads its givens'
+        // types), where dotty's typer meets the members as its walk reaches them: the cycle is
+        // kept, its members each with the reference from the one before it, and reported where
+        // the bodies' walk first reads one of them (`first_cycle_read`).
+        if !self.bodies_started {
+            let mut members = vec![(s, Some((self.env.file, span)))];
+            members.extend_from_slice(&self.singleton_chain[i + 1..]);
+            let starter = self.singleton_chain[0].1;
+            self.deferred_cycles.push(super::KeptCycle { members, starter });
+            return true;
+        }
+        self.report_singleton_cycle(s, (self.env.file, span));
+        true
+    }
+
+    /// "Cyclic reference involving val a" ("method a" for a def) at `place`, the reference to
+    /// `first`, the member whose completion began first, that closes the cycle.
+    fn report_singleton_cycle(&mut self, first: SymId, place: (FileId, Span)) {
+        // Which member reports it is the member the walk met first, which several workers'
+        // walks do not keep to: the build goes to one worker for the diagnostic.
+        self.need_serial_for_diagnostics(|| format!("a cycle of singleton types ({})", self.name_str(self.syms.sym(first).name)));
+        let kind = self.syms.sym(first).kind;
+        let method = kind == SymKind::Def || (kind == SymKind::Given && self.is_given_with_clauses(first));
+        let msg = format!("Cyclic reference involving {} {}", if method { "method" } else { "val" }, self.name_str(self.syms.sym(first).name));
+        let file = std::mem::replace(&mut self.env.file, place.0);
+        // Reported once: a retype of the file does not meet the cycle again.
+        self.once(|w| w.error(place.1, msg));
+        self.env.file = file;
+    }
+
+    /// The bodies' walk reads the signature of `sym`: where `sym` is a member of a cycle a pass
+    /// before the bodies met (`deferred_cycles`), dotty's typer completes it first, and the cycle
+    /// is reported naming it, at the reference to it from the member before it.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn first_cycle_read(&mut self, sym: SymId) {
+        let Some(k) = self.deferred_cycles.iter().position(|c| c.members.iter().any(|&(m, _)| m == sym)) else { return };
+        let cycle = self.deferred_cycles.remove(k);
+        // The definition the walk is typing, the outermost member of the read's site: where the
+        // pass's starter stands before it, dotty's walk reached the starter first and completed
+        // the cycle from there, as the pass did.
+        let reader = self.sites.owners.iter().find_map(|o| match *o {
+            super::site::SiteOwner::Sym(s) => Some(s),
+            _ => None,
+        });
+        let at = |w: &Self, s: SymId| (w.syms.sym(s).file.0, w.syms.sym(s).span.start);
+        let walk = at(self, reader.unwrap_or(sym));
+        let from_starter = cycle.starter.is_some_and(|(file, span)| (file.0, span.start) < walk);
+        match cycle.members.iter().find(|&&(m, _)| m == sym).and_then(|&(_, link)| link) {
+            Some(place) if !from_starter => self.report_singleton_cycle(sym, place),
+            // The starter's way, or a completion that began otherwise than at a singleton type: the
+            // cycle as the pass met it.
+            _ => self.report_kept_cycle(&cycle),
+        }
+    }
+
+    /// The kept cycle as the pass before the bodies met it: its first member, at the reference that
+    /// closed it.
+    fn report_kept_cycle(&mut self, cycle: &super::KeptCycle) {
+        let (first, place) = cycle.members[0];
+        self.report_singleton_cycle(first, place.expect("the reference that closes the cycle"));
+    }
+
+    /// The cycles the bodies' walk read no member of, reported as the pass before the bodies met
+    /// them.
+    pub(super) fn report_deferred_cycles(&mut self) {
+        for cycle in std::mem::take(&mut self.deferred_cycles) {
+            self.report_kept_cycle(&cycle);
+        }
+    }
+
+    /// Where dotty places an error at a singleton type's path, the path's point: a selection's
+    /// name (`A.x.type` at `x`), the start of any other (`span`, the singleton type's).
+    fn path_point(&self, path: TyExprId, span: Span) -> Span {
+        let ast = self.cur_ast();
+        let TyExpr::Select(q, _) = ast.ty(path) else { return span };
+        let from = ast.ty_end(q);
+        if from == ast::NO_END {
+            return span;
+        }
+        let text = self.source(self.env.file).text.as_bytes();
+        let end = (span.end as usize).min(text.len());
+        let mut at = (from as usize).min(end);
+        // The spaces around the dot.
+        while at < end && (text[at].is_ascii_whitespace() || text[at] == b'.') {
+            at += 1;
+        }
+        Span::new(at as u32, span.end.max(at as u32))
+    }
+
+    /// Enters `sym`, whose declared type is about to be resolved, in `singleton_chain`, with the
+    /// singleton type whose read began its completion (`singleton_read`).
+    pub(super) fn enter_singleton_chain(&mut self, sym: SymId) {
+        let link = self.singleton_read.take().filter(|&(s, ..)| s == sym).map(|(_, file, span)| (file, span));
+        self.singleton_chain.push((sym, link));
+    }
+
+    /// `f` reading the signature of the term `s` of the singleton type at `span`.
+    fn reading_singleton<R>(&mut self, s: SymId, span: Span, f: impl FnOnce(&mut Self) -> R) -> R {
+        let saved = self.singleton_read.replace((s, self.env.file, span));
+        let r = f(self);
+        self.singleton_read = saved;
+        r
     }
 
     /// Whether the path's term is a definition whose signature typing the path reads: a val, a

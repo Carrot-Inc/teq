@@ -304,7 +304,7 @@ worker_fields! {
         target_name_files, rule_member_names, derived_aliases, derived_opaques, import_values, export_blocks,
         js_import_ids, js_registry, js_imports_at_bodies, js_exported, worker, arity_classes, items, diag_ranges,
         diag_region, history_reads, told, meetings, claims, inherited, tclasses_published, tclasses_registered,
-        walk_by_size, compilation_unported, bodies_started, std_seen, arity_seen, lists_at_fork, tvars_at_fork, files,
+        walk_by_size, compilation_unported, bodies_started, deferred_cycles, std_seen, arity_seen, lists_at_fork, tvars_at_fork, files,
         ascription_constants, kind_clauses, inferred_parent_args, inferred_trait_args, sam_classes,
         std_package_misses, inline_accessor_syms, inline_results, expr_marks, eta_expansions, folded_paths,
         folded_deprecated, wildcards_used, captured_locals, spaces, deferred_matches, late_methods, override_pairs,
@@ -326,7 +326,7 @@ worker_fields! {
     thread {
         trail, mark_floor, dropped_deps, attempts, inlining, attempt_caches, bodies_in_progress, mismatches,
         mismatch_renders, logging, app_depth, pattern_type_depth, applied_class_last, unchecked_top, bounds_projections, error_nodes, pending_widenings, open_vars, conversion_open_vars,
-        inline_unboxes, completing, pending_library_names, naming_library, export_stack, export_retry,
+        inline_unboxes, completing, singleton_chain, singleton_read, singleton_cycles_met, pending_library_names, naming_library, export_stack, export_retry,
         export_retrying, diag_range_open, diag_rank, diag_range_from, tclasses_settling, tclass_settling_scopes,
         tclasses_in_checks, pending_shared, merging, infos, std_entered_pending, loader_done_pending, kind_walk,
         deferred_classes, declaring, declared_views, sealed_std_files, pending_mirror_parents, late_naming_from,

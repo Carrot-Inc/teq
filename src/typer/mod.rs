@@ -1183,6 +1183,19 @@ pub(crate) struct FormPasses {
     approx: crate::types::FormPass<depfun::Approx>,
 }
 
+/// A cycle of singleton types a pass before the bodies met (`singleton_cycle`), kept for the
+/// bodies' walk to report as dotty's typer meets it (`first_cycle_read`).
+#[derive(Clone, Debug)]
+pub struct KeptCycle {
+    /// Its members, the one met again first, each with the reference to it from the member before
+    /// it (the first's is the reference that closed the cycle).
+    pub members: Vec<(SymId, Option<(FileId, Span)>)>,
+    /// The singleton type of a definition off the chain whose read began the pass's completion (an
+    /// alias's right-hand side, a parent's type argument), where one did: dotty's walk completes
+    /// the cycle from there when it reaches that definition first.
+    pub starter: Option<(FileId, Span)>,
+}
+
 pub struct Worker<'a> {
     pub asts: &'a Asts,
     pub interner: &'a Interner,
@@ -1728,6 +1741,19 @@ pub struct Worker<'a> {
     /// How many signature, alias or class completions are under way: a definition completes
     /// in its own scope, whatever inline expansion asked for it.
     pub completing: u32,
+    /// The definitions whose declared type is being resolved, outermost first, each with the
+    /// singleton type (its file and place) whose read began its completion where one did
+    /// (`singleton_cycle`): one a singleton type names again closes a cycle.
+    pub singleton_chain: Vec<(SymId, Option<(FileId, Span)>)>,
+    /// The singleton type whose term's signature is being read (`reading_singleton`): the term,
+    /// the file and the place, the link of the term's completion in `singleton_chain`.
+    pub singleton_read: Option<(SymId, FileId, Span)>,
+    /// How many cycles of singleton types this thread met, reported or kept (`singleton_cycle`):
+    /// a read that met one says so by the count.
+    pub singleton_cycles_met: u32,
+    /// The cycles of singleton types a pass before the bodies met (`singleton_cycle`): reported
+    /// where the bodies' walk first reads one of their members (`first_cycle_read`).
+    pub deferred_cycles: Vec<KeptCycle>,
     /// Library classes completed inside another completion, whose output names are settled
     /// once the outermost completion is done: settling them decodes the signatures of the
     /// overloaded members, which may name an alias whose right-hand side is being resolved.
@@ -2872,6 +2898,9 @@ impl<'a> Typer<'a> {
             // once on the way (a signature, an import) says so where it is (`once`).
             w.diags.of_bodies = true;
             w.bodies_started = true;
+            // A cycle of singleton types met before the bodies is reported at the walk's first
+            // read of one of its members, through the hooked read (`first_cycle_read`).
+            w.profile.sig_hook |= !w.deferred_cycles.is_empty();
             w.diag_ranges.clear();
             w.history_reads.clear();
             w.told.clear();
@@ -2908,7 +2937,7 @@ impl<'a> Typer<'a> {
                 let overlays = w.types.fork_for(threads, mappings);
                 crate::types::view::forked(overlays);
                 // The forced refusal refuses a complete signature's read where the reads are hooked.
-                w.profile.sig_hook = w.profile.on || crate::shake::refusing() || (overlays && (cfg!(debug_assertions) || crate::types::noting()));
+                w.profile.sig_hook = w.profile.on || crate::shake::refusing() || (overlays && (cfg!(debug_assertions) || crate::types::noting())) || !w.deferred_cycles.is_empty();
                 crate::measure::fork_part("the overlays mapped", clock.elapsed());
                 let clock = std::time::Instant::now();
                 let queue = check::Queue::new(w, &order);
@@ -3080,6 +3109,7 @@ impl<'a> Typer<'a> {
                 }
                 w.complete_pending_sealed_files();
             }
+            w.report_deferred_cycles();
             // The members' records take the trees of the getters completed after them, by a call
             // or on another worker (`fill_getters`).
             w.fill_getters();
@@ -3467,6 +3497,10 @@ impl<'a> Worker<'a> {
             plain_max: TExprId(0),
             soft_lub: false,
             completing: 0,
+            singleton_chain: Vec::new(),
+            singleton_read: None,
+            singleton_cycles_met: 0,
+            deferred_cycles: Vec::new(),
             pending_library_names: Vec::new(),
             class_base_memo: FxMap::default(),
             std_binding_keys: None,
@@ -3968,6 +4002,10 @@ impl<'a> Worker<'a> {
             literal_receiver: None,
             plain_max: TExprId(0),
             completing: Default::default(),
+            singleton_chain: Vec::new(),
+            singleton_read: None,
+            singleton_cycles_met: 0,
+            deferred_cycles: self.deferred_cycles.clone(),
             pending_library_names: Default::default(),
             class_base_memo: FxMap::default(),
             std_binding_keys: None,

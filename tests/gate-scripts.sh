@@ -2876,6 +2876,11 @@ check "pkgobj-given-import: the table's templates and its judge's planted tables
 check "given-instance-import: the table's templates" "$work/given-instance-import.log" \
   eval 'python3 tests/support/given_instance_import.py --self-test > "$work/given-instance-import.log" 2>&1'
 
+# The table of a cycle of singleton types and the programs near one (tests/support/singleton_cycles.py, run by
+# tests/support/pkgobj-given-import.sh and tests/support/scalac_cells.scala): its templates, its judge's planted tables.
+check "singleton-cycles: the table's templates and its judge's planted tables judged as they must be" "$work/singleton-cycles.log" \
+  eval 'python3 tests/support/singleton_cycles.py --self-test > "$work/singleton-cycles.log" 2>&1'
+
 fi
 echo "gate-scripts: $pass passed, $fail failed"
 pieces_end $((fail > 0)) passed=$pass failed=$fail

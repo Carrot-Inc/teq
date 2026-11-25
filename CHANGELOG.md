@@ -7,6 +7,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A cycle of singleton types (`val a: b.type = b; val b: a.type = a`, of vals, lazy vals, givens or defs, in an
+  object, a class, a trait or a package's top level) is refused as scalac refuses it ("Cyclic reference involving val
+  a", at the reference that closes the cycle), where a check, a run or a build of it never ended, an import of the
+  cycle's givens and a summon included. A def's cycle is "involving method a", where teq said "recursive use of a
+  needs an explicit result type". A chain of singleton types that does not close compiles as it did.
 - On the JVM an inner class made through a `null` outer throws `NullPointerException`, and a superclass's constructor
   sees the captures it reads through an override, as scalac (it read `null` or `0`).
 - On the JVM an enum's body reading its case's parameter (`val y = x * 2` for `case C(x: Int)`) sees it, as scalac.

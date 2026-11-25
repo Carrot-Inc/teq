@@ -3792,6 +3792,9 @@ impl<'a> Worker<'a> {
     #[cold]
     #[inline(never)]
     fn completed_sig_hooked(&mut self, sym: SymId) -> Option<&Arc<MethodSig>> {
+        if !self.deferred_cycles.is_empty() && self.bodies_started {
+            self.first_cycle_read(sym);
+        }
         self.sig_read_noted(sym);
         if self.views_on && crate::types::noting() {
             self.types.count_sig_read(|c| c.reads += 1);
@@ -4457,8 +4460,11 @@ impl<'a> Worker<'a> {
         let t = self;
         match &def.kind {
             DefKind::Val { ty, .. } => match ty {
-                Some(ty) => {
-                    let (ty, declared) = t.declared_view(*ty, |w| w.resolve_declared_type(*ty));
+                Some(tree) => {
+                    let tree = *tree;
+                    t.enter_singleton_chain(sym);
+                    let (ty, declared) = t.declared_view(tree, |w| w.resolve_declared_type(tree));
+                    t.singleton_chain.pop();
                     MethodSig { declared, ..MethodSig::value(t.types.unannotated(t.declared_chain(ty, declared))) }
                 }
                 // An incomplete val's type is unknown unless it was declared.
@@ -4508,7 +4514,9 @@ impl<'a> Worker<'a> {
                 let tparams: Vec<TParamId> = ids.iter().map(|&(_, p)| p).collect();
                 let (ret, declared) = match f.ret {
                     Some(r) => {
+                        t.enter_singleton_chain(sym);
                         let (ty, declared) = t.declared_view(r, |w| w.resolve_declared_type(r));
+                        t.singleton_chain.pop();
                         (Some(t.declared_chain(ty, declared)), declared)
                     }
                     None => (None, NO_TYPE),
@@ -4597,7 +4605,9 @@ impl<'a> Worker<'a> {
                     t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
                     t.resolve_tparam_bounds(&g.tparams, &ids);
                     let clauses = t.resolve_clauses(&g.clauses, None, &g.tparams, &ids, None, None);
+                    t.enter_singleton_chain(sym);
                     let (ret, declared) = t.declared_view(g.ty, |w| w.resolve_declared_type(g.ty));
+                    t.singleton_chain.pop();
                     let ret = t.declared_chain(ret, declared);
                     t.env.frames.pop();
                     if t.deferred_candidate(sym) && g.alias.is_some_and(|a| t.is_deferred_marker(a)) {
