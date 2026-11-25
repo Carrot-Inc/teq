@@ -1167,10 +1167,8 @@ impl<'a> Gen<'a> {
                 let fin = info.mods & mods::FINAL != 0 && !self.is_interface;
                 let flags = MethodFlags { is_final: outer_accessor || fin, synthetic: outer_accessor, ..MethodFlags::PUBLIC };
                 let site = MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_member(fun.sym, &m.name), ..MethodSite::default() };
-                self.begin_method_at(flags, &m.name, &m.desc, false, &params, m.ret.clone(), &[body], site);
-                self.code.line(cx.line_of(info.file, info.span.start));
-                self.method_body(fun.sym, &fun.params, body);
-                self.end_method();
+                let method = self.held_context(flags, &m.name, &m.desc, &params, m.ret.clone(), &[body], site);
+                self.hold_def(method, "method", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
                 self.emit_bridges(fun.sym, &m);
                 if self.is_interface && self.dotty_forwards(fun.sym) {
                     let site = self.statified_site(&m.params, &m.ret, None, MethodSite::default());
@@ -1204,12 +1202,10 @@ impl<'a> Gen<'a> {
             // (`Namer.foreachDefaultGetterOf`); a method's own take its access alone
             // (`Desugar.defaultGetters`).
             let fin = !self.is_interface && cx.input.syms.is_forwarder(fun.sym);
-            self.begin_method_at(MethodFlags { is_final: fin, ..MethodFlags::PUBLIC }, &getter, &desc, false, &params[..before], ret.clone(), &[d], site);
-            self.body(|g| {
+            self.hold_member(MethodFlags { is_final: fin, ..MethodFlags::PUBLIC }, &getter, &desc, &params[..before], ret.clone(), &[d], site, "default getter", |g| {
                 let value = g.lower_default_value(d, shape.by_name, &ret);
                 g.lir.ret(value)
             });
-            self.end_method();
             if self.is_interface {
                 let site = if self.dotty_forwards(fun.sym) { self.statified_site(&m.params[..before], &ret, None, MethodSite::default()) } else { MethodSite::default() };
                 self.trait_static_forwarder_at(&getter, &m.params[..before], &ret, site);
@@ -5004,7 +5000,6 @@ impl<'a> Gen<'a> {
         let main = cx.input.syms.main_adapter(cx.input.interner, main).unwrap_or(main);
         let info = cx.input.syms.sym(main);
         let args_type = ErasedType::L(Rc::from("[Ljava/lang/String;"));
-        self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, "main", "([Ljava/lang/String;)V", false, &[(None, args_type.clone())], ErasedType::V, &[]);
         let m = self.mref(main);
         let module = match (object, info.owner) {
             (Some(c), _) | (None, Owner::Class(c)) => self.module_name(c),
@@ -5022,7 +5017,8 @@ impl<'a> Gen<'a> {
             self.unsupported("a repeated parameter of the entry point without ArraySeq");
             param = None;
         }
-        self.body(|g| {
+        let flags = MethodFlags { is_static: true, ..MethodFlags::PUBLIC };
+        self.hold_member(flags, "main", "([Ljava/lang/String;)V", &[(None, args_type.clone())], ErasedType::V, &[], MethodSite::default(), "entry point", |g| {
             let receiver = match &module {
                 Some(module) => g.lir.module(module),
                 None => g.lir.unit(),
@@ -5043,7 +5039,6 @@ impl<'a> Gen<'a> {
             let dropped = g.lower_adapt(called, &m.ret, &ErasedType::V);
             g.lir.ret(dropped)
         });
-        self.end_method();
     }
 }
 

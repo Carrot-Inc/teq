@@ -754,7 +754,7 @@ impl<'a> Gen<'a> {
         let this = ErasedType::L(name.clone());
         let outer = self.sym_type(tc.ctor_params[0]);
         self.field(FieldFlags { is_final: true, ..FieldFlags::PRIVATE }, "$outer", &outer);
-        self.begin_method(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), false, &[(None, outer.clone())], ErasedType::V, &[]);
+        self.begin_method(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), true, &[(None, outer.clone())], ErasedType::V, &[]);
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
         self.body(|g| {
             let made = g.lir.init(&object_init, &[]);
@@ -1085,7 +1085,7 @@ impl<'a> Gen<'a> {
         let outer_name = self.class_name(o);
         let outer = ErasedType::L(outer_name.clone());
         self.field(FieldFlags { is_final: true, synthetic: true, ..FieldFlags::PRIVATE }, "$outer", &outer);
-        self.begin_method(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), false, &[(None, outer.clone())], ErasedType::V, &[]);
+        self.begin_method(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), true, &[(None, outer.clone())], ErasedType::V, &[]);
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
         self.body(|g| {
             let instance = g.lir.this(this.clone());
