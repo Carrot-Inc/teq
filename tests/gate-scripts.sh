@@ -2881,6 +2881,11 @@ check "given-instance-import: the table's templates" "$work/given-instance-impor
 check "singleton-cycles: the table's templates and its judge's planted tables judged as they must be" "$work/singleton-cycles.log" \
   eval 'python3 tests/support/singleton_cycles.py --self-test > "$work/singleton-cycles.log" 2>&1'
 
+# The table of an extension on a builtin receiver's parent (tests/support/builtin_receiver_extensions.py, run by
+# tests/support/pkgobj-given-import.sh and tests/support/scalac_cells.scala): its templates, its judge's planted tables.
+check "builtin-receiver-extensions: the table's templates and its judge's planted tables judged as they must be" "$work/builtin-receiver-extensions.log" \
+  eval 'python3 tests/support/builtin_receiver_extensions.py --self-test > "$work/builtin-receiver-extensions.log" 2>&1'
+
 fi
 echo "gate-scripts: $pass passed, $fail failed"
 pieces_end $((fail > 0)) passed=$pass failed=$fail

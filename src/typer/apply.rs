@@ -15017,7 +15017,11 @@ impl<'a> Worker<'a> {
 
     /// A receiver parameter of a class type takes instances of that class only, which settles
     /// most candidates without instantiating them; but a `*:` chain, which a tuple class conforms
-    /// to by the subtype check's rule and not by its base classes.
+    /// to by the subtype check's rule and not by its base classes, and a builtin receiver's class
+    /// (`String`, `Array`), whose base types are itself alone: its parents are the subtype check's
+    /// rules (`string_interface`, AnyRef's), which decide, as they do for a literal's type. Another
+    /// builtin class it never derives from, but AnyRef and AnyVal, and `Null`'s class conforms to
+    /// every reference class.
     fn receiver_class_rules_out(&mut self, sym: SymId, recv_ty: TypeId) -> bool {
         let ext_clauses = self.syms.sym(sym).ext_clauses as usize;
         let Some(recv_param) = self.sig_of(sym).clauses.iter().take(ext_clauses).find(|c| !c.is_using).map(|c| c.params[0].ty) else { return false };
@@ -15029,6 +15033,13 @@ impl<'a> Worker<'a> {
         let Type::Class(actual, _) = self.types.get(recv_ty) else { return false };
         let Some(info) = self.syms.class_done(actual) else { return false };
         let opaque = |k: ClassKind| k == ClassKind::Opaque;
+        if info.kind == ClassKind::Builtin {
+            return self.syms.class(wanted).kind == ClassKind::Builtin
+                && wanted != actual
+                && wanted != self.b.any_ref
+                && wanted != self.b.any_val
+                && actual != self.b.null;
+        }
         !opaque(info.kind)
             && !opaque(self.syms.class(wanted).kind)
             && !info.base_types.iter().any(|&(b, _)| b == wanted)

@@ -7,6 +7,11 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- An extension whose receiver is a class `String` or `Array` derives from (`extension (x: CharSequence) def +:(y:
+  java.util.List[String])`, an extension on `AnyRef`, `Object` or `Comparable[String]`) applies to a receiver of that
+  type, a val's or a call's as a literal's, in a selection, an infix or right-associative operator's call and the
+  method form, as under scalac, where it was "value +: is not a member of List[E]", or where another `+:` was taken:
+  `x +: "b"` for a String `x` printed `Vector(a, b)`.
 - A value class's `super.equals(x)` is `false` for every argument, as scalac's (Object's equals of a box nothing else
   holds), where it was `true` for `this` on JavaScript and in the interpreter, and on the JVM from a lambda or a local
   def.
