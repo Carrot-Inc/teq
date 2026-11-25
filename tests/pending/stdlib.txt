@@ -448,6 +448,7 @@ structural_erased_signatures	output differs
 structural_erasure_lists	output differs
 structural_reflective_calls	output differs
 structural_signatures	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+super_call_object_members_jvm	output differs
 super_rebind_result	TypeError: this.choose$Any$super1 is not a function
 symbol_name	error: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition withou
 sync_exits_jvm	error: type IllegalThreadStateException not found

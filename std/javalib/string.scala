@@ -186,7 +186,7 @@ package java.lang:
     @js("$1")
     def newString(s: String): String
     @js("\"\"")
-    @jvm("ldc \"\"")
+    @jvm("new java/lang/String dup invokespecial java/lang/String.<init>()V")
     def newString(): String
     @jvm("new java/lang/String dup $1 invokespecial java/lang/String.<init>(Ljava/lang/StringBuffer;)V")
     def newString(buffer: java.lang.StringBuffer): String = buffer.toString

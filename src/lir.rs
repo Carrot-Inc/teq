@@ -270,8 +270,6 @@ pub enum Unlowered {
     LocalTraitMemberUnplain,
     /// A local def's default argument.
     DefaultOfLocalDef,
-    /// A `@jvm` template written from its text, or the typer's own text that is no one call.
-    TemplateText,
     /// A local `def`'s declaration, where its lifted method is named and queued (`Kind::LocalFun`).
     LocalDefDeclaration,
     /// `class B extends A` where every parameter of `A` has a default and none is written.
@@ -544,6 +542,19 @@ pub enum Refusal {
     NoJvmBody { name: Rc<str>, owner: Option<Rc<str>> },
     /// A template text of the typer's that is JavaScript's alone.
     JavaScriptTemplate(Rc<str>),
+    /// An enum's lookup (`values`, `valueOf`, `fromOrdinal`) on a value whose companion is not known.
+    EnumLookupWithoutCompanion,
+    /// A partial function literal in a build whose runtime has no `PartialFunctionImpl`.
+    PartialFunctionWithoutRuntimeClass,
+    /// A `@jvm` template's stack code no tree is read from, or one whose instructions do not take the
+    /// values the use gives them: what is named (`instruction`, `placeholder`, `method reference`,
+    /// `field reference`, `runtime call`), the item and the text.
+    Template { what: &'static str, item: Rc<str>, text: Rc<str> },
+    /// A template's new array of the use's type, which is no array's.
+    NewArrayOfUnknownElement,
+    /// `super.m(..)` of a program's member that carries its own `@jvm` template, which stands for every call of
+    /// it: no class file method of it is the super call's.
+    SuperCallOfOwnTemplate { member: Rc<str> },
     /// An enum case's call of its enum's constructor that passes none of the enum's arguments.
     EnumCaseWithoutArguments,
     /// A class's arguments to a trait that do not match the trait's parameters.
@@ -590,6 +601,11 @@ impl Refusal {
             Refusal::NoJvmBody { name, owner: Some(owner) } => format!("no @jvm intrinsic or body for {} of {}", name, owner),
             Refusal::NoJvmBody { name, owner: None } => format!("no @jvm intrinsic or body for {}", name),
             Refusal::JavaScriptTemplate(text) => format!("the JavaScript template {}", text),
+            Refusal::EnumLookupWithoutCompanion => "an enum lookup whose companion is not known".to_string(),
+            Refusal::PartialFunctionWithoutRuntimeClass => "the runtime class PartialFunctionImpl is missing".to_string(),
+            Refusal::Template { what, item, text } => format!("the {} {} of {}", what, item, text),
+            Refusal::NewArrayOfUnknownElement => "a new array of an element type only a ClassTag knows".to_string(),
+            Refusal::SuperCallOfOwnTemplate { member } => format!("not supported on the JVM yet: a super call of {}, which carries its own `@jvm` template", member),
             Refusal::EnumCaseWithoutArguments => "an enum case without the arguments of its enum".to_string(),
             Refusal::TraitArgumentsMismatch => "the arguments of a trait that its parameters do not match".to_string(),
             Refusal::ByNameDefaultWithoutSignature => "the default of a by-name parameter of a class file without its Scala signature".to_string(),

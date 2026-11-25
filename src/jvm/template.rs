@@ -3,7 +3,7 @@
 //! assembled from the text (`Gen::assemble`). Of the texts the typer makes itself, one that
 //! is a call becomes that call; `Gen::intrinsic` writes the others.
 
-use crate::lir::{Arith, Cast, ErasedType, Invoke, Kind, LirId, MethodRef, Refusal, Unlowered};
+use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LirId, MethodRef, Refusal, Relation};
 use super::classfile::op;
 use super::gen::{erased_array_method, primitive_conversion, Gen, Referenced, Site};
 use super::intrinsic::{plain_op, single_form, split_method, tokenize, typer_text};
@@ -23,8 +23,8 @@ pub(super) enum Template {
     Single(Rc<MethodRef>),
     /// Stack code that is a tree.
     Tree(Rc<Tree>),
-    /// Other stack code, or a text the typer made.
-    Text,
+    /// Stack code no tree is read from: the token of the instruction where reading stopped.
+    Unread(usize),
 }
 
 /// Stack code in which every value is left once and taken once, by the instruction that
@@ -34,6 +34,8 @@ pub(super) struct Tree {
     ops: Vec<Op>,
     /// How many arguments the placeholders reach.
     arguments: usize,
+    /// The token each op was read from, which a refusal names (`Gen::template_route`).
+    at: Vec<usize>,
     /// It makes an array of the use's type (`array_new`), which must be an array's.
     makes_array: bool,
 }
@@ -50,16 +52,31 @@ enum Op {
     New(Rc<MethodRef>),
     /// `getstatic`: the class, the field, its type.
     StaticField(Rc<str>, Rc<str>, ErasedType),
+    /// `getfield`: the field of the instance under it: the class, the field, its type.
+    Field(Rc<str>, Rc<str>, ErasedType),
+    /// `putfield`: the field of the instance under the value set to it; no value.
+    FieldStore(Rc<str>, Rc<str>, ErasedType),
+    /// `putstatic`: the static field set to the value under it; no value.
+    StaticFieldStore(Rc<str>, Rc<str>, ErasedType),
+    /// `ldc "text"`: the string constant.
+    Text(Rc<str>),
     /// `rt`, `getstatic C.MODULE$:LC;`: the instance of the object whose class is `C`.
     Module(Rc<str>),
     /// `ipush n`, `iconst_n`.
     Int(i32),
     /// `aconst_null`: the null reference.
     Null,
-    /// A primitive conversion, to this type.
-    Convert(ErasedType),
+    /// A primitive conversion, to this type, by this instruction.
+    Convert(ErasedType, u8),
     /// An operation on two values of this type.
     Binary(Arith, ErasedType),
+    /// `iconst_1 ixor` on a boolean: its negation.
+    Not,
+    /// `ineg`, `lneg`, `dneg`: the number negated, of this type.
+    Neg(ErasedType),
+    /// `lcmp`, `dcmpl`, `dcmpg`: the `Int` -1, 0 or 1 by how the two values of this type compare; a
+    /// NaN on either side gives 1 where the flag says so (`dcmpg`), else -1 (`dcmpl`).
+    ThreeWay(ErasedType, bool),
     /// `cast_result`: the value as the type the typer recorded for the use.
     AsRecorded,
     /// `checkcast C`: the reference tested to be null or an instance of the class or array
@@ -80,6 +97,10 @@ enum Op {
     ArrayClone,
     /// `array_new`: a new array of the use's type, of the length under it.
     NewArray,
+    /// `builder_append`, `builder_insert`: `java.lang.StringBuilder`'s `append` (`insert` at the
+    /// index under the value) whose parameter the value's own type picks (`Gen::rendered_as`).
+    BuilderAppend,
+    BuilderInsert,
     /// A last `pop`: the value dropped.
     Drop,
     /// `dup`: the value held in a temporary, read by each of its two copies.
@@ -112,11 +133,17 @@ pub(super) enum TemplateRoute {
     /// The typer's text for `x.getClass` of a primitive receiver: the receiver evaluated for its
     /// effects, then the primitive's class, the static `TYPE` of this box class.
     PrimitiveClass(Rc<str>),
+    /// The typer's text `($0 ?? $1)`: the first argument unboxed to the primitive the second is
+    /// of, the second where the first is null (`Gen::lower_unbox`).
+    Unbox,
+    /// A quote, or a member of the std's quoted reflection, which runs at compile time only: a
+    /// method holding one that the output keeps (an override of a jar trait's member,
+    /// `Literally.validate`, `TreeMethods.asExpr` beside a macro's expansion) throws if it is
+    /// ever called.
+    CompileTimeOnly,
     /// A template the JVM has no translation of, refused: a member with no `@jvm` template or
     /// body, or a JavaScript text of the typer's.
     Refused(Refusal),
-    /// From the text: assembled, or the typer's own text.
-    Text,
 }
 
 impl<'a> Gen<'a> {
@@ -138,66 +165,106 @@ impl<'a> Gen<'a> {
             if let Some(route) = self.typer_route(template, text, args) {
                 return route;
             }
-            return match self.refused_template(template, text) {
-                Some(why) => TemplateRoute::Refused(why),
-                None => TemplateRoute::Text,
-            };
+            if text.starts_with("$quote") || text.starts_with('!') && self.template_owner(template).is_some_and(|o| o.starts_with("scala/quoted/")) {
+                return TemplateRoute::CompileTimeOnly;
+            }
+            return TemplateRoute::Refused(self.refused_template(template, text));
         }
+        let tokens = || tokenize(text);
+        let refused = |what: &'static str, item: &str| TemplateRoute::Refused(Refusal::Template { what, item: Rc::from(item), text: Rc::from(text) });
         match &*self.template(text) {
             Template::Single(m) if args.len() >= m.params.len() + (m.kind != Invoke::Static) as usize => TemplateRoute::Single(m.clone()),
-            Template::Tree(tree) if args.len() >= tree.arguments && (!tree.makes_array || Self::array_element(&self.recorded_erasure(e)).is_some()) => {
-                TemplateRoute::Tree(tree.clone())
+            Template::Single(_) => refused("instruction", &tokens()[0]),
+            Template::Tree(tree) if args.len() < tree.arguments => {
+                let tokens = tokens();
+                let beyond = tokens.iter().find(|t| t.strip_prefix('$').and_then(|r| r.split(':').next()?.parse::<usize>().ok()).is_some_and(|n| n >= args.len()));
+                refused("placeholder", beyond.map_or("", |t| t.as_str()))
             }
-            _ => TemplateRoute::Text,
+            Template::Tree(tree) if tree.makes_array && Self::array_element(&self.recorded_erasure(e)).is_none() => TemplateRoute::Refused(Refusal::NewArrayOfUnknownElement),
+            Template::Tree(tree) => match self.tree_unfit(tree, args) {
+                None => TemplateRoute::Tree(tree.clone()),
+                Some(k) => refused("instruction", &tokens()[tree.at[k]]),
+            },
+            Template::Unread(at) => {
+                let (what, item) = unread(&tokens(), *at);
+                refused(what, &item)
+            }
         }
     }
 
     /// The refusal of a template the JVM has no translation of: a member whose template names no
-    /// body (`!name`), unless it is the std's quoted reflection, which runs at compile time only
-    /// (`Gen::intrinsic`); a typer's text that is JavaScript's alone. None for the typer's texts the
-    /// old generator writes (`Gen::intrinsic`): a quote, an unboxing, an enum's lookup and a
-    /// partial function the typer's routes do not take. A primitive's class and a product's prefix
-    /// with no argument (a program's own `@jvm` on a top-level def) are refused like the others.
-    fn refused_template(&mut self, template: StrRef, text: &str) -> Option<Refusal> {
+    /// body (`!name`, the std's quoted reflection aside, `TemplateRoute::CompileTimeOnly`); an
+    /// enum's lookup whose companion is not known; a partial function where the runtime lacks its
+    /// class; a typer's text that is JavaScript's alone. A primitive's class, a product's prefix and
+    /// an unboxing with too few arguments (a program's own `@jvm` on a top-level def) are refused
+    /// like the others.
+    fn refused_template(&mut self, template: StrRef, text: &str) -> Refusal {
         if let Some(name) = text.strip_prefix('!') {
             let owner = self.template_owner(template);
-            if owner.as_deref().is_some_and(|o| o.starts_with("scala/quoted/")) {
-                return None;
-            }
-            return Some(Refusal::NoJvmBody { name: Rc::from(name), owner });
+            return Refusal::NoJvmBody { name: Rc::from(name), owner };
         }
-        let written = text.starts_with("$quote")
-            || matches!(text, UNBOX | "$enumValues($0)" | "$enumValueOf($0, $1, $2, $3, $4)" | "$enumFromOrdinal($0, $1, $2)" | "$enumCaseOfOrdinal($0, $1, $2, $3, $4)" | "$pf($0, $1)");
-        (!written).then(|| Refusal::JavaScriptTemplate(Rc::from(text)))
+        match text {
+            "$enumValues($0)" | "$enumValueOf($0, $1, $2, $3, $4)" | "$enumFromOrdinal($0, $1, $2)" | "$enumCaseOfOrdinal($0, $1, $2, $3, $4)" => Refusal::EnumLookupWithoutCompanion,
+            "$pf($0, $1)" => Refusal::PartialFunctionWithoutRuntimeClass,
+            _ => Refusal::JavaScriptTemplate(Rc::from(text)),
+        }
     }
 
-    /// A use of a template, or why its route is not lowered yet.
-    pub(super) fn lower_template(&mut self, e: TExprId, template: StrRef, args: ListRef) -> Result<LirId, Unlowered> {
+    /// A use of a template: its nodes, or its refusal. A member's template reached through `super`
+    /// is the member's super call, as scalac writes it (`invokespecial` on the class `super` names,
+    /// `Gen::lower_super_call`): the template stands for the member called on an instance, which a
+    /// super call bypasses; a member of the program that carries its own template is refused there.
+    pub(super) fn lower_template(&mut self, e: TExprId, template: StrRef, list: ListRef) -> LirId {
         let cx = self.cx;
-        let args: &[TExprId] = cx.input.prog.expr_list(args);
+        let args: &[TExprId] = cx.input.prog.expr_list(list);
+        let text: &str = &cx.input.prog.strings[template.idx()];
+        if let (Some(&r), Some((name, ret))) = (args.first(), any_member_over_super(text)) {
+            if matches!(cx.input.prog.expr(r), TExpr::Super(_)) {
+                return self.lower_object_super_call(e, name, Vec::new(), ret, Vec::new());
+            }
+        }
+        if let (Some(&s), Some(&r)) = (cx.input.prog.template_syms.get(&template), args.first()) {
+            if matches!(cx.input.prog.expr(r), TExpr::Super(_)) {
+                let std = cx.input.sources.get(cx.input.syms.sym(s).file.0 as usize).is_some_and(|f| f.is_std);
+                if !std {
+                    let member = Rc::from(cx.input.interner.get(cx.input.syms.sym(s).name));
+                    return self.lower_refused(Refusal::SuperCallOfOwnTemplate { member });
+                }
+                return self.lower_super_call(e, r, s, ListRef { start: list.start + 1, len: list.len - 1 });
+            }
+        }
         match self.template_route(e, template, args) {
-            TemplateRoute::Single(m) => Ok(self.lower_single(args, &m)),
-            TemplateRoute::Tree(tree) => Ok(self.lower_tree(e, args, &tree)),
-            TemplateRoute::ObjectMember(m) => Ok(self.lower_object_member(args, &m)),
-            TemplateRoute::Member(m) => Ok(self.lower_member(args, &m)),
+            TemplateRoute::Single(m) => self.lower_single(args, &m),
+            TemplateRoute::Tree(tree) => self.lower_tree(e, args, &tree),
+            TemplateRoute::ObjectMember(m) => self.lower_object_member(args, &m),
+            TemplateRoute::Member(m) => self.lower_member(args, &m),
             TemplateRoute::Made(ctor) => {
                 let mut operands: Vec<LirId> = Vec::with_capacity(ctor.params.len());
                 for (a, p) in args.iter().zip(&ctor.params) {
                     operands.push(self.lower_expr(*a, p));
                 }
                 let operands = self.lir.list(&operands);
-                Ok(self.lir.push(Kind::New { touch: None, ctor: ctor.clone(), args: operands }, ErasedType::L(ctor.owner.clone())))
+                self.lir.push(Kind::New { touch: None, ctor: ctor.clone(), args: operands }, ErasedType::L(ctor.owner.clone()))
             }
-            TemplateRoute::Synchronized => Ok(self.lower_synchronized(args[0], args[1])),
+            TemplateRoute::Synchronized => self.lower_synchronized(args[0], args[1]),
+            TemplateRoute::Unbox => self.lower_unbox(args[0], args[1]),
+            TemplateRoute::CompileTimeOnly => {
+                let exception: Rc<str> = Rc::from("java/lang/UnsupportedOperationException");
+                let string = ErasedType::L(Rc::from(STRING));
+                let ctor = Rc::new(reference(Invoke::Special, &exception, "<init>", vec![string.clone()], ErasedType::V));
+                let message = self.lir.push(Kind::Text(Rc::from("runs at compile time only")), string);
+                let args = self.lir.list(&[message]);
+                let made = self.lir.push(Kind::New { touch: None, ctor, args }, ErasedType::L(exception));
+                self.lir.push(Kind::Throw(made), ErasedType::V)
+            }
             TemplateRoute::PrimitiveClass(boxed) => {
                 let class = ErasedType::L(Rc::from("java/lang/Class"));
                 let dropped = self.lower_expr(args[0], &ErasedType::V);
                 let read = self.lir.push(Kind::StaticField { owner: boxed, name: Rc::from("TYPE") }, class.clone());
                 let stmts = self.lir.list(&[dropped]);
-                Ok(self.lir.push(Kind::Block { stmts, result: read }, class))
+                self.lir.push(Kind::Block { stmts, result: read }, class)
             }
-            TemplateRoute::Refused(refusal) => Ok(self.lower_refused(refusal)),
-            TemplateRoute::Text => Err(Unlowered::TemplateText),
+            TemplateRoute::Refused(refusal) => self.lower_refused(refusal),
         }
     }
 
@@ -222,6 +289,7 @@ impl<'a> Gen<'a> {
             },
             "$productPrefix($0)" if !args.is_empty() => TemplateRoute::Member(named(Invoke::Interface, PRODUCT, "productPrefix", Vec::new(), ErasedType::L(Rc::from(STRING)))),
             "$synchronized($0, $1)" if args.len() >= 2 => TemplateRoute::Synchronized,
+            UNBOX if args.len() >= 2 => TemplateRoute::Unbox,
             "$identityHash($0)" if !args.is_empty() => TemplateRoute::Member(named(Invoke::Static, "java/lang/System", "identityHashCode", vec![object], ErasedType::I)),
             "$0.$ordinal" if !args.is_empty() => TemplateRoute::Member(named(Invoke::Interface, ENUM, "ordinal", Vec::new(), ErasedType::I)),
             // The lookups of an enum's companion (`prims.rs`): its own `values`, `valueOf` and
@@ -251,6 +319,42 @@ impl<'a> Gen<'a> {
             }
             _ => return None,
         })
+    }
+
+    /// `super.name(args)` of a member of `Object` that no class behind the caller defines
+    /// (`Typer::apply_super_any_member`), as scalac writes it: `invokespecial` on the superclass,
+    /// which names it (`Gen::lower_super_call`'s owner).
+    pub(super) fn lower_object_super_call(&mut self, e: TExprId, name: &str, params: Vec<ErasedType>, ret: ErasedType, args: Vec<LirId>) -> LirId {
+        let cx = self.cx;
+        let owner = match self.this_class.and_then(|c| cx.input.syms.class(c).superclass) {
+            Some(c) => self.class_name(c),
+            None => Rc::from(OBJECT),
+        };
+        let desc = method_desc(&params, &ret);
+        let method = Rc::new(MethodRef { owner, owner_is_interface: false, name: name.to_string(), params, ret: ret.clone(), desc, kind: Invoke::Special });
+        let receiver = self.lower_instance();
+        let args = self.lir.list(&args);
+        let place = cx.input.prog.span_of(e).map(|(file, span)| (file, span.end));
+        self.lir.push(Kind::SuperCall { method, receiver, args, order: None, place }, ret)
+    }
+
+    /// `($0 ?? $1)`, teq's text for a value of a reflective call unboxed to a primitive
+    /// (`typer::prims::UNBOX`): the value held, its unboxing where it is not null, else `zero`, at
+    /// the primitive's type, which a later ascription of the value leaves alone.
+    fn lower_unbox(&mut self, value: TExprId, zero: TExprId) -> LirId {
+        let object = ErasedType::object();
+        let prim = self.recorded_erasure(zero);
+        let held = self.lir.temp();
+        let init = self.lower_expr(value, &object);
+        let keep = self.lir.keep(held, init);
+        let read = self.lir.kept(held, object.clone());
+        let null = self.lir.push(Kind::Null, object.clone());
+        let present = self.lir.push(Kind::Compare { relation: Relation::Ne, how: Comparing::Identity, left: read, right: null }, ErasedType::Z);
+        let boxed = self.lir.kept(held, object.clone());
+        let unboxed = self.lower_adapt(boxed, &object, &prim);
+        let otherwise = self.lower_expr(zero, &prim);
+        let value = self.lir.push(Kind::If { cond: present, then: unboxed, otherwise: Some(otherwise) }, prim);
+        self.lir.seq(&[keep], value)
     }
 
     /// The name of the class that declares the def a template stands on.
@@ -405,6 +509,33 @@ impl<'a> Gen<'a> {
                     self.lir.push(Kind::New { touch: None, ctor: ctor.clone(), args: operands }, ErasedType::L(ctor.owner.clone()))
                 }
                 Op::StaticField(owner, name, ty) => self.lir.push(Kind::StaticField { owner: owner.clone(), name: name.clone() }, ty.clone()),
+                Op::Field(owner, name, ty) => {
+                    let receiver = take(&mut stack);
+                    self.lir.push(Kind::Field { receiver, owner: owner.clone(), name: name.clone() }, ty.clone())
+                }
+                // A field set leaves no value: the template's value where it is the last
+                // instruction, else a statement of its block (`Op::Statement`).
+                Op::FieldStore(owner, name, ty) | Op::StaticFieldStore(owner, name, ty) => {
+                    let instance = matches!(op, Op::FieldStore(..));
+                    let value = take(&mut stack);
+                    let held = self.lir.ty(value).clone();
+                    let value = self.lower_adapt(value, &held, ty);
+                    let (owner, name) = (owner.clone(), name.clone());
+                    match instance {
+                        true => {
+                            let receiver = take(&mut stack);
+                            self.lir.push(Kind::FieldStore { receiver, owner, name, value }, ErasedType::V)
+                        }
+                        false => self.lir.push(Kind::StaticFieldStore { owner, name, value }, ErasedType::V),
+                    }
+                }
+                // The string as a value, an operand wherever it stands (`Gen::assemble` loads it as one): a
+                // concatenation's text alone is read off a `Text` node itself (`Gen::lower_concat`).
+                Op::Text(text) => {
+                    let string = ErasedType::L(Rc::from(STRING));
+                    let constant = self.lir.push(Kind::Text(text.clone()), string.clone());
+                    self.lir.push(Kind::Typed(constant), string)
+                }
                 Op::Module(class) => self.lir.push(Kind::Module(class.clone()), ErasedType::L(class.clone())),
                 Op::Int(v) => self.lir.push(Kind::Int(*v), ErasedType::I),
                 // The null seen at `Object`, as `Gen::assemble` types it: compared with `eq`/`ne` it is
@@ -414,15 +545,33 @@ impl<'a> Gen<'a> {
                     let null = self.lir.push(Kind::Null, ErasedType::object());
                     self.lir.push(Kind::Typed(null), ErasedType::object())
                 }
-                Op::Convert(to) => {
+                Op::Convert(to, _) => {
                     let value = take(&mut stack);
                     let from = self.lir.ty(value).clone();
                     self.lower_adapt(value, &from, to)
                 }
+                // An operand of a smaller integral type or a boolean is an `Int`'s (`Gen::tree_unfit`).
                 Op::Binary(arith, ty) => {
                     let right = take(&mut stack);
                     let left = take(&mut stack);
+                    let (lt, rt) = (self.lir.ty(left).clone(), self.lir.ty(right).clone());
+                    let (left, right) = (self.lower_adapt(left, &lt, ty), self.lower_adapt(right, &rt, ty));
                     self.lir.push(Kind::Binary { op: *arith, left, right }, ty.clone())
+                }
+                Op::Not => {
+                    let value = take(&mut stack);
+                    self.lir.push(Kind::Not(value), ErasedType::Z)
+                }
+                Op::Neg(ty) => {
+                    let value = take(&mut stack);
+                    let held = self.lir.ty(value).clone();
+                    let value = self.lower_adapt(value, &held, ty);
+                    self.lir.push(Kind::Neg(value), ty.clone())
+                }
+                Op::ThreeWay(ty, nan_greater) => {
+                    let right = take(&mut stack);
+                    let left = take(&mut stack);
+                    self.lower_three_way(left, right, ty, *nan_greater)
                 }
                 Op::AsRecorded => {
                     let value = take(&mut stack);
@@ -489,12 +638,32 @@ impl<'a> Gen<'a> {
                     let array = self.recorded_erasure(e);
                     self.lir.push(Kind::NewArray { length }, array)
                 }
+                Op::BuilderAppend | Op::BuilderInsert => {
+                    let value = take(&mut stack);
+                    let mut operands = Vec::with_capacity(2);
+                    let mut params = Vec::with_capacity(2);
+                    if matches!(op, Op::BuilderInsert) {
+                        let index = take(&mut stack);
+                        operands.push(index);
+                        params.push(ErasedType::I);
+                    }
+                    let builder = take(&mut stack);
+                    let held = self.lir.ty(value).clone();
+                    let param = Self::rendered_as(&held);
+                    operands.push(self.lower_adapt(value, &held, &param));
+                    params.push(param);
+                    let name = if matches!(op, Op::BuilderInsert) { "insert" } else { "append" };
+                    let method = Rc::new(reference(Invoke::Virtual, STRING_BUILDER, name, params, ErasedType::L(Rc::from(STRING_BUILDER))));
+                    let args = self.lir.list(&operands);
+                    self.lir.push(Kind::Call { method: method.clone(), at: None, receiver: builder, args, order: None }, method.ret.clone())
+                }
                 Op::Drop => {
                     let value = take(&mut stack);
                     let from = self.lir.ty(value).clone();
                     self.lower_adapt(value, &from, &ErasedType::V)
                 }
                 Op::Dup => {
+                    self.hold_under(&mut stack, 1, &mut statements);
                     let value = take(&mut stack);
                     let ty = self.lir.ty(value).clone();
                     let held = self.lir.temp();
@@ -503,6 +672,7 @@ impl<'a> Gen<'a> {
                     self.lir.kept(held, ty)
                 }
                 Op::Statement => {
+                    self.hold_under(&mut stack, 1, &mut statements);
                     let value = take(&mut stack);
                     let from = self.lir.ty(value).clone();
                     statements.push(self.lower_adapt(value, &from, &ErasedType::V));
@@ -511,7 +681,9 @@ impl<'a> Gen<'a> {
                 // What follows the template's use is dead: the type its place wants is the
                 // fitting's to make from none.
                 Op::Throw => {
+                    self.hold_under(&mut stack, 1, &mut statements);
                     let value = take(&mut stack);
+                    stack.clear();
                     self.lir.push(Kind::Throw(value), ErasedType::V)
                 }
             };
@@ -521,6 +693,166 @@ impl<'a> Gen<'a> {
         match statements.is_empty() {
             true => value,
             false => self.lir.seq(&statements, value),
+        }
+    }
+
+    /// `lcmp`, `dcmpl`, `dcmpg` as the nodes of what they compute: the two values held in
+    /// temporaries, the left first, then -1 where the left is less, 0 where they are equal (`+0.0`
+    /// and `-0.0` among them) and 1 where it is greater; a NaN, in no order and equal to nothing,
+    /// falls to the last answer, which is 1 where `nan_greater` (`dcmpg`) and -1 otherwise (`dcmpl`,
+    /// whose chain asks for greater first).
+    fn lower_three_way(&mut self, left: LirId, right: LirId, ty: &ErasedType, nan_greater: bool) -> LirId {
+        let (lt, rt) = (self.lir.ty(left).clone(), self.lir.ty(right).clone());
+        let (left, right) = (self.lower_adapt(left, &lt, ty), self.lower_adapt(right, &rt, ty));
+        let (l, r) = (self.lir.temp(), self.lir.temp());
+        let keeps = [self.lir.keep(l, left), self.lir.keep(r, right)];
+        let (first, answer, last) = if nan_greater { (Relation::Lt, -1, 1) } else { (Relation::Gt, 1, -1) };
+        let compare = |this: &mut Self, relation: Relation| {
+            let (a, b) = (this.lir.kept(l, ty.clone()), this.lir.kept(r, ty.clone()));
+            this.lir.push(Kind::Compare { relation, how: Comparing::Numbers, left: a, right: b }, ErasedType::Z)
+        };
+        let equal = compare(self, Relation::Eq);
+        let (zero, last) = (self.lir.push(Kind::Int(0), ErasedType::I), self.lir.push(Kind::Int(last), ErasedType::I));
+        let inner = self.lir.push(Kind::If { cond: equal, then: zero, otherwise: Some(last) }, ErasedType::I);
+        let ordered = compare(self, first);
+        let answer = self.lir.push(Kind::Int(answer), ErasedType::I);
+        let value = self.lir.push(Kind::If { cond: ordered, then: answer, otherwise: Some(inner) }, ErasedType::I);
+        self.lir.seq(&keeps, value)
+    }
+
+    /// The first of a tree's instructions that does not take the values the use gives it, None where
+    /// all do: the arguments its text
+    /// leaves untyped are at their own types (`Gen::placeholder_type`), which a conversion must
+    /// convert by its instruction, an operation must be of (an `Int`'s of a smaller integral type
+    /// or a boolean), an index must be an `Int` and a cast or a test a reference.
+    fn tree_unfit(&mut self, tree: &Tree, args: &[TExprId]) -> Option<usize> {
+        let int = |t: &ErasedType| matches!(t, ErasedType::I | ErasedType::Z | ErasedType::B | ErasedType::S | ErasedType::C);
+        let mut stack: Vec<ErasedType> = Vec::new();
+        for (k, op) in tree.ops.iter().enumerate() {
+            let mut take = |n: usize| stack.split_off(stack.len().saturating_sub(n));
+            let left = match op {
+                Op::Operand(n, declared) => declared.clone().unwrap_or_else(|| self.placeholder_type(args[*n])),
+                Op::Call(m) => {
+                    take(m.params.len() + 1);
+                    m.ret.clone()
+                }
+                Op::StaticCall(m) => {
+                    take(m.params.len());
+                    m.ret.clone()
+                }
+                Op::New(c) => {
+                    take(c.params.len());
+                    ErasedType::L(c.owner.clone())
+                }
+                Op::StaticField(_, _, ty) => ty.clone(),
+                Op::Field(_, _, ty) => {
+                    take(1);
+                    ty.clone()
+                }
+                Op::FieldStore(..) | Op::StaticFieldStore(..) => {
+                    take(if matches!(op, Op::FieldStore(..)) { 2 } else { 1 });
+                    ErasedType::V
+                }
+                Op::Neg(ty) => {
+                    if !take(1).iter().all(|t| t == ty || *ty == ErasedType::I && int(t)) {
+                        return Some(k);
+                    }
+                    ty.clone()
+                }
+                Op::ThreeWay(ty, _) => {
+                    if !take(2).iter().all(|t| t == ty) {
+                        return Some(k);
+                    }
+                    ErasedType::I
+                }
+                Op::ArrayStore | Op::Drop | Op::Throw => {
+                    take(if matches!(op, Op::ArrayStore) { 3 } else { 1 });
+                    ErasedType::V
+                }
+                Op::Module(class) => ErasedType::L(class.clone()),
+                Op::Int(_) => ErasedType::I,
+                Op::Null | Op::AsRecorded => {
+                    if matches!(op, Op::AsRecorded) {
+                        take(1);
+                    }
+                    ErasedType::object()
+                }
+                Op::Text(_) => ErasedType::L(Rc::from(STRING)),
+                Op::Convert(to, opcode) => {
+                    let from = take(1).pop().unwrap_or(ErasedType::V);
+                    if primitive_conversion(&from, to) != [*opcode] {
+                        return Some(k);
+                    }
+                    to.clone()
+                }
+                Op::Binary(_, ty) => {
+                    if !take(2).iter().all(|t| t == ty || *ty == ErasedType::I && int(t)) {
+                        return Some(k);
+                    }
+                    ty.clone()
+                }
+                Op::Not => {
+                    if take(1).first() != Some(&ErasedType::Z) {
+                        return Some(k);
+                    }
+                    ErasedType::Z
+                }
+                Op::Cast(class) | Op::Is(class) => {
+                    if !take(1).first().is_some_and(|t| t.is_ref()) {
+                        return Some(k);
+                    }
+                    if matches!(op, Op::Is(_)) { ErasedType::Z } else { ErasedType::L(class.clone()) }
+                }
+                Op::Erased | Op::ArrayClone => take(1).pop().unwrap_or(ErasedType::V),
+                Op::ArrayLoad => {
+                    let taken = take(2);
+                    if !taken.get(1).is_some_and(int) {
+                        return Some(k);
+                    }
+                    taken.first().and_then(Self::array_element).unwrap_or_else(ErasedType::object)
+                }
+                Op::ArrayLength => {
+                    take(1);
+                    ErasedType::I
+                }
+                Op::NewArray => {
+                    if !take(1).first().is_some_and(int) {
+                        return Some(k);
+                    }
+                    ErasedType::object()
+                }
+                Op::BuilderAppend | Op::BuilderInsert => {
+                    let taken = take(if matches!(op, Op::BuilderInsert) { 3 } else { 2 });
+                    if matches!(op, Op::BuilderInsert) && !taken.get(1).is_some_and(int) {
+                        return Some(k);
+                    }
+                    ErasedType::L(Rc::from(STRING_BUILDER))
+                }
+                Op::Dup => stack.last().cloned().unwrap_or(ErasedType::V),
+                Op::Statement => {
+                    take(1);
+                    continue;
+                }
+            };
+            stack.push(left);
+        }
+        None
+    }
+
+    /// The values under the top `top` of a template's stack, evaluated before them, each held in a
+    /// temporary in their order (a constant or a temporary's read as it is): the statement or the
+    /// temporary made of the top then comes after them, as their instructions do.
+    fn hold_under(&mut self, stack: &mut [LirId], top: usize, statements: &mut Vec<LirId>) {
+        let under = stack.len().saturating_sub(top);
+        for value in &mut stack[..under] {
+            let node = self.lir.node(*value);
+            if matches!(node.kind, Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Null | Kind::Temp(_)) {
+                continue;
+            }
+            let ty = node.ty.clone();
+            let held = self.lir.temp();
+            statements.push(self.lir.keep(held, *value));
+            *value = self.lir.kept(held, ty);
         }
     }
 
@@ -534,54 +866,6 @@ impl<'a> Gen<'a> {
     }
 }
 
-/// Whether each read of a `dup`'s two copies is the receiver of a call, the first value the call
-/// evaluates, every statement after the `dup` and the template's value being such a call (or a
-/// value dropped of one): the reads the class-file writer keeps on the operand stack
-/// (`Gen::kept_on_stack`). Anything else would hold the copy in a slot, which the assembler's
-/// `dup` does not.
-fn copies_read_first(ops: &[Op]) -> bool {
-    #[derive(Clone, Copy, PartialEq)]
-    enum Read {
-        Other,
-        Copy,
-        /// A call on a copy, or such a call's value dropped.
-        OnCopy,
-    }
-    let mut stack: Vec<Read> = Vec::new();
-    let mut statements_on_copy = true;
-    for op in ops {
-        let takes = match op {
-            Op::Operand(..) | Op::StaticField(..) | Op::Module(_) | Op::Int(_) => 0,
-            Op::Call(m) => m.params.len() + 1,
-            Op::StaticCall(m) | Op::New(m) => m.params.len(),
-            Op::Binary(..) | Op::ArrayLoad => 2,
-            Op::ArrayStore => 3,
-            _ => 1,
-        };
-        if stack.len() < takes {
-            return false;
-        }
-        let taken = stack.split_off(stack.len() - takes);
-        // A copy is read only as a call's receiver, the first of its operands, and a value that
-        // read one is no other instruction's operand: each statement and the value read one copy,
-        // first.
-        let receiver_copy = matches!(op, Op::Call(_)) && taken.first() == Some(&Read::Copy);
-        let others = if receiver_copy { &taken[1..] } else { &taken[..] };
-        let passes = matches!(op, Op::Drop | Op::AsRecorded | Op::Statement);
-        if others.contains(&Read::Copy) || (!passes && others.contains(&Read::OnCopy)) {
-            return false;
-        }
-        match op {
-            Op::Dup => stack.extend([Read::Copy, Read::Copy]),
-            Op::Statement => statements_on_copy &= taken[0] == Read::OnCopy,
-            Op::Drop | Op::AsRecorded => stack.push(taken[0]),
-            _ if receiver_copy => stack.push(Read::OnCopy),
-            _ => stack.push(Read::Other),
-        }
-    }
-    statements_on_copy && stack == [Read::OnCopy]
-}
-
 /// The type a placeholder declares: `L` is `Object`, anything else a descriptor.
 pub(super) fn declared_type(text: &str) -> ErasedType {
     match text {
@@ -593,9 +877,10 @@ pub(super) fn declared_type(text: &str) -> ErasedType {
 fn read_template(text: &str) -> Template {
     let tokens = tokenize(text);
     if !single_form(text, &tokens) {
-        return match read_tree(&tokens) {
+        let mut at = 0;
+        return match read_tree(&tokens, &mut at) {
             Some(tree) => Template::Tree(Rc::new(tree)),
-            None => Template::Text,
+            None => Template::Unread(at),
         };
     }
     let kind = match tokens[0].as_str() {
@@ -603,11 +888,37 @@ fn read_template(text: &str) -> Template {
         "invokevirtual" => Invoke::Virtual,
         "invokeinterface" => Invoke::Interface,
         // A class's own method called directly: no template is one.
-        _ => return Template::Text,
+        _ => return Template::Unread(0),
     };
     match member(kind, &tokens[1]) {
         Some(m) => Template::Single(Rc::new(m)),
-        None => Template::Text,
+        None => Template::Unread(0),
+    }
+}
+
+/// The member of `Object` and its result for the typer's text of `super.toString` and the like where
+/// no class behind defines the member (`Typer::apply_super_any_member`); None for any other text.
+fn any_member_over_super(text: &str) -> Option<(&'static str, ErasedType)> {
+    Some(match text {
+        "$anyStr($0)" => ("toString", ErasedType::L(Rc::from(STRING))),
+        "$identityHash($0)" => ("hashCode", ErasedType::I),
+        "$cloneObject($0)" => ("clone", ErasedType::object()),
+        _ => return None,
+    })
+}
+
+/// What a refusal of stack code no tree is read from names, in the old assembler's words: the
+/// instruction at token `at` where reading stopped, or the placeholder, the member or the field
+/// reference, or the runtime call it could not read.
+fn unread(tokens: &[String], at: usize) -> (&'static str, String) {
+    let t = tokens.get(at).map_or("", |t| t.as_str());
+    let item = tokens.get(at + 1).cloned().unwrap_or_default();
+    match t {
+        _ if t.starts_with('$') && t[1..].split(':').next().is_none_or(|n| n.parse::<usize>().is_err()) => ("placeholder", t.to_string()),
+        "invokestatic" | "invokevirtual" | "invokeinterface" | "invokespecial" if split_method(&item).is_none() => ("method reference", item),
+        "getstatic" | "getfield" | "putstatic" | "putfield" if item.split_once(':').and_then(|(o, _)| o.rsplit_once('.')).is_none() => ("field reference", item),
+        "rtcall" if !item.contains('(') => ("runtime call", item),
+        _ => ("instruction", t.to_string()),
     }
 }
 
@@ -655,26 +966,46 @@ fn values(stack: &mut Vec<Slot>, n: usize) -> Option<()> {
     Some(())
 }
 
-fn int(stack: &mut Vec<Slot>) -> Option<()> {
-    (value(stack)?? == ErasedType::I).then_some(())
+/// After an instruction that leaves no value: with more instructions after it, a statement of the
+/// template's block (its value taken off the stack); else the template's value, the last.
+fn no_value(stack: &mut Vec<Slot>, ops: &mut Vec<Op>, more: bool) -> bool {
+    if more {
+        stack.pop();
+        ops.push(Op::Statement);
+    }
+    !more
 }
 
-/// Stack code as a tree; None for code that is none (a value used twice, one dropped in the
-/// middle, an instruction that finds too little), for an instruction no node is made of yet (the
-/// builder instructions, a field of an instance or a field written, a
-/// comparison), for a string constant (`ldc`, below), and for an argument alone but at a reference
-/// type the template declares, whose node would be the argument's own.
-fn read_tree(tokens: &[String]) -> Option<Tree> {
+/// A value the text types as an `Int`, or one whose type is the use's argument's.
+fn int(stack: &mut Vec<Slot>) -> Option<()> {
+    matches!(value(stack)?, None | Some(ErasedType::I)).then_some(())
+}
+
+/// A value the text types as a reference, or one whose type is the use's argument's.
+fn reference_value(stack: &mut Vec<Slot>) -> Option<()> {
+    value(stack)?.is_none_or(|t| t.is_ref()).then_some(())
+}
+
+/// Stack code as a tree, its instructions run over a model of the stack: each takes its operands'
+/// nodes off it and puts its own on; a `dup` holds its value in a temporary read twice, and an
+/// instruction that leaves no value with more after it (a `pop`, a call, a field or an element
+/// set) makes a statement of the template's block. None for code that is none (an instruction
+/// that finds too little, one after the last value, more than one value left).
+/// `at` is left at the token of the instruction being read, where reading stops when it does.
+fn read_tree(tokens: &[String], at: &mut usize) -> Option<Tree> {
     const ARITHS: [Arith; 11] = [Arith::Add, Arith::Sub, Arith::Mul, Arith::Div, Arith::Rem, Arith::And, Arith::Or, Arith::Xor, Arith::Shl, Arith::Shr, Arith::Ushr];
     let mut ops: Vec<Op> = Vec::new();
+    let mut op_at: Vec<usize> = Vec::new();
     let mut stack: Vec<Slot> = Vec::new();
     let mut placeholders: Vec<usize> = Vec::new();
     // Nothing follows an instruction that leaves no value.
     let mut ended = false;
     let mut makes_array = false;
-    let mut duplicated = false;
     let mut i = 0;
     while i < tokens.len() {
+        *at = i;
+        // Each op read so far is of the instruction before this one.
+        op_at.resize(ops.len(), *at);
         if ended {
             return None;
         }
@@ -685,14 +1016,15 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
                 Some((n, ty)) => (n, Some(declared_type(ty))),
                 None => (rest, None),
             };
+            // An argument named twice is evaluated twice, as its instructions load it twice; one
+            // at `V` is evaluated as a statement.
             let n: usize = index.parse().ok()?;
-            // An argument named twice would be lowered twice.
-            if placeholders.contains(&n) || declared == Some(ErasedType::V) {
-                return None;
-            }
             placeholders.push(n);
-            stack.push(Slot::Value(declared.clone()));
-            ops.push(Op::Operand(n, declared));
+            ops.push(Op::Operand(n, declared.clone()));
+            match declared == Some(ErasedType::V) {
+                true => ops.push(Op::Statement),
+                false => stack.push(Slot::Value(declared)),
+            }
             continue;
         }
         let mut operand = || {
@@ -713,9 +1045,12 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
                     }
                 };
                 values(&mut stack, m.params.len() + (m.kind != Invoke::Static) as usize)?;
-                ended = m.ret == ErasedType::V;
+                let leaves = m.ret.clone();
                 stack.push(Slot::Value(Some(m.ret.clone())));
                 ops.push(if m.kind == Invoke::Static { Op::StaticCall(Rc::new(m)) } else { Op::Call(Rc::new(m)) });
+                if leaves == ErasedType::V {
+                    ended = no_value(&mut stack, &mut ops, i < tokens.len());
+                }
             }
             "invokespecial" => {
                 let ctor = member(Invoke::Special, operand()?)?;
@@ -737,6 +1072,31 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
                 }
                 stack.push(Slot::Raw(Rc::from(class)));
             }
+            "getfield" | "putfield" | "putstatic" => {
+                let (owner_name, desc) = operand()?.split_once(':')?;
+                let (owner, name) = owner_name.rsplit_once('.')?;
+                let ty = parse_type(desc).0;
+                if ty == ErasedType::V {
+                    return None;
+                }
+                let (owner, name) = (Rc::from(owner), Rc::from(name));
+                match t {
+                    "getfield" => {
+                        reference_value(&mut stack)?;
+                        stack.push(Slot::Value(Some(ty.clone())));
+                        ops.push(Op::Field(owner, name, ty));
+                    }
+                    _ => {
+                        value(&mut stack)?;
+                        if t == "putfield" {
+                            reference_value(&mut stack)?;
+                        }
+                        stack.push(Slot::Value(Some(ErasedType::V)));
+                        ops.push(if t == "putfield" { Op::FieldStore(owner, name, ty) } else { Op::StaticFieldStore(owner, name, ty) });
+                        ended = no_value(&mut stack, &mut ops, i < tokens.len());
+                    }
+                }
+            }
             "getstatic" => {
                 let (owner_name, desc) = operand()?.split_once(':')?;
                 let (owner, name) = owner_name.rsplit_once('.')?;
@@ -757,17 +1117,13 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
             }
             "checkcast" => {
                 let class = operand()?;
-                if !value(&mut stack)??.is_ref() {
-                    return None;
-                }
+                reference_value(&mut stack)?;
                 stack.push(Slot::Value(Some(ErasedType::L(Rc::from(class)))));
                 ops.push(Op::Cast(Rc::from(class)));
             }
             "instanceof" => {
                 let class = operand()?;
-                if !value(&mut stack)??.is_ref() {
-                    return None;
-                }
+                reference_value(&mut stack)?;
                 stack.push(Slot::Value(Some(ErasedType::Z)));
                 ops.push(Op::Is(Rc::from(class)));
             }
@@ -782,9 +1138,9 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
                 value(&mut stack)?;
                 int(&mut stack)?;
                 value(&mut stack)?;
-                ended = true;
                 stack.push(Slot::Value(Some(ErasedType::V)));
                 ops.push(Op::ArrayStore);
+                ended = no_value(&mut stack, &mut ops, i < tokens.len());
             }
             "array_length" => {
                 value(&mut stack)?;
@@ -802,6 +1158,15 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
                 stack.push(Slot::Value(None));
                 ops.push(Op::NewArray);
             }
+            "builder_append" | "builder_insert" => {
+                value(&mut stack)?;
+                if t == "builder_insert" {
+                    int(&mut stack)?;
+                }
+                value(&mut stack)?;
+                stack.push(Slot::Value(Some(ErasedType::L(Rc::from(STRING_BUILDER)))));
+                ops.push(if t == "builder_append" { Op::BuilderAppend } else { Op::BuilderInsert });
+            }
             // `Gen::assemble` models the null as an `Object`, a `Null` node as the null type: the
             // two write the same bytes where no frame holds the value (the std's `nullRef`, read by
             // a branch's `areturn`), and a frame that holds it says `null` where it said `Object`.
@@ -810,9 +1175,11 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
                 stack.push(Slot::Value(Some(ErasedType::object())));
                 ops.push(Op::Null);
             }
-            // A `Text` node in a concatenation is text of its recipe, where `Gen::assemble`'s
-            // string is an operand of it.
-            "ldc" => return None,
+            "ldc" => {
+                let text = operand()?;
+                stack.push(Slot::Value(Some(ErasedType::L(Rc::from(STRING)))));
+                ops.push(Op::Text(Rc::from(text)));
+            }
             "ipush" => {
                 let n: i32 = operand()?.parse().ok()?;
                 stack.push(Slot::Value(Some(ErasedType::I)));
@@ -827,24 +1194,33 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
                 stack.push(Slot::Value(None));
                 ops.push(Op::AsRecorded);
             }
-            // A `dup` of a value an instruction then takes: the template's block holds it in a
-            // temporary, which the class-file writer keeps on the stack (`Gen::kept_on_stack`).
-            "dup" if !duplicated => {
+            // A `dup`: the template's block holds the value in a temporary and reads it twice (the
+            // class-file writer keeps it on the stack where it can, `Gen::kept_on_stack`).
+            "dup" => {
                 let top = value(&mut stack)?;
-                duplicated = true;
                 stack.push(Slot::Value(top.clone()));
                 stack.push(Slot::Value(top));
                 ops.push(Op::Dup);
             }
-            "pop" if duplicated && stack.len() > 1 => {
+            "pop" if stack.len() > 1 || i < tokens.len() => {
                 value(&mut stack)?;
                 ops.push(Op::Statement);
             }
-            "pop" | "athrow" => {
+            "pop" => {
                 value(&mut stack)?;
                 ended = true;
                 stack.push(Slot::Value(Some(ErasedType::V)));
-                ops.push(if t == "pop" { Op::Drop } else { Op::Throw });
+                ops.push(Op::Drop);
+            }
+            // What follows a throw never runs: it is not read, and the throw is the template's
+            // value, the values under it evaluated before it.
+            "athrow" => {
+                value(&mut stack)?;
+                stack.clear();
+                stack.push(Slot::Value(Some(ErasedType::V)));
+                ops.push(Op::Throw);
+                op_at.resize(ops.len(), *at);
+                break;
             }
             _ => match plain_op(t)? {
                 (opcode, 0, Some(ErasedType::I)) => {
@@ -854,18 +1230,43 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
                     ops.push(Op::Int(v));
                 }
                 // A conversion, where the adaptation between the two types is that instruction.
-                (opcode, 1, Some(to)) => {
-                    let from = value(&mut stack)??;
-                    if primitive_conversion(&from, &to) != [opcode] {
+                (opcode, 1, Some(ty)) if matches!(opcode, op::INEG | op::LNEG | op::DNEG) => {
+                    if value(&mut stack)?.is_some_and(|t| t != ty) {
                         return None;
                     }
+                    stack.push(Slot::Value(Some(ty.clone())));
+                    ops.push(Op::Neg(ty));
+                }
+                // A conversion, where the adaptation between the two types is that instruction (a
+                // value the use types is checked at the use, `Gen::tree_fits`).
+                (opcode, 1, Some(to)) => {
+                    if let Some(from) = value(&mut stack)? {
+                        if primitive_conversion(&from, &to) != [opcode] {
+                            return None;
+                        }
+                    }
                     stack.push(Slot::Value(Some(to.clone())));
-                    ops.push(Op::Convert(to));
+                    ops.push(Op::Convert(to, opcode));
+                }
+                (opcode, 2, Some(ErasedType::I)) if matches!(opcode, op::LCMP | op::DCMPL | op::DCMPG) => {
+                    let ty = if opcode == op::LCMP { ErasedType::J } else { ErasedType::D };
+                    let (right, left) = (value(&mut stack)?, value(&mut stack)?);
+                    if left.is_some_and(|t| t != ty) || right.is_some_and(|t| t != ty) {
+                        return None;
+                    }
+                    stack.push(Slot::Value(Some(ErasedType::I)));
+                    ops.push(Op::ThreeWay(ty, opcode == op::DCMPG));
                 }
                 (opcode, 2, Some(ty)) => {
-                    let (right, left) = (value(&mut stack)??, value(&mut stack)??);
+                    let (right, left) = (value(&mut stack)?, value(&mut stack)?);
+                    if opcode == op::IXOR && left == Some(ErasedType::Z) && matches!(ops.last(), Some(Op::Int(1))) {
+                        ops.pop();
+                        stack.push(Slot::Value(Some(ErasedType::Z)));
+                        ops.push(Op::Not);
+                        continue;
+                    }
                     let arith = ARITHS.into_iter().find(|a| arith_instruction(*a, &ty) == opcode)?;
-                    if left != ty || right != ty {
+                    if left.is_some_and(|t| t != ty) || right.is_some_and(|t| t != ty) {
                         return None;
                     }
                     stack.push(Slot::Value(Some(ty.clone())));
@@ -875,26 +1276,21 @@ fn read_tree(tokens: &[String]) -> Option<Tree> {
             },
         }
     }
+    op_at.resize(ops.len(), *at);
     if stack.len() != 1 || !matches!(stack[0], Slot::Value(_)) {
         return None;
     }
-    if duplicated && !copies_read_first(&ops) {
+    if ops.is_empty() {
         return None;
     }
-    let root = match ops.as_slice() {
-        [.., root, Op::AsRecorded] => root,
-        [.., root] => root,
-        [] => return None,
-    };
-    if matches!(root, Op::Operand(..)) {
-        let [Op::Operand(_, Some(declared))] = ops.as_slice() else { return None };
-        if !declared.is_ref() {
-            return None;
-        }
+    // An argument alone is the argument at its own type or at a primitive type the template
+    // declares, or at a reference type it declares, a cast erasure drops.
+    if matches!(ops.as_slice(), [Op::Operand(_, Some(declared))] if declared.is_ref()) {
         ops.push(Op::Erased);
+        op_at.push(*at);
     }
     let arguments = placeholders.iter().try_fold(0, |most: usize, &n| Some(most.max(n.checked_add(1)?)))?;
-    Some(Tree { ops, arguments, makes_array })
+    Some(Tree { ops, arguments, at: op_at, makes_array })
 }
 
 #[cfg(test)]
@@ -913,11 +1309,18 @@ mod tests {
                 Op::StaticCall(_) => Some("StaticCall"),
                 Op::New(_) => Some("New"),
                 Op::StaticField(..) => Some("StaticField"),
+                Op::Field(..) => Some("Field"),
+                Op::FieldStore(..) => Some("FieldStore"),
+                Op::StaticFieldStore(..) => Some("StaticFieldStore"),
+                Op::Text(_) => Some("Text"),
                 Op::Module(_) => Some("Module"),
                 Op::Int(_) => Some("Int"),
                 Op::Null => Some("Null"),
-                Op::Convert(_) | Op::AsRecorded => Some("Adapt"),
+                Op::Convert(..) | Op::AsRecorded => Some("Adapt"),
                 Op::Binary(..) => Some("Binary"),
+                Op::Not => Some("Not"),
+                Op::Neg(_) => Some("Neg"),
+                Op::ThreeWay(..) => Some("Block(If)"),
                 Op::Cast(_) => Some("Cast"),
                 Op::Is(_) => Some("Is"),
                 Op::Erased => Some("Cast(erased)"),
@@ -926,6 +1329,7 @@ mod tests {
                 Op::ArrayLength => Some("ArrayLength"),
                 Op::ArrayClone => Some("ArrayClone"),
                 Op::NewArray => Some("NewArray"),
+                Op::BuilderAppend | Op::BuilderInsert => Some("Call"),
                 Op::Drop => Some("Drop"),
                 Op::Dup => Some("Block(temporary)"),
                 Op::Statement => Some("Block(statement)"),
@@ -988,30 +1392,15 @@ mod tests {
     }
 
     /// Every code template of the std is a node or nodes of the lowered IR: one member's call, a tree
-    /// of nodes, or a typer's text with a route; a text no node is made of stays the class file's own
-    /// (`Kind::Legacy` of `TExpr::Js`) and is listed here with the reason, so that a new one fails.
-    /// A use can still be the class file's where the template is one of these and the use gives too
-    /// few arguments, or makes an array of a type that is none (`Gen::template_route`). With
+    /// of nodes, or a typer's text with a route; a text no node is made of would be refused at each
+    /// use and is listed here with the reason, so that a new one fails. A use is still refused where
+    /// it gives too few arguments, arguments the instructions do not take, or makes an array of a
+    /// type that is none (`Gen::template_route`). With
     /// `TEQ_TEMPLATE_TABLE=<file>`, the table of every template and what it lowers to is written there.
     #[test]
     fn std_templates_are_nodes() {
-        // The texts no node is made of yet, each with what keeps it: `newString()`'s empty string (a
-        // `Str` node in a concatenation is text of its recipe, where the template's string is an
-        // operand of it); `className`'s two calls with no placeholder (operands are implicit in the
-        // one-member form alone); `listStorage`'s lone argument with no declared type (its node
-        // would be the argument's own); the builder instructions (`builder_append`,
-        // `builder_insert`: the overload follows the operand's type); `nonEmpty`'s `iconst_1 ixor`
-        // on a boolean (no `Binary` of a boolean); `last`'s `dup` whose copy a call reads after
-        // another call (`copies_read_first`).
-        const LEFT: [&str; 7] = [
-            "ldc \"\"",
-            "invokevirtual java/lang/Object.getClass()Ljava/lang/Class; invokevirtual java/lang/Class.getName()Ljava/lang/String;",
-            "$0",
-            "$0 $1 builder_append",
-            "$0 $1:I $2 builder_insert",
-            "$0 invokevirtual java/lang/StringBuilder.isEmpty()Z iconst_1 ixor",
-            "$0 dup invokevirtual java/lang/StringBuilder.length()I iconst_1 isub invokevirtual java/lang/StringBuilder.charAt(I)C",
-        ];
+        // The texts no node is made of yet: none.
+        const LEFT: [&str; 0] = [];
         let (templates, read) = std_templates();
         // The walk read the std whole: each source the compiler embeds (its layers' tables) is among the files
         // read with the declarations it holds, and every declaration read is a use of a template.
@@ -1030,9 +1419,10 @@ mod tests {
                 match read_template(text) {
                     Template::Single(m) => (if m.kind == Invoke::Static { "StaticCall" } else { "Call" }).to_string(),
                     Template::Tree(tree) => format!("tree: {}", tree_kinds(&tree)),
-                    Template::Text => {
+                    Template::Unread(at) => {
                         without_node.push(text);
-                        "no node: Legacy Js".to_string()
+                        let (what, item) = unread(&tokenize(text), at);
+                        format!("refused: the {} {}", what, item)
                     }
                 }
             };

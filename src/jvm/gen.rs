@@ -3842,7 +3842,7 @@ impl<'a> Gen<'a> {
             TExpr::Assign(..) => unreachable!("lowered (`Gen::lower_assign`)"),
             TExpr::Prim(..) | TExpr::Unary(..) | TExpr::While(..) | TExpr::TypeTest(..) => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::StrConcat(items) => self.str_concat(items),
-            TExpr::Js(template, args) => self.intrinsic(e, template, args),
+            TExpr::Js(..) => unreachable!("lowered or refused (`Gen::lower_template`)"),
             TExpr::If(..) => unreachable!("lowered (`Gen::lower_if`)"),
             TExpr::Match(..) | TExpr::Block(..) => {
                 let t = self.static_type(e);

@@ -1397,8 +1397,12 @@ impl<'a> Worker<'a> {
     }
 
     /// `super.toString`, `super.hashCode` and `super.equals(that)` where no class or trait behind
-    /// the caller defines the member: what `Any` does. Inside a trait the class that mixes the
-    /// trait in may still have a definition behind it, so the call is bound there.
+    /// the caller defines the member: what `Any` does, over `super`, which a back end with classes
+    /// calls as the superclass's member (`invokespecial`) and the others read as `this`. Inside a
+    /// trait the class that mixes the trait in may still have a definition behind it, so the call
+    /// is bound there. A value class's members are extension methods over the underlying value,
+    /// which no `invokespecial` takes (scalac calls a super accessor on a box it makes): there the
+    /// call stays on `this`.
     #[cold]
     fn apply_super_any_member(
         &mut self,
@@ -1420,7 +1424,11 @@ impl<'a> Worker<'a> {
             let callee = Callee::Method { recv: Some(recv), sym, owner_subst: Vec::new(), prefix: None, refined: None };
             return self.apply_callee(callee, targs, lists, span, expected);
         }
-        let this = self.prog.add(TExpr::This);
+        let this = if self.syms.class(c).value_class {
+            self.prog.add(TExpr::This)
+        } else {
+            self.prog.add(TExpr::Super(SuperTarget::Chain))
+        };
         let helper = |t: &mut Self, template: &str, ty: TypeId| {
             let s = t.prog.add_str(template);
             let l = t.prog.list(&[this]);

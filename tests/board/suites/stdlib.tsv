@@ -3040,7 +3040,9 @@ structural_signatures	fail	-	function $fail(n, m) { const c = $exc[n]; throw c ?
 structural_value_class	pass	-	
 summon_from_wildcard_given	pass	-	
 summoner_sugar	pass	-	
+super_call_java_library_template	pass	-	
 super_call_kinds	pass	-	
+super_call_object_members_jvm	fail	-	output differs
 super_rebind_result	fail	-	TypeError: this.choose$Any$super1 is not a function
 suppression_disabled	pass	-	
 suppression_inheritance	pass	-	

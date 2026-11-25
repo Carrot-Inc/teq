@@ -1632,7 +1632,7 @@ java_enum_parent	pass	-
 java_identity_hash_map	pass	-	
 java_identity_map_entry_set	pass	-	
 java_interface_abstract	pass	-	
-java_io_streams	fail	-	exception
+java_io_streams	pass	-	
 java_map_compute	pass	-	
 java_math	pass	-	
 java_member_class_depth	pass	-	
@@ -3105,7 +3105,9 @@ structural_signatures	pass	-
 structural_value_class	pass	-	
 summon_from_wildcard_given	pass	-	
 summoner_sugar	pass	-	
+super_call_java_library_template	pass	-	
 super_call_kinds	pass	-	
+super_call_object_members_jvm	pass	-	
 super_rebind_result	fail	-	verify
 suppression_disabled	pass	-	
 suppression_inheritance	pass	-	

@@ -91,7 +91,7 @@ package java.lang:
       if text == null then name else name + ": " + text
 
     @js("$0.$qname")
-    @jvm("invokevirtual java/lang/Object.getClass()Ljava/lang/Class; invokevirtual java/lang/Class.getName()Ljava/lang/String;")
+    @jvm("$0 invokevirtual java/lang/Object.getClass()Ljava/lang/Class; invokevirtual java/lang/Class.getName()Ljava/lang/String;")
     private def className: String
 
   @js("console.error($0.stack !== undefined ? $0.stack : $str($0))")

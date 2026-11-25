@@ -73,6 +73,13 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   read the enclosing instance take it from the constructor's own parameter, as Scala.js's are, where they read it
   from `this` before `super` (a `ReferenceError` at run time) or, for an enum's case, from a field not yet set (a
   `TypeError`).
+- On the JVM `super.m(...)` to a Java library method teq models by a template calls the superclass's method, where
+  it called the override itself and overflowed the stack.
+- On the JVM `new String()` is a new empty string, as scalac's, where it was the interned literal `""`
+  (`new String() eq ""` was true).
+- A `@jvm` template whose stack code is malformed (a value taken that is not there, more than one value left,
+  `new` without `dup`, `invokespecial` of a method) is refused at its use with the instruction named, where it
+  built a class that failed to load or skipped the instruction.
 - An inline given whose using clause has a default (`inline given bark(using msg: String = "Woof!"): String`) has
   that default's getter as a method of its class (`Dog.bark$default$1`), as scalac's has: a call that leaves the
   argument out through an export of an instance or an import of its givens applies it, where it was missing (the

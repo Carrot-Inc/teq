@@ -3105,7 +3105,9 @@ structural_signatures	pass	-
 structural_value_class	pass	-	
 summon_from_wildcard_given	pass	-	
 summoner_sugar	pass	-	
+super_call_java_library_template	pass	-	
 super_call_kinds	pass	-	
+super_call_object_members_jvm	fail	-	unsupported
 super_rebind_result	fail	-	unsupported
 suppression_disabled	pass	-	
 suppression_inheritance	pass	-	

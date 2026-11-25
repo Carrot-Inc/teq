@@ -280,7 +280,7 @@ impl<'a> Gen<'a> {
             }
             TExpr::Lambda(params, body) if self.analysis_in_order() => self.lower_lambda(params, body),
             TExpr::Lambda(..) => return Err(Unlowered::AfterEscape),
-            TExpr::Js(template, args) => return self.lower_template(e, template, args),
+            TExpr::Js(template, args) => self.lower_template(e, template, args),
             TExpr::Return(_) if self.m.closure => return Err(Unlowered::NonLocalReturn),
             TExpr::Return(_) => return Err(Unlowered::ReturnInValuePosition),
             // `xs*` passed to a JavaScript member with repeated parameters (the typer's `js_call_args`):
@@ -574,9 +574,15 @@ impl<'a> Gen<'a> {
         self.lir.push(Kind::Block { stmts, result }, ErasedType::Z)
     }
 
-    /// An order or an equality of two operands, compared as their static types say.
+    /// An order or an equality of two operands, compared as their static types say; `super eq that`
+    /// is the typer's `super.equals(that)` where no class behind defines `equals`
+    /// (`Typer::apply_super_any_member`): `Object.equals` as a super call.
     fn lower_compare(&mut self, op: PrimOp, a: TExprId, b: TExprId) -> LirId {
         let object = ErasedType::object();
+        if let (PrimOp::Same, TExpr::Super(_)) = (op, self.cx.input.prog.expr(a)) {
+            let that = self.lower_expr(b, &object);
+            return self.lower_object_super_call(a, "equals", vec![object], ErasedType::Z, vec![that]);
+        }
         let relation = match op {
             PrimOp::Lt => Relation::Lt,
             PrimOp::Le => Relation::Le,
@@ -2445,7 +2451,7 @@ impl<'a> Gen<'a> {
     /// named, called as that class's own. A Java interface's method is called on the interface
     /// itself, whatever brings it: the receiver of a super call is the method's owner
     /// (`BCodeBodyBuilder.genCallMethod`), which the class then lists (`superCallTargets`).
-    fn lower_super_call(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> LirId {
+    pub(super) fn lower_super_call(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> LirId {
         let cx = self.cx;
         let TExpr::Super(target) = cx.input.prog.expr(r) else { unreachable!("a super call, by the route") };
         let m = self.mref(s);
