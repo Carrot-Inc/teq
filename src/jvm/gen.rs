@@ -5,7 +5,7 @@
 use crate::lir::{Adaptation, Capture, Comparing, ErasedType, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodRef, Relation};
 use super::classfile::*;
 use super::free::{Analysis, Free};
-use super::lifted::Placed;
+use super::lifted::{Asker, Placed};
 use super::names::*;
 use super::{Cx, Unit};
 use crate::ast::{mods, ListRef};
@@ -404,11 +404,6 @@ impl Lifted {
         let desc = method_desc(&shape.takes(), &shape.ret);
         Lifted { name, desc, this: shape.instance.is_some(), shape, captures, home, module, place }
     }
-
-    /// How many arguments a call passes.
-    pub fn arity(&self) -> usize {
-        self.this as usize + self.key as usize + self.captures.len() + self.params.len()
-    }
 }
 
 pub enum PendingBody {
@@ -673,6 +668,8 @@ pub struct Gen<'a> {
     pub cw: ClassWriter,
     /// The class being written as its definitions (`plan.rs`).
     pub plan: crate::lir::ClassDef,
+    /// The class's lifted methods by their unit's names and places, beside `plan` (`lifted::LiftedTable`).
+    pub(super) lifted_table: super::lifted::LiftedTable,
     /// The interfaces the class being written names in an `invokespecial`, each with the place
     /// of its first call (`super_call_place`): the JVM wants each among the class's direct
     /// superinterfaces, so the class's list takes them (dotty's `superCallTargets`). It is the
@@ -827,6 +824,7 @@ impl<'a> Gen<'a> {
             trait_fields: FxMap::default(),
             cw: ClassWriter::new(0, "x", OBJECT, &[]),
             plan: Default::default(),
+            lifted_table: Default::default(),
             super_targets: Vec::new(),
             super_call_at: None,
             lifted_body: None,
@@ -943,6 +941,7 @@ impl<'a> Gen<'a> {
         self.pending.clear();
         self.local_defs.clear();
         self.pair_bridged.clear();
+        self.lifted_table = Default::default();
         self.lifted.clear();
         self.lifted_shapes.clear();
         self.lifted_lazy_inits.clear();
@@ -5999,8 +5998,8 @@ impl<'a> Gen<'a> {
         }
         assert!(!self.code.frozen, "a lambda is named while a lowering runs");
         let at = *self.lambda_places.entry(code).and_modify(|n| *n += 1).or_insert(0);
-        let place = self.lifted_place(Placed::Lambda(code, at));
-        let lifted = Rc::new(Lifted::new(self.lambda_name(code, at), shape.clone(), body.captures.clone(), body.home, body.module.clone(), place));
+        let (name, place) = self.lifted_entry(Placed::Lambda(code, at), Asker::LambdaMethod, shape);
+        let lifted = Rc::new(Lifted::new(name, shape.clone(), body.captures.clone(), body.home, body.module.clone(), place));
         self.lambdas.insert(Rc::as_ptr(body), (body.clone(), lifted.clone()));
         if let Some(k) = copy {
             self.finally_lambdas.insert(k, lifted.clone());
@@ -6126,8 +6125,7 @@ impl<'a> Gen<'a> {
         }
         let cx = self.cx;
         let (shape, body) = self.local_fun_shape(s);
-        let name = self.def_name(s);
-        let place = self.lifted_place(Placed::Def(s));
+        let (name, place) = self.lifted_entry(Placed::Def(s), Asker::LiftedFun, &shape);
         let lifted = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone(), place));
         self.lifted.insert(s, lifted.clone());
         // A local inline method has its getters alone (`Desugar.addDefaultGetters`), which
@@ -6171,8 +6169,7 @@ impl<'a> Gen<'a> {
         }
         let f = self.cx.fun_of_sym[s.idx()];
         let (shape, body) = self.local_default_shape(s, i);
-        let name = self.local_default_name(s, i);
-        let place = self.lifted_place(Placed::Default(s, i));
+        let (name, place) = self.lifted_entry(Placed::Default(s, i), Asker::LocalDefaultMethod, &shape);
         let l = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone(), place));
         self.lifted_defaults.insert((s, i), l.clone());
         (l.clone(), Some(Pending { lifted: l, body: PendingBody::Default(FunId(f), i), return_target: ReturnTarget::Unknown }))

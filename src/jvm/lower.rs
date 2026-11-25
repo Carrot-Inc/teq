@@ -3,8 +3,9 @@
 //! constant pool refuse a write while one runs (`Gen::lowering`), since the order of what is
 //! written is the output's bytes.
 
-use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Refusal, Relation, TempId};
+use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LiftedFrom, LiftedShape, LirId, List, MethodRef, Refusal, Relation, TempId};
 use super::gen::{rank_type, CallRoute, CaptureArgument, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, ReturnTarget, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
+use super::lifted::{Asker, Placed};
 use super::names::*;
 use crate::ast::ListRef;
 use crate::classfile::ACC_STATIC;
@@ -1834,7 +1835,8 @@ impl<'a> Gen<'a> {
         let captures = self.lir.list(&captures);
         let args = self.lir.list(&args);
         let ret = lifted.ret.clone();
-        let call = self.lir.push(Kind::LiftedCall { def: s, from: LiftedFrom::Default(i as u32), lifted, captures, args, order: None }, ret);
+        let method = self.lifted_call_ref(Placed::Default(s, i), &lifted, (self.this_name.clone(), self.is_interface));
+        let call = self.lir.push(Kind::LiftedCall { method, from: LiftedFrom::Default(i as u32), lifted, captures, args, order: None }, ret);
         if holds.is_empty() { call } else { self.lir.seq(&holds, call) }
     }
 
@@ -2109,7 +2111,8 @@ impl<'a> Gen<'a> {
         };
         let captures = self.lir.list(&captures);
         let ret = lifted.ret.clone();
-        let call = self.lir.push(Kind::LiftedCall { def: s, from: LiftedFrom::Def, lifted, captures, args, order: None }, ret);
+        let method = self.lifted_call_ref(Placed::Def(s), &lifted, (self.this_name.clone(), self.is_interface));
+        let call = self.lir.push(Kind::LiftedCall { method, from: LiftedFrom::Def, lifted, captures, args, order: None }, ret);
         if holds.is_empty() { call } else { self.lir.seq(&holds, call) }
     }
 
@@ -2127,9 +2130,20 @@ impl<'a> Gen<'a> {
         let holder = self.lower_capture(s);
         let captures = self.lir.list(&captures);
         let args = self.lir.list(&[holder]);
-        let from = if init { LiftedFrom::LazyInitialiser } else { LiftedFrom::LazyAccessor };
+        let (from, placed) = if init { (LiftedFrom::LazyInitialiser, Placed::LazyInit(s)) } else { (LiftedFrom::LazyAccessor, Placed::Def(s)) };
         let ret = lifted.ret.clone();
-        self.lir.push(Kind::LiftedCall { def: s, from, lifted, captures, args, order: None }, ret)
+        let owner = self.lazy_owner(s);
+        let method = self.lifted_call_ref(placed, &lifted, owner);
+        self.lir.push(Kind::LiftedCall { method, from, lifted, captures, args, order: None }, ret)
+    }
+
+    /// The method a call of the lifted method of `placed` calls, of the class `owner` and of the shape `lifted` the
+    /// lowering has: its name by the class's table (`Gen::lifted_entry`), a lookup that queues nothing.
+    fn lifted_call_ref(&mut self, placed: Placed, lifted: &LiftedShape, (owner, owner_is_interface): (Rc<str>, bool)) -> Rc<MethodRef> {
+        let (name, _) = self.lifted_entry(placed, Asker::LiftedCallRef, lifted);
+        let params = lifted.takes();
+        let desc = method_desc(&params, &lifted.ret);
+        Rc::new(MethodRef { owner, owner_is_interface, name, params, ret: lifted.ret.clone(), desc, kind: Invoke::Static })
     }
 
     /// A member read on a receiver: its field where this class's own code may name it, else its

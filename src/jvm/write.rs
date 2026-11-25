@@ -1,7 +1,7 @@
 //! Bytecode from the lowered IR (`crate::lir`): each node's code in the order the generator
 //! wrote it from the typed IR, so that the class files are the same byte for byte.
 
-use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LabelId, LiftedFrom, LirId, List, Relation, SwitchCase, TempId};
+use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LabelId, LirId, List, Relation, SwitchCase, TempId};
 use super::classfile::{op, switch_layout, Label, VT};
 use super::classes::Declared;
 use super::gen::{FinallyFrame, Gen, Local};
@@ -407,24 +407,16 @@ impl<'a> Gen<'a> {
                 let lifted = self.lambda_method(&lifted, &body);
                 self.lambda_call_site(&lifted, &ty, &method);
             }
-            Kind::LiftedCall { def, from, lifted, captures, args, order } => {
-                let (named, pending) = match from {
-                    LiftedFrom::Def => (self.lifted_fun(def), None),
-                    LiftedFrom::Default(i) => self.local_default_method(def, i as usize),
-                    LiftedFrom::LazyAccessor | LiftedFrom::LazyInitialiser => (self.lazy_method(def, from == LiftedFrom::LazyInitialiser), None),
-                };
-                debug_assert!(Rc::ptr_eq(&named.shape, &lifted), "the method named is the one the call was lowered against");
+            // The method's body, where no held tree has asked for it, is asked for where the call is written.
+            Kind::LiftedCall { method, from, lifted, captures, args, order } => {
+                let pending = self.ask_lifted_call(&method, from, &lifted);
                 self.write_arguments(captures, None);
                 self.write_arguments(args, order.as_deref());
                 // A default getter's body is queued once its arguments are written, their lambdas first in the class.
                 if let Some(p) = pending {
                     self.defer(p);
                 }
-                let (owner, interface) = match from {
-                    LiftedFrom::Def | LiftedFrom::Default(_) => (self.this_name.clone(), self.is_interface),
-                    LiftedFrom::LazyAccessor | LiftedFrom::LazyInitialiser => self.lazy_owner(def),
-                };
-                self.invoke_desc(Invoke::Static, &owner, interface, &named.name, &named.desc, named.arity(), &named.ret);
+                self.invoke_mref(&method);
             }
             Kind::ReturnKey => self.load_return_key(),
             Kind::LazyKey(holder) => self.load_lazy_key(holder),

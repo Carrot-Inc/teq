@@ -1867,6 +1867,7 @@ library_quote_pattern_outer_type	pass	-
 library_type_pattern_from_above	pass	-	
 library_val_overridden	pass	-	
 lifted_block_arguments	pass	-	
+lifted_encoded_name_overloads	pass	-	
 lifted_names_shared_thunk	cannot run	-	the JVM's platform
 lifted_receiver_default	pass	-	
 line_continued_by_bracket	pass	-	

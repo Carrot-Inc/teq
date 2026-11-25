@@ -1083,16 +1083,12 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
             let (_, vals) = &cx.layout.file_groups[cx.file_group[f] as usize];
             reach.files.get(f).copied().unwrap_or(false) || vals.iter().any(|&(s, _)| reach.vals[s.idx()])
         };
-        // A file of top-level `export` clauses has its forwarders in its `<file>$package`, and a
-        // file's top-level given class its def there.
-        let pkg = cx.input.file_pkgs[f];
-        let has_exports = syms.pkg(pkg).export_files.contains(&FileId(f as u32))
-            && syms.pkg(pkg).entries.values().filter_map(|e| e.alias).any(|a| syms.aliases[a.idx()].file == FileId(f as u32) && crate::typer::value_exports::exported_companion(syms, cx.input.types, a).is_some());
+        // A file's top-level given class has its def in its `<file>$package`.
         let has_given_classes = cx.given_classes.iter().any(|(&g, &k)| syms.sym(g).file.0 as usize == f && matches!(syms.sym(g).owner, Owner::Package(_)) && cx.emits(k));
         // A top-level opaque type's companion is nested in the `<file>$package` object, whose
         // mirror class carries the file's `$package` TASTy, as scalac's does.
         let has_opaque_companions = cx.opaque_companions.contains_key(&(f as u32));
-        if (has_funs || has_vals || has_exports || has_given_classes || has_opaque_companions) && owned(FileId(f as u32)) {
+        if (has_funs || has_vals || has_given_classes || has_opaque_companions) && owned(FileId(f as u32)) {
             units.push(Unit::File(FileId(f as u32)));
         }
     }
@@ -1305,6 +1301,7 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
         lap.done("store updated", usage.kept + usage.emitted);
     }
     let names = cx.input.named.iter().map(|&c| (c, cx.class_names[c.idx()].clone())).collect();
+    lifted::report_late_entries();
     Output { classes, main_class, errors, refused, main_classes, inits, kept: usage, names, twice }
 }
 

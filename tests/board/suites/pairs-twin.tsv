@@ -1832,6 +1832,7 @@ cases/lexical_extension_ranked_macro	pass	-
 cases/lexical_extension_ranked_receiver	pass	-	
 cases/lexical_extension_retry_leading	pass	-	
 cases/lifted_block_arguments	pass	-	
+cases/lifted_encoded_name_overloads	pass	-	
 cases/lifted_names_shared_thunk	pass	-	
 cases/lifted_receiver_default	pass	-	
 cases/line_continued_by_bracket	pass	-	

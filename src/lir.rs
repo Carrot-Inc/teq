@@ -419,11 +419,12 @@ pub enum Kind {
     /// method however often the node is written). `body` is what the method is made of,
     /// transitional (`LiftedBody`).
     Closure { captures: List, method: Rc<MethodRef>, lifted: Rc<LiftedShape>, body: Rc<LiftedBody> },
-    /// A call of a lifted method (`from`): the local definition `def`'s, or the accessor or the
-    /// initialiser of the local lazy val `def`: the captured values as `Closure` has them, then the
-    /// arguments as `Call` has them. `def` is transitional: the writer names the method from it,
-    /// and finds the class of a lazy val's, until lifted bodies are methods of the class-level plan.
-    LiftedCall { def: SymId, from: LiftedFrom, lifted: Rc<LiftedShape>, captures: List, args: List, order: Option<Rc<[usize]>> },
+    /// A call of a lifted method (`from`): a local definition's, the getter of its default, or the
+    /// accessor or the initialiser of a local lazy val. `method` is static, of the class being
+    /// written or, for a lazy val's, of the class declaring the val, and named as `LambdaLift` names
+    /// it; the call passes the captured values as `Closure` has them, then the arguments as `Call`
+    /// has them.
+    LiftedCall { method: Rc<MethodRef>, from: LiftedFrom, lifted: Rc<LiftedShape>, captures: List, args: List, order: Option<Rc<[usize]>> },
     /// The key of the non-local returns of the def the code stands in, a reference: the one the
     /// def made, or the one the code was given where it is a closure's.
     ReturnKey,

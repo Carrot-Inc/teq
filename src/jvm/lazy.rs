@@ -4,7 +4,7 @@
 
 use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodFlags, MethodRef, Relation, Visibility};
 use super::gen::*;
-use super::lifted::Placed;
+use super::lifted::{Asker, Placed};
 use super::names::*;
 use crate::ast::{mods, ListRef};
 use crate::symbols::*;
@@ -116,8 +116,7 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let (shape, body) = self.lazy_shape(s);
         let placed = cx.local_home(s).is_some();
-        let name = if init { self.lazy_init_name(s) } else { self.def_name(s) };
-        let place = self.lifted_place(if init { Placed::LazyInit(s) } else { Placed::Def(s) });
+        let (name, place) = self.lifted_entry(if init { Placed::LazyInit(s) } else { Placed::Def(s) }, Asker::LazyMethod, &shape);
         let lifted = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, None, place));
         if init {
             self.lifted_lazy_inits.insert(s, lifted.clone());

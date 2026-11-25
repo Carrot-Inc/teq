@@ -12,7 +12,7 @@
 use super::dependencies::{Callee, Deps, Kind};
 use super::gen::*;
 use super::lazy::{sanitize, UnitVisitor, UnitWalk};
-use super::names::encode;
+use super::names::{encode, method_desc};
 use crate::ast::{mods, ListRef};
 use crate::intern::FxMap;
 use crate::source::FileId;
@@ -44,6 +44,61 @@ pub(super) enum Folded {
     Lambda(TExprId),
     Def(SymId),
     Class(ClassId),
+}
+
+/// The lifted methods of the class being written (`Gen::lifted_entry`), by what each lifts: its name and its place by
+/// its unit's walk (`LiftedNames`). Kept beside the class's plan, which holds such a method only once it is written.
+/// An entry is made where the class first asks for it: the unit's names know no class (a class writes copies of local
+/// defs another class's code declares, `Gen::copy_home`), and a class that lifts nothing walks no unit.
+#[derive(Default)]
+pub struct LiftedTable {
+    entries: FxMap<Placed, (String, Option<u32>)>,
+    /// What each method, by its name and its descriptor, lifts: how a call's `MethodRef` finds the body it names
+    /// (`Gen::ask_lifted_call`). Two of one name and two descriptors are overloads, as dotty's counter numbers `+` and
+    /// `$plus` alike; `None` for a name and descriptor two methods were given, refused where the second was named.
+    named: FxMap<(String, String), Option<Placed>>,
+}
+
+impl LiftedTable {
+    /// What the lifted method of the class named `name` with the descriptor `desc` lifts, `Some(None)` where two
+    /// methods share both.
+    pub(super) fn placed(&self, name: &str, desc: &str) -> Option<Option<Placed>> {
+        self.named.get(&(name.to_string(), desc.to_string())).copied()
+    }
+}
+
+/// Who makes an entry of the class's table: one of the four that make a lifted method where the class writes or holds
+/// what asks for it, or the lowering of a call, which names the method it calls (`Gen::lifted_call_ref`).
+#[derive(Clone, Copy)]
+pub(super) enum Asker {
+    LambdaMethod,
+    LiftedFun,
+    LazyMethod,
+    LocalDefaultMethod,
+    LiftedCallRef,
+}
+
+const ASKERS: [&str; 5] = ["lambda_method", "lifted_fun", "lazy_method", "local_default_method", "lifted_call_ref"];
+
+/// The entries made, by asker, once their class's plan held a method (`TEQ_LIFTED_LATE`).
+static LATE: [std::sync::atomic::AtomicU32; 5] = [const { std::sync::atomic::AtomicU32::new(0) }; 5];
+
+/// Whether a build counts the entries of the classes' tables made once their class's plan holds a method, by asker,
+/// and reports them as it ends (`TEQ_LIFTED_LATE` set; `report_late_entries`): what is left of a class's lifted methods
+/// being in its plan before its code.
+fn lifted_late() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("TEQ_LIFTED_LATE").is_some())
+}
+
+/// The build's line of the entries made late, `LIFTEDLATE<TAB>lambda_method N<TAB>...`, one count by asker, where
+/// `TEQ_LIFTED_LATE` is set; the counts start again for the next build.
+pub fn report_late_entries() {
+    if !lifted_late() {
+        return;
+    }
+    let counts: Vec<String> = ASKERS.iter().zip(&LATE).map(|(asker, n)| format!("{} {}", asker, n.swap(0, std::sync::atomic::Ordering::Relaxed))).collect();
+    eprintln!("LIFTEDLATE\t{}", counts.join("\t"));
 }
 
 /// A lifted method of the unit by what it lifts, as `LiftedNames::places` keys its place: the order in which
@@ -496,8 +551,34 @@ impl<'a> Gen<'a> {
         self.cx.local_file(s).unwrap_or_else(|| self.writing_unit())
     }
 
+    /// The name and the place of the lifted method of `p`, of the shape `shape`, in the class being written, by the
+    /// class's table: a lookup of the unit's names the first time the class asks for it, which queues nothing. Two
+    /// methods of one name and one descriptor in the class are an internal error, where the second is named.
+    pub(super) fn lifted_entry(&mut self, p: Placed, asker: Asker, shape: &crate::lir::LiftedShape) -> (String, Option<u32>) {
+        if let Some(entry) = self.lifted_table.entries.get(&p) {
+            return entry.clone();
+        }
+        if lifted_late() && !self.plan.methods.is_empty() {
+            LATE[asker as usize].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        let name = match p {
+            Placed::Lambda(body, place) => self.lambda_name(body, place),
+            Placed::Def(s) => self.def_name(s),
+            Placed::LazyInit(s) => self.lazy_init_name(s),
+            Placed::Default(s, i) => self.local_default_name(s, i),
+        };
+        let key = (name.clone(), method_desc(&shape.takes(), &shape.ret));
+        if self.lifted_table.named.insert(key.clone(), Some(p)).is_some() {
+            self.unsupported(&format!("internal error: two lifted methods named {}{} in the class", key.0, key.1));
+            self.lifted_table.named.insert(key, None);
+        }
+        let entry = (name, self.lifted_place(p));
+        self.lifted_table.entries.insert(p, entry.clone());
+        entry
+    }
+
     /// The lifted method of the lambda whose body is `body`, by its unit's walk.
-    pub(super) fn lambda_name(&mut self, body: TExprId, place: u32) -> String {
+    fn lambda_name(&mut self, body: TExprId, place: u32) -> String {
         let file = self.writing_unit();
         if let Some(name) = self.file_lifted_names(file).lambdas.get(&(body, place)) {
             return name.to_string();
@@ -507,7 +588,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The lifted method of the local def `s`, or of the local lazy val `s`'s accessor.
-    pub(super) fn def_name(&mut self, s: SymId) -> String {
+    fn def_name(&mut self, s: SymId) -> String {
         let file = self.declaring_unit(s);
         if let Some(name) = self.file_lifted_names(file).defs.get(&s) {
             return name.to_string();
@@ -518,7 +599,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The lifted initialiser of the local lazy val `s`, `x$lzyINITM$N`.
-    pub(super) fn lazy_init_name(&mut self, s: SymId) -> String {
+    fn lazy_init_name(&mut self, s: SymId) -> String {
         let file = self.declaring_unit(s);
         let found = self.lazy_local_numbers(s).and_then(|_| self.file_lifted_names(file).inits.get(&s));
         if let Some(name) = found {
@@ -570,7 +651,7 @@ impl<'a> Gen<'a> {
 
     /// The place of the lifted method of `p` among its class's lifted methods (`Placed`): a lambda's in the unit of
     /// the class being written, a local definition's in the unit of the code declaring it, as their names are.
-    pub(super) fn lifted_place(&mut self, p: Placed) -> Option<u32> {
+    fn lifted_place(&mut self, p: Placed) -> Option<u32> {
         let file = match p {
             Placed::Lambda(..) => self.writing_unit(),
             Placed::Def(s) | Placed::LazyInit(s) | Placed::Default(s, _) => self.declaring_unit(s),
@@ -579,7 +660,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The lifted getter of the default `i` of the local def `s`, `g$default$I$N`.
-    pub(super) fn local_default_name(&mut self, s: SymId, i: usize) -> String {
+    fn local_default_name(&mut self, s: SymId, i: usize) -> String {
         let file = self.declaring_unit(s);
         if let Some(name) = self.file_lifted_names(file).defaults.get(&(s, i)) {
             return name.to_string();

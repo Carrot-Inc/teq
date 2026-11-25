@@ -618,15 +618,14 @@ impl<'a> Gen<'a> {
             }
             let (params, ret) = parse_method_desc(desc);
             let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|t| (None, t.clone())).collect();
-            self.begin_method(MethodFlags { is_static: true, synthetic: trait_setter, ..MethodFlags::PUBLIC }, name, desc, false, &typed, ret.clone(), &[]);
             let forwarded = method_ref(Invoke::Virtual, &module_name, false, name, &params, &ret);
-            self.body(|g| {
+            let flags = MethodFlags { is_static: true, synthetic: trait_setter, ..MethodFlags::PUBLIC };
+            self.hold_member(flags, name, desc, &typed, ret.clone(), &[], super::classes::MethodSite::default(), "static forwarder", |g| {
                 let instance = g.lir.module(&module_name);
                 let args: Vec<_> = (0..params.len()).map(|i| g.param(i)).collect();
                 let result = g.lir.call(&forwarded, instance, &args);
                 g.lir.ret(result)
             });
-            self.end_method();
         }
     }
 
@@ -653,16 +652,6 @@ impl<'a> Gen<'a> {
             }
             if cx.tclass_of[b.idx()] == u32::MAX {
                 continue;
-            }
-            // Its companions' forwarders (`companion_forwarders`), which its class file holds as
-            // methods, its other forwarders being members.
-            if syms.class(b).has_exports {
-                for &a in syms.class(b).type_aliases.values() {
-                    if let Some(k) = crate::typer::value_exports::exported_companion(syms, cx.input.types, a) {
-                        let t = ErasedType::L(Rc::from(cx.companion_name(k)));
-                        out.push((encode(cx.input.interner.get(syms.aliases[a.idx()].name)), method_desc(&[], &t)));
-                    }
-                }
             }
             for m in cx.members_in_order(b) {
                 let info = syms.sym(m);
@@ -781,40 +770,32 @@ impl<'a> Gen<'a> {
         let case_name = self.class_name(c);
         let case_type = ErasedType::L(case_name.clone());
         let case_init = method_ref(Invoke::Special, &case_name, false, "<init>", std::slice::from_ref(&outer), &ErasedType::V);
-        self.begin_method(MethodFlags::PUBLIC, "apply", &method_desc(&[], &case_type), false, &[], case_type.clone(), &[]);
-        self.body(|g| {
+        self.hold_member(MethodFlags::PUBLIC, "apply", &method_desc(&[], &case_type), &[], case_type.clone(), &[], super::classes::MethodSite::default(), "inner companion's member", |g| {
             let instance = g.lir.this(this.clone());
             let held = g.lir.field(instance, &name, "$outer", outer.clone());
             let made = g.lir.make(&case_init, &[held]);
             g.lir.ret(made)
         });
-        self.end_method();
         if !tc.retracted_unapply {
-            self.begin_method(MethodFlags::PUBLIC, "unapply", &method_desc(&[case_type.clone()], &ErasedType::Z), false, &[(None, case_type.clone())], ErasedType::Z, &[]);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "unapply", &method_desc(&[case_type.clone()], &ErasedType::Z), &[(None, case_type.clone())], ErasedType::Z, &[], super::classes::MethodSite::default(), "inner companion's member", |g| {
                 let matched = g.lir.bool(true);
                 g.lir.ret(matched)
             });
-            self.end_method();
         }
         let string = ErasedType::L(Rc::from(STRING));
-        self.begin_method(MethodFlags::PUBLIC, "toString", "()Ljava/lang/String;", false, &[], string.clone(), &[]);
         let shown: Rc<str> = Rc::from(cx.input.interner.get(info.name));
-        self.body(|g| {
+        self.hold_member(MethodFlags::PUBLIC, "toString", "()Ljava/lang/String;", &[], string.clone(), &[], super::classes::MethodSite::default(), "inner companion's member", |g| {
             let text = g.lir.text(&shown, string.clone());
             g.lir.ret(text)
         });
-        self.end_method();
         // The outer accessor under scalac's name, which a downstream of either compiler calls
         // (`Worker::outer_accessor` names it so on the JVM).
         let accessor = format!("{}$$$outer", name.replace('/', "$"));
-        self.begin_method(MethodFlags { is_final: true, synthetic: true, ..MethodFlags::PUBLIC }, &accessor, &method_desc(&[], &outer), false, &[], outer.clone(), &[]);
-        self.body(|g| {
+        self.hold_member(MethodFlags { is_final: true, synthetic: true, ..MethodFlags::PUBLIC }, &accessor, &method_desc(&[], &outer), &[], outer.clone(), &[], super::classes::MethodSite::default(), "inner companion's member", |g| {
             let instance = g.lir.this(this.clone());
             let held = g.lir.field(instance, &name, "$outer", outer.clone());
             g.lir.ret(held)
         });
-        self.end_method();
         self.drain_pending();
         self.finish_class(&name)
     }
@@ -861,8 +842,8 @@ impl<'a> Gen<'a> {
                 let i = start + j;
                 let Some(d) = defaults.get(i).copied().flatten() else { continue };
                 let ret = self.default_getter_ret(p.by_name.then_some(p.ty), |g| g.sym_type(params[i]));
-                self.begin_method(MethodFlags::PUBLIC, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&before_types, &ret), false, &before, ret.clone(), &[d]);
-                self.body(|g| {
+                let site = super::classes::MethodSite::default();
+                self.hold_member(MethodFlags::PUBLIC, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&before_types, &ret), &before, ret.clone(), &[d], site, "inner companion's default getter", |g| {
                     let held = outer_of(g);
                     let from = g.lir.ty(held).clone();
                     let instance = g.lower_adapt(held, &from, outer);
@@ -872,7 +853,6 @@ impl<'a> Gen<'a> {
                     let done = g.lir.seq(&[kept], value);
                     g.lir.ret(done)
                 });
-                self.end_method();
             }
             start += cl.params.len();
         }
@@ -900,10 +880,10 @@ impl<'a> Gen<'a> {
                 if self.plan.has_method(&getter, &method_desc(&before_types, &ret)) {
                     continue;
                 }
-                self.begin_method(MethodFlags::PUBLIC, &getter, &method_desc(&before_types, &ret), false, &before, ret.clone(), &[]);
                 let statics: Vec<ErasedType> = std::iter::once(outer.clone()).chain(before_types.iter().cloned()).collect();
                 let forwarded = method_ref(Invoke::Static, &case_name, false, &format!("$lessinit$greater$default${}", i + 2), &statics, &ret);
-                self.body(|g| {
+                let site = super::classes::MethodSite::default();
+                self.hold_member(MethodFlags::PUBLIC, &getter, &method_desc(&before_types, &ret), &before, ret.clone(), &[], site, "forwarding default getter", |g| {
                     let mut args = vec![outer_of(g)];
                     for j in 0..before_types.len() {
                         args.push(g.param(j));
@@ -911,7 +891,6 @@ impl<'a> Gen<'a> {
                     let value = g.lir.static_call(&forwarded, &args);
                     g.lir.ret(value)
                 });
-                self.end_method();
             }
             start += cl.params.len();
         }
@@ -969,8 +948,7 @@ impl<'a> Gen<'a> {
         // `apply` with every parameter, as `companionDefs` gives it whatever the defaults, which a
         // call fills in through the getters below.
         if info.mods & crate::ast::mods::ABSTRACT == 0 && !self.plan.has_method("apply", &apply_desc) {
-            self.begin_method(MethodFlags::PUBLIC, "apply", &apply_desc, false, &params, case_type.clone(), &[]);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "apply", &apply_desc, &params, case_type.clone(), &[], super::classes::MethodSite::default(), "inner case companion's member", |g| {
                 let mut args = vec![g.companion_outer(&this, &name, &accessor, &outer, &captured)];
                 for i in 0..types.len() {
                     args.push(g.param(i));
@@ -978,7 +956,6 @@ impl<'a> Gen<'a> {
                 let made = g.lir.make(&case_init, &args);
                 g.lir.ret(made)
             });
-            self.end_method();
         }
         if !tc.retracted_unapply {
             let first = info.ctor.first();
@@ -988,12 +965,10 @@ impl<'a> Gen<'a> {
             let ret = if no_params { ErasedType::Z } else { case_type.clone() };
             let desc = method_desc(&[case_type.clone()], &ret);
             if !self.plan.has_method(extractor, &desc) {
-                self.begin_method(MethodFlags::PUBLIC, extractor, &desc, false, &[(None, case_type.clone())], ret.clone(), &[]);
-                self.body(|g| {
+                self.hold_member(MethodFlags::PUBLIC, extractor, &desc, &[(None, case_type.clone())], ret.clone(), &[], super::classes::MethodSite::default(), "inner case companion's member", |g| {
                     let matched = if no_params { g.lir.bool(true) } else { g.param(0) };
                     g.lir.ret(matched)
                 });
-                self.end_method();
             }
         }
         // The `toString` `Desugar.classDef` gives the companion it makes is the typer's member of it
@@ -1005,9 +980,8 @@ impl<'a> Gen<'a> {
         let from_desc = method_desc(&[product.clone()], &case_type);
         if mirror && !self.plan.has_method("fromProduct", &from_desc) {
             let object_type = ErasedType::object();
-            self.begin_method(MethodFlags::PUBLIC, "fromProduct", &from_desc, false, &[(None, product.clone())], case_type.clone(), &[]);
             let element = method_ref(Invoke::Interface, &Rc::from(PRODUCT), true, "productElement", &[ErasedType::I], &object_type);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "fromProduct", &from_desc, &[(None, product.clone())], case_type.clone(), &[], super::classes::MethodSite::default(), "inner case companion's member", |g| {
                 let mut args = vec![g.companion_outer(&this, &name, &accessor, &outer, &captured)];
                 for (i, t) in types.iter().enumerate() {
                     let elements = g.param(0);
@@ -1018,16 +992,14 @@ impl<'a> Gen<'a> {
                 let made = g.lir.make(&case_init, &args);
                 g.lir.ret(made)
             });
-            self.end_method();
-            self.begin_method(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, "fromProduct", &method_desc(&[product.clone()], &object_type), false, &[(None, product.clone())], object_type.clone(), &[]);
             let from_product = method_ref(Invoke::Virtual, &name, false, "fromProduct", &[product.clone()], &case_type);
-            self.body(|g| {
+            let flags = MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC };
+            self.hold_member(flags, "fromProduct", &method_desc(&[product.clone()], &object_type), &[(None, product.clone())], object_type.clone(), &[], super::classes::MethodSite::default(), "inner case companion's member", |g| {
                 let instance = g.lir.this(this.clone());
                 let elements = g.param(0);
                 let made = g.lir.call(&from_product, instance, &[elements]);
                 g.lir.ret(made)
             });
-            self.end_method();
         }
         // The companion's own getters where the class's are its companion's
         // (`ctor_defaults_on_inner_companion`), else ones that forward to the class's.
@@ -1039,12 +1011,10 @@ impl<'a> Gen<'a> {
         let scalac_accessor = format!("{}$$$outer", name.replace('/', "$"));
         let desc = method_desc(&[], &outer);
         if !self.plan.has_method(&scalac_accessor, &desc) {
-            self.begin_method(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &scalac_accessor, &desc, false, &[], outer.clone(), &[]);
-            self.body(|g| {
+            self.hold_member(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &scalac_accessor, &desc, &[], outer.clone(), &[], super::classes::MethodSite::default(), "inner case companion's member", |g| {
                 let held = g.companion_outer(&this, &name, &accessor, &outer, &captured);
                 g.lir.ret(held)
             });
-            self.end_method();
         }
     }
 
@@ -1134,9 +1104,8 @@ impl<'a> Gen<'a> {
         let all: Vec<ErasedType> = tc.ctor_params.iter().map(|&p| self.sym_type(p)).collect();
         let declared: Vec<(Option<SymId>, ErasedType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
         let declared_types: Vec<ErasedType> = declared.iter().map(|p| p.1.clone()).collect();
-        self.begin_method(MethodFlags::PUBLIC, "apply", &method_desc(&declared_types, &case_type), false, &declared, case_type.clone(), &[]);
         let case_init = method_ref(Invoke::Special, &case_name, false, "<init>", &all, &ErasedType::V);
-        self.body(|g| {
+        self.hold_member(MethodFlags::PUBLIC, "apply", &method_desc(&declared_types, &case_type), &declared, case_type.clone(), &[], super::classes::MethodSite::default(), "instance companion's member", |g| {
             let instance = g.lir.this(this.clone());
             let mut args = vec![g.lir.field(instance, &name, "$outer", outer.clone())];
             for i in 0..declared_types.len() {
@@ -1145,36 +1114,30 @@ impl<'a> Gen<'a> {
             let made = g.lir.make(&case_init, &args);
             g.lir.ret(made)
         });
-        self.end_method();
 
         let first = cx.input.syms.class(c).info.ctor.first();
         let repeated = first.and_then(|cl| cl.params.last()).map_or(false, |p| p.repeated);
         let extractor = if repeated { "unapplySeq" } else { "unapply" };
         let no_params = first.map_or(true, |cl| cl.params.is_empty());
         let ret = if no_params { ErasedType::Z } else { case_type.clone() };
-        self.begin_method(MethodFlags::PUBLIC, extractor, &method_desc(&[case_type.clone()], &ret), false, &[(None, case_type.clone())], ret.clone(), &[]);
-        self.body(|g| {
+        self.hold_member(MethodFlags::PUBLIC, extractor, &method_desc(&[case_type.clone()], &ret), &[(None, case_type.clone())], ret.clone(), &[], super::classes::MethodSite::default(), "instance companion's member", |g| {
             let matched = if no_params { g.lir.bool(true) } else { g.param(0) };
             g.lir.ret(matched)
         });
-        self.end_method();
 
         let string = ErasedType::L(Rc::from(STRING));
-        self.begin_method(MethodFlags::PUBLIC, "toString", &method_desc(&[], &string), false, &[], string.clone(), &[]);
         let shown: Rc<str> = Rc::from(cx.input.interner.get(cx.input.syms.class(c).name));
-        self.body(|g| {
+        self.hold_member(MethodFlags::PUBLIC, "toString", &method_desc(&[], &string), &[], string.clone(), &[], super::classes::MethodSite::default(), "instance companion's member", |g| {
             let text = g.lir.text(&shown, string.clone());
             g.lir.ret(text)
         });
-        self.end_method();
 
         if cx.has_product_mirror(c) {
             let product = ErasedType::L(Rc::from(PRODUCT));
             let object_type = ErasedType::object();
             let desc = method_desc(&[product.clone()], &case_type);
-            self.begin_method(MethodFlags::PUBLIC, "fromProduct", &desc, false, &[(None, product.clone())], case_type.clone(), &[]);
             let element = method_ref(Invoke::Interface, &Rc::from(PRODUCT), true, "productElement", &[ErasedType::I], &object_type);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "fromProduct", &desc, &[(None, product.clone())], case_type.clone(), &[], super::classes::MethodSite::default(), "instance companion's member", |g| {
                 let instance = g.lir.this(this.clone());
                 let mut args = vec![g.lir.field(instance, &name, "$outer", outer.clone())];
                 for (i, t) in declared_types.iter().enumerate() {
@@ -1186,16 +1149,13 @@ impl<'a> Gen<'a> {
                 let made = g.lir.make(&case_init, &args);
                 g.lir.ret(made)
             });
-            self.end_method();
-            self.begin_method(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, "fromProduct", &method_desc(&[product.clone()], &object_type), false, &[(None, product.clone())], object_type.clone(), &[]);
             let from_product = method_ref(Invoke::Virtual, &name, false, "fromProduct", &[product.clone()], &case_type);
-            self.body(|g| {
+            self.hold_member(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, "fromProduct", &method_desc(&[product.clone()], &object_type), &[(None, product.clone())], object_type.clone(), &[], super::classes::MethodSite::default(), "instance companion's member", |g| {
                 let instance = g.lir.this(this.clone());
                 let elements = g.param(0);
                 let made = g.lir.call(&from_product, instance, &[elements]);
                 g.lir.ret(made)
             });
-            self.end_method();
         }
         self.drain_pending();
         self.finish_class(&name)
@@ -1287,12 +1247,10 @@ impl<'a> Gen<'a> {
                 let Some(d) = defaults.get(i).copied().flatten() else { continue };
                 let by_name = cl.params[i - start].by_name;
                 let ret = self.default_getter_ret(by_name.then_some(cl.params[i - start].ty), |g| g.sym_type(params[i]));
-                self.begin_method(MethodFlags::PUBLIC, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&before_types, &ret), false, &before, ret.clone(), &[d]);
-                self.body(|g| {
+                self.hold_member(MethodFlags::PUBLIC, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&before_types, &ret), &before, ret.clone(), &[d], super::classes::MethodSite::default(), "companion's default getter", |g| {
                     let value = g.lower_default_value(d, by_name, &ret);
                     g.lir.ret(value)
                 });
-                self.end_method();
             }
             start += size;
         }
@@ -1436,20 +1394,17 @@ impl<'a> Gen<'a> {
             let u = self.vc_underlying(c);
             for name in ["apply", "unapply"] {
                 if !written(name, &[u.clone()]) {
-                    self.begin_method(MethodFlags::PUBLIC, name, &method_desc(&[u.clone()], &u), false, &[(None, u.clone())], u.clone(), &[]);
-                    self.body(|g| {
+                    self.hold_member(MethodFlags::PUBLIC, name, &method_desc(&[u.clone()], &u), &[(None, u.clone())], u.clone(), &[], super::classes::MethodSite::default(), "companion's member", |g| {
                         let given = g.param(0);
                         g.lir.ret(given)
                     });
-                    self.end_method();
                 }
             }
         }
         if !written("apply", &types) && !cx.input.syms.class(c).value_class {
             // dotty's `apply` of a case class's companion: the constructor's parameters, the class's type.
             let site = super::classes::MethodSite { at: self.class_definition_start(c), dotty: self.dotty_constructor(c, &tc.ctor_params), ..Default::default() };
-            self.begin_method_at(MethodFlags::PUBLIC, "apply", &method_desc(&types, &case_type), false, &params, case_type.clone(), &[], site);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "apply", &method_desc(&types, &case_type), &params, case_type.clone(), &[], site, "companion's member", |g| {
                 let mut args = Vec::with_capacity(types.len());
                 for i in 0..types.len() {
                     args.push(g.param(i));
@@ -1457,7 +1412,6 @@ impl<'a> Gen<'a> {
                 let made = g.lir.make(&case_init, &args);
                 g.lir.ret(made)
             });
-            self.end_method();
         }
 
         // Scala 3's extractor is the argument itself; a class without parameters answers a
@@ -1474,19 +1428,16 @@ impl<'a> Gen<'a> {
         let unapply_desc = method_desc(&unapply_params, &ret);
         let same_desc = own.iter().any(|(n, d)| &**n == extractor && *d == unapply_desc);
         if !tc.retracted_unapply && !same_desc && !cx.input.syms.class(c).value_class {
-            self.begin_method(MethodFlags::PUBLIC, extractor, &unapply_desc, false, &[(None, case_type.clone())], ret.clone(), &[]);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, extractor, &unapply_desc, &[(None, case_type.clone())], ret.clone(), &[], super::classes::MethodSite::default(), "companion's member", |g| {
                 let matched = if no_params { g.lir.bool(true) } else { g.param(0) };
                 g.lir.ret(matched)
             });
-            self.end_method();
         }
 
         if cx.has_product_mirror(c) && !written("fromProduct", &[product.clone()]) {
             let desc = method_desc(&[product.clone()], &case_type);
-            self.begin_method(MethodFlags::PUBLIC, "fromProduct", &desc, false, &[(None, product.clone())], case_type.clone(), &[]);
             let element = method_ref(Invoke::Interface, &Rc::from(PRODUCT), true, "productElement", &[ErasedType::I], &object_type);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "fromProduct", &desc, &[(None, product.clone())], case_type.clone(), &[], super::classes::MethodSite::default(), "companion's member", |g| {
                 let mut args = Vec::with_capacity(types.len());
                 for (i, t) in types.iter().enumerate() {
                     let elements = g.param(0);
@@ -1497,18 +1448,16 @@ impl<'a> Gen<'a> {
                 let made = g.lir.make(&case_init, &args);
                 g.lir.ret(made)
             });
-            self.end_method();
 
-            self.begin_method(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, "fromProduct", &method_desc(&[product.clone()], &object_type), false, &[(None, product.clone())], object_type.clone(), &[]);
             let this = ErasedType::L(self.this_name.clone());
             let from_product = method_ref(Invoke::Virtual, &self.this_name, false, "fromProduct", &[product.clone()], &case_type);
-            self.body(|g| {
+            let flags = MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC };
+            self.hold_member(flags, "fromProduct", &method_desc(&[product.clone()], &object_type), &[(None, product.clone())], object_type.clone(), &[], super::classes::MethodSite::default(), "companion's member", |g| {
                 let instance = g.lir.this(this);
                 let elements = g.param(0);
                 let made = g.lir.call(&from_product, instance, &[elements]);
                 g.lir.ret(made)
             });
-            self.end_method();
         }
 
         if cx.vc_on_companion(c) {
@@ -1517,13 +1466,11 @@ impl<'a> Gen<'a> {
         // The `toString` `Desugar.classDef` gives the companion it makes.
         if object.map_or(true, |o| syms.class(o).synthetic_companion) {
             let string = ErasedType::L(Rc::from(STRING));
-            self.begin_method(MethodFlags::PUBLIC, "toString", "()Ljava/lang/String;", false, &[], string.clone(), &[]);
             let shown: Rc<str> = Rc::from(cx.input.interner.get(syms.class(c).name));
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "toString", "()Ljava/lang/String;", &[], string.clone(), &[], super::classes::MethodSite::default(), "companion's member", |g| {
                 let text = g.lir.text(&shown, string);
                 g.lir.ret(text)
             });
-            self.end_method();
         }
 
         self.ctor_default_getters_of(c);
@@ -1561,25 +1508,21 @@ impl<'a> Gen<'a> {
         let enum_name = self.class_name(e);
         let object_type = ErasedType::object();
         let desc = method_desc(&[enum_type.clone()], &ErasedType::I);
-        self.begin_method(MethodFlags::PUBLIC, "ordinal", &desc, false, &[(None, enum_type.clone())], ErasedType::I, &[]);
         let ordinal = method_ref(Invoke::Virtual, &enum_name, false, "ordinal", &[], &ErasedType::I);
-        self.body(|g| {
+        self.hold_member(MethodFlags::PUBLIC, "ordinal", &desc, &[(None, enum_type.clone())], ErasedType::I, &[], super::classes::MethodSite::default(), "enum companion's member", |g| {
             let value = g.param(0);
             let read = g.lir.call(&ordinal, value, &[]);
             g.lir.ret(read)
         });
-        self.end_method();
-        self.begin_method(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, "ordinal", &method_desc(&[object_type.clone()], &ErasedType::I), false, &[(None, object_type.clone())], ErasedType::I, &[]);
         let this = ErasedType::L(self.this_name.clone());
         let typed = method_ref(Invoke::Virtual, &self.this_name, false, "ordinal", &[enum_type.clone()], &ErasedType::I);
-        self.body(|g| {
+        self.hold_member(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, "ordinal", &method_desc(&[object_type.clone()], &ErasedType::I), &[(None, object_type.clone())], ErasedType::I, &[], super::classes::MethodSite::default(), "enum companion's member", |g| {
             let instance = g.lir.this(this);
             let given = g.param(0);
             let value = g.lower_adapt(given, &object_type, &enum_type);
             let read = g.lir.call(&typed, instance, &[value]);
             g.lir.ret(read)
         });
-        self.end_method();
     }
 
     /// The value `v` of an enum as its companion reads it: the instance's field for an enum of
@@ -1635,18 +1578,15 @@ impl<'a> Gen<'a> {
         if !written("fromOrdinal") && stored {
             let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
             let module = self.this_name.clone();
-            self.begin_method(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), false, &[(None, ErasedType::I)], enum_type.clone(), &[]);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), &[(None, ErasedType::I)], enum_type.clone(), &[], super::classes::MethodSite::default(), "enum companion's member", |g| {
                 let all = g.lir.static_field(&module, "$values", array.clone());
                 let ordinal = g.param(0);
                 let read = g.lir.push(Kind::ArrayLoad { array: all, index: ordinal }, enum_type.clone());
                 let failed = g.lower_no_ordinal(&no_ordinal, &enum_type);
                 g.lower_try_any(read, failed, &enum_type)
             });
-            self.end_method();
         } else if !written("fromOrdinal") && placed && !all_values {
-            self.begin_method(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), false, &[(None, ErasedType::I)], enum_type.clone(), &[]);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), &[(None, ErasedType::I)], enum_type.clone(), &[], super::classes::MethodSite::default(), "enum companion's member", |g| {
                 // The switch's default, like each of its cases, leaves no value.
                 if values.len() >= SWITCH_FROM {
                     let failed = g.lower_no_ordinal(&no_ordinal, &ErasedType::V);
@@ -1659,10 +1599,8 @@ impl<'a> Gen<'a> {
                     g.lir.compare(Relation::Eq, Comparing::Numbers, at, given)
                 })
             });
-            self.end_method();
         } else if !written("fromOrdinal") {
-            self.begin_method(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), false, &[(None, ErasedType::I)], enum_type.clone(), &[]);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), &[(None, ErasedType::I)], enum_type.clone(), &[], super::classes::MethodSite::default(), "enum companion's member", |g| {
                 let mut answers = Vec::with_capacity(values.len());
                 for (v, ordinal, _) in &values {
                     let given = g.param(0);
@@ -1679,7 +1617,6 @@ impl<'a> Gen<'a> {
                 let failed = g.lower_throw_with(&no_such, &no_ordinal, shown);
                 g.lir.seq(&answers, failed)
             });
-            self.end_method();
         }
         if !all_values {
             return;
@@ -1688,21 +1625,18 @@ impl<'a> Gen<'a> {
             let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
             let ErasedType::L(array_name) = &array else { unreachable!() };
             let array_name = array_name.clone();
-            self.begin_method(MethodFlags::PUBLIC, "values", &method_desc(&[], &array), false, &[], array.clone(), &[]);
             let module = self.this_name.clone();
             let clone = method_ref(Invoke::Virtual, &array_name, false, "clone", &[], &object_type);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "values", &method_desc(&[], &array), &[], array.clone(), &[], super::classes::MethodSite::default(), "enum companion's member", |g| {
                 let stored = g.lir.static_field(&module, "$values", array.clone());
                 let copied = g.lir.call(&clone, stored, &[]);
                 let copy = g.lower_adapt(copied, &object_type, &array);
                 g.lir.ret(copy)
             });
-            self.end_method();
         }
         if !written("values") {
             let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
-            self.begin_method(MethodFlags::PUBLIC, "values", &method_desc(&[], &array), false, &[], array.clone(), &[]);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "values", &method_desc(&[], &array), &[], array.clone(), &[], super::classes::MethodSite::default(), "enum companion's member", |g| {
                 let mut items = Vec::with_capacity(values.len());
                 for (v, _, _) in &values {
                     let value = g.lower_enum_value_read(*v, instance);
@@ -1713,13 +1647,11 @@ impl<'a> Gen<'a> {
                 let made = g.lir.push(Kind::ArrayOf { elem: enum_type.clone(), items }, array.clone());
                 g.lir.ret(made)
             });
-            self.end_method();
         }
         if !written("valueOf") && placed {
             let no_name: Rc<str> = Rc::from(format!("enum {} has no case with name: ", display));
-            self.begin_method(MethodFlags::PUBLIC, "valueOf", &method_desc(&[string.clone()], &enum_type), false, &[(None, string.clone())], enum_type.clone(), &[]);
             let equals = method_ref(Invoke::Virtual, &Rc::from(OBJECT), false, "equals", &[ErasedType::object()], &ErasedType::Z);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "valueOf", &method_desc(&[string.clone()], &enum_type), &[(None, string.clone())], enum_type.clone(), &[], super::classes::MethodSite::default(), "enum companion's member", |g| {
                 let name = g.param(0);
                 let failed = g.lower_lookup_failure("java/lang/IllegalArgumentException", &no_name, name, &enum_type);
                 if values.len() >= SWITCH_FROM {
@@ -1731,13 +1663,11 @@ impl<'a> Gen<'a> {
                     g.lir.call(&equals, text, &[given])
                 })
             });
-            self.end_method();
         } else if !written("valueOf") {
             let no_name: Rc<str> = Rc::from(format!("enum {} has no case with name: ", display));
             let illegal: Rc<str> = Rc::from("java/lang/IllegalArgumentException");
-            self.begin_method(MethodFlags::PUBLIC, "valueOf", &method_desc(&[string.clone()], &enum_type), false, &[(None, string.clone())], enum_type.clone(), &[]);
             let equals = method_ref(Invoke::Virtual, &Rc::from(STRING), false, "equals", &[ErasedType::object()], &ErasedType::Z);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "valueOf", &method_desc(&[string.clone()], &enum_type), &[(None, string.clone())], enum_type.clone(), &[], super::classes::MethodSite::default(), "enum companion's member", |g| {
                 let mut answers = Vec::with_capacity(values.len());
                 for (v, _, name) in &values {
                     let text = g.lir.text(&Rc::from(name.as_str()), string.clone());
@@ -1753,7 +1683,6 @@ impl<'a> Gen<'a> {
                 let failed = g.lower_throw_with(&illegal, &no_name, given);
                 g.lir.seq(&answers, failed)
             });
-            self.end_method();
         }
     }
 
@@ -1935,20 +1864,17 @@ impl<'a> Gen<'a> {
         if cx.input.syms.class(c).value_class && types.len() == 1 {
             let u = types[0].clone();
             if !self.plan.methods.iter().any(|m| &*m.name == "copy" && m.desc.starts_with(prefix)) {
-                self.begin_method(MethodFlags::PUBLIC, "copy", &method_desc(&types, &u), false, &params, u.clone(), &[]);
-                self.body(|g| {
+                self.hold_member(MethodFlags::PUBLIC, "copy", &method_desc(&types, &u), &params, u.clone(), &[], super::classes::MethodSite::default(), "case class's copy", |g| {
                     let given = g.param(0);
                     g.lir.ret(given)
                 });
-                self.end_method();
             }
         } else if !self.plan.methods.iter().any(|m| &*m.name == "copy" && m.desc.starts_with(prefix)) {
             // dotty's `copy` (Desugar.scala's case class members): the constructor's parameters, the class's own type.
             let declared: Vec<SymId> = params.iter().filter_map(|p| p.0).collect();
             let site = super::classes::MethodSite { at: self.class_definition_start(c), dotty: self.dotty_constructor(c, &declared), ..Default::default() };
-            self.begin_method_at(MethodFlags::PUBLIC, "copy", &method_desc(&types, &this), false, &params, this.clone(), &[], site);
             let init = method_ref(Invoke::Special, &owner, false, "<init>", &init_types, &ErasedType::V);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, "copy", &method_desc(&types, &this), &params, this.clone(), &[], site, "case class's copy", |g| {
                 let mut args = Vec::with_capacity(init_types.len());
                 for (field, t) in captured.iter() {
                     let instance = g.lir.this(this.clone());
@@ -1960,19 +1886,16 @@ impl<'a> Gen<'a> {
                 let made = g.lir.make(&init, &args);
                 g.lir.ret(made)
             });
-            self.end_method();
         }
         let first = cx.input.syms.class(c).ctor.first().map_or(0, |cl| cl.params.len());
         for (i, &p) in tc.ctor_params[k..].iter().enumerate().take(first) {
             let t = types[i].clone();
             let field = self.field_name(p);
-            self.begin_method(MethodFlags::PUBLIC, &format!("copy$default${}", i + 1), &method_desc(&[], &t), false, &[], t.clone(), &[]);
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, &format!("copy$default${}", i + 1), &method_desc(&[], &t), &[], t.clone(), &[], super::classes::MethodSite::default(), "case class's copy", |g| {
                 let instance = g.lir.this(this.clone());
                 let read = g.lir.field(instance, &owner, &field, t);
                 g.lir.ret(read)
             });
-            self.end_method();
         }
     }
 
@@ -1997,10 +1920,10 @@ impl<'a> Gen<'a> {
             let mut ctor = outer.clone();
             ctor.extend(self.ctor_param_types(k));
             let typed: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
-            self.begin_method(MethodFlags { is_final: !self.is_interface, ..MethodFlags::PUBLIC }, &m.name, &m.desc, false, &typed, m.ret.clone(), &[]);
             let this = ErasedType::L(self.this_name.clone());
             let init = method_ref(Invoke::Special, &class, false, "<init>", &ctor, &ErasedType::V);
-            self.body(|g| {
+            let flags = MethodFlags { is_final: !self.is_interface, ..MethodFlags::PUBLIC };
+            self.hold_member(flags, &m.name, &m.desc, &typed, m.ret.clone(), &[], super::classes::MethodSite::default(), "given class's def", |g| {
                 let mut args = Vec::with_capacity(ctor.len());
                 if let Some(t) = outer.first() {
                     let instance = g.lir.this(this.clone());
@@ -2014,10 +1937,7 @@ impl<'a> Gen<'a> {
                 g.lir.ret(made)
             });
             if self.is_interface {
-                self.end_method();
                 self.trait_static_forwarder(&m.name, &m.params, &m.ret);
-            } else {
-                self.end_method();
             }
         }
     }
@@ -2030,45 +1950,18 @@ impl<'a> Gen<'a> {
         let singleton = ErasedType::L(Rc::from(MIRROR_SINGLETON));
         let object = ErasedType::object();
         let desc = method_desc(&[product.clone()], &singleton);
-        self.begin_method(MethodFlags::PUBLIC, "fromProduct", &desc, false, &[(None, product.clone())], singleton.clone(), &[]);
-        self.body(|g| {
+        self.hold_member(MethodFlags::PUBLIC, "fromProduct", &desc, &[(None, product.clone())], singleton.clone(), &[], super::classes::MethodSite::default(), "case object's mirror member", |g| {
             let instance = g.lir.this(this.clone());
             let mirror = g.lower_adapt(instance, &this, &singleton);
             g.lir.ret(mirror)
         });
-        self.end_method();
-        self.begin_method(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, "fromProduct", &method_desc(&[product.clone()], &object), false, &[(None, product.clone())], object.clone(), &[]);
         let from_product = method_ref(Invoke::Virtual, &self.this_name, false, "fromProduct", &[product.clone()], &singleton);
-        self.body(|g| {
+        self.hold_member(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, "fromProduct", &method_desc(&[product.clone()], &object), &[(None, product.clone())], object.clone(), &[], super::classes::MethodSite::default(), "case object's mirror member", |g| {
             let instance = g.lir.this(this);
             let elements = g.param(0);
             let made = g.lir.call(&from_product, instance, &[elements]);
             g.lir.ret(made)
         });
-        self.end_method();
-    }
-
-    /// The term forwarders of the synthetic companions of the case classes the class or file being
-    /// written exports by its type forwarders `aliases` (`typer::value_exports::exported_companion`):
-    /// scalac's `final def N: q.N.type`, answering the companion's module, public and final, a
-    /// trait's a default method with its static `N$`.
-    pub fn companion_forwarders(&mut self, aliases: &[crate::types::AliasId]) {
-        let cx = self.cx;
-        for &a in aliases {
-            let Some(k) = crate::typer::value_exports::exported_companion(cx.input.syms, cx.input.types, a) else { continue };
-            let name = encode(cx.input.interner.get(cx.input.syms.aliases[a.idx()].name));
-            let module: Rc<str> = Rc::from(cx.companion_name(k));
-            let t = ErasedType::L(module.clone());
-            self.begin_method(MethodFlags { is_final: !self.is_interface, ..MethodFlags::PUBLIC }, &name, &method_desc(&[], &t), false, &[], t.clone(), &[]);
-            self.body(|g| {
-                let companion = g.lir.module(&module);
-                g.lir.ret(companion)
-            });
-            self.end_method();
-            if self.is_interface {
-                self.trait_static_forwarder(&name, &[], &t);
-            }
-        }
     }
 
     /// The erased parameters and result of an export forwarder of member `s` whose signature the
@@ -2205,7 +2098,6 @@ impl<'a> Gen<'a> {
                 }
             }
             let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
-            self.begin_method(MethodFlags { synthetic: true, ..MethodFlags::PUBLIC }, &m.name, &m.desc, false, &params, m.ret.clone(), &[]);
             let target = a.target.and_then(|t| match cx.input.syms.sym(t).owner {
                 Owner::Class(o) => Some((t, o)),
                 _ => None,
@@ -2228,7 +2120,7 @@ impl<'a> Gen<'a> {
                 None => MethodRef { owner: Rc::from(OBJECT), owner_is_interface: false, kind: Invoke::Special, ..(*self.mref(a.member)).clone() },
             };
             let special = Rc::new(special);
-            self.body(|g| {
+            self.hold_member(MethodFlags { synthetic: true, ..MethodFlags::PUBLIC }, &m.name, &m.desc, &params, m.ret.clone(), &[], super::classes::MethodSite::default(), "super accessor", |g| {
                 let receiver = g.lir.this(this.clone());
                 let mut args = Vec::with_capacity(m.params.len());
                 for (i, t) in m.params.iter().enumerate() {
@@ -2242,7 +2134,6 @@ impl<'a> Gen<'a> {
                 let result = g.lower_adapt(result, &special.ret, &m.ret);
                 g.lir.ret(result)
             });
-            self.end_method();
         }
     }
 
@@ -2276,7 +2167,6 @@ impl<'a> Gen<'a> {
         }
         let this = ErasedType::L(self.this_name.clone());
         let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
-        self.begin_method(MethodFlags { synthetic: true, ..MethodFlags::PUBLIC }, &m.name, &m.desc, false, &params, m.ret.clone(), &[]);
         let shape = self.default_getter_shape(target, i);
         let tm = self.mref(target);
         let taken: Vec<ErasedType> = tm.params[..shape.before].to_vec();
@@ -2286,7 +2176,7 @@ impl<'a> Gen<'a> {
         let interface = cx.input.syms.class(through).kind == ClassKind::Trait;
         let (ps, ret) = parse_method_desc(&desc);
         let getter = method_ref(Invoke::Special, &owner, interface, &name, &ps, &ret);
-        self.body(|g| {
+        self.hold_member(MethodFlags { synthetic: true, ..MethodFlags::PUBLIC }, &m.name, &m.desc, &params, m.ret.clone(), &[], super::classes::MethodSite::default(), "super accessor of a default getter", |g| {
             let receiver = g.lir.this(this.clone());
             let mut args = Vec::with_capacity(m.params.len());
             for (k, t) in m.params.iter().enumerate() {
@@ -2300,14 +2190,12 @@ impl<'a> Gen<'a> {
             let result = g.lower_adapt(result, &ret, &m.ret);
             g.lir.ret(result)
         });
-        self.end_method();
     }
 
     /// The accessor `m` of a `super` call bound to the member `t` of the local trait `o` that takes
     /// `proxies`: the trait's static `t$` on `this`, the proxies as this class holds them.
     fn proxied_super_accessor(&mut self, m: &MethodRef, t: SymId, o: ClassId, proxies: &[SymId]) {
         let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
-        self.begin_method(MethodFlags { synthetic: true, ..MethodFlags::PUBLIC }, &m.name, &m.desc, false, &params, m.ret.clone(), &[]);
         let this = ErasedType::L(self.this_name.clone());
         let extras = self.member_extras(t);
         let tm = self.mref(t);
@@ -2316,7 +2204,7 @@ impl<'a> Gen<'a> {
         let mut all = vec![ErasedType::L(owner.clone())];
         all.extend(pm.params.iter().cloned());
         let static_t = method_ref(Invoke::Static, &owner, true, &format!("{}$", pm.name), &all, &pm.ret);
-        self.body(|g| {
+        self.hold_member(MethodFlags { synthetic: true, ..MethodFlags::PUBLIC }, &m.name, &m.desc, &params, m.ret.clone(), &[], super::classes::MethodSite::default(), "super accessor", |g| {
             let mut args = vec![g.lir.this(this)];
             for &p in proxies {
                 let want = g.anon_capture_type(p);
@@ -2334,7 +2222,6 @@ impl<'a> Gen<'a> {
             let result = g.lower_adapt(result, &pm.ret, &m.ret);
             g.lir.ret(result)
         });
-        self.end_method();
     }
 
     /// The class an `invokespecial` of a super call from class `c` names for a method defined
@@ -2429,7 +2316,6 @@ impl<'a> Gen<'a> {
             }
             let (params, ret) = parse_method_desc(&desc);
             let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|t| (None, t.clone())).collect();
-            self.begin_method(MethodFlags::PUBLIC, &name, &desc, false, &typed, ret.clone(), &[]);
             let special = match target {
                 Some((b, member)) => {
                     let through = match syms.class(c).superclass {
@@ -2441,13 +2327,12 @@ impl<'a> Gen<'a> {
                 }
                 None => method_ref(Invoke::Special, &Rc::from(OBJECT), false, name.rsplit("$$super$").next().unwrap_or(&name), &params, &ret),
             };
-            self.body(|g| {
+            self.hold_member(MethodFlags::PUBLIC, &name, &desc, &typed, ret.clone(), &[], super::classes::MethodSite::default(), "jar trait's mixin member", |g| {
                 let receiver = g.lir.this(this.clone());
                 let args: Vec<LirId> = (0..params.len()).map(|i| g.param(i)).collect();
                 let result = g.lir.call(&special, receiver, &args);
                 g.lir.ret(result)
             });
-            self.end_method();
         }
     }
 
