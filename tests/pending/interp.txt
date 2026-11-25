@@ -98,6 +98,7 @@ given_implicit_scope_match_part	compile
 given_import_index_part_selectors	compile
 given_index_dependent_parameter_later_clause	compile
 given_index_dependent_parameter_same_clause	compile
+given_inline_val_class	compile
 given_object_several_parents_mixed	< 3.6: 12; default: 12 (teq: 10 in both, a compilation with a file at 3.6 typed as before; queued: the part that ports 3.6 and 3.7-migration's comparison of givens)
 impure_function_alias	compile
 inferred_result_tracked	compile
@@ -203,6 +204,7 @@ quoted_values_class_tests	compile
 quoted_values_reflection_kinds	output
 reducer_literal_bound	compile
 reducer_wildcard_bound	compile
+reflect_given_classes	output
 regex_case_properties	output
 regex_comments	output
 return_tail_call_try_unguarded	exception

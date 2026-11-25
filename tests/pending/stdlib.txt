@@ -140,10 +140,15 @@ given_implicit_scope_match_part	error: no given instance of type A was found for
 given_import_index_part_selectors	error: no given instance of type A was found for parameter x
 given_index_dependent_parameter_later_clause	error: no given instance of type A was found for parameter x
 given_index_dependent_parameter_same_clause	error: no given instance of type A was found for parameter x
+given_init_cycle	output differs
+given_inline_val_class	error: type K is not a member of (gg : T)
+given_nested_init_cycle	output differs
 given_object_instance_lazy	error: type IllegalThreadStateException not found
 given_object_publication_super	RangeError: Maximum call stack size exceeded
 given_object_several_parents_mixed	< 3.6: 12; default: 12 (teq: 10 in both, a compilation with a file at 3.6 typed as before; queued: the part that ports 3.6 and 3.7-migration's comparison of givens)
 given_open_variable_tapir_joins	error: cannot resolve import: sttp not found
+given_owners	output differs
+given_publish_during_init	output differs
 import_value_type_member	RangeError: Maximum call stack size exceeded
 impure_function_alias	error: type ImpureFunction1 not found
 inference_leftovers_retired	TypeError: CanEqual$(...).derived is not a function

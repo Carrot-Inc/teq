@@ -86,7 +86,12 @@ given_implicit_scope_match_part	< 13
 given_import_index_part_selectors	< 13
 given_index_dependent_parameter_later_clause	< 13
 given_index_dependent_parameter_same_clause	< 13
+given_init_cycle	< 7
+given_inline_val_class	< 21
+given_nested_init_cycle	< 7
 given_object_several_parents_mixed	< 3.6: 12; default: 12 (teq: 10 in both, a compilation with a file at 3.6 typed as before; queued: the part that ports 3.6 and 3.7-migration's comparison of givens)
+given_owners	< 21
+given_publish_during_init	< 7
 impure_function_alias	< 42
 inferred_result_tracked	< 3
 inferred_result_types	< Int Int
@@ -184,6 +189,7 @@ quoted_values_class_tests	< true false true false typed
 quoted_values_reflection_kinds	< other expr other type expr
 reducer_literal_bound	< true
 reducer_wildcard_bound	< true
+reflect_given_classes	< true
 return_tail_call_and_or	< true
 return_tail_call_argument_jump	< 100
 return_tail_call_deep	< 0

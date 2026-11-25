@@ -168,6 +168,7 @@ genericdefaults	fail	-	known bundle: the bundle over the lean products types `De
 given	pass	-	
 givenabstract	pass	-	
 givenbridge	fail	-	known js-run: JavaScript reads a superclass's val, var or given that a generic trait declares as a def through a property where the call is to a method (`c.g is not a function` whole, `c.x is not a fu
+givenclass	fail	-	givenclass classes
 givenclassouter	pass	-	
 givenclassread	pass	-	
 givendeferred	pass	-	

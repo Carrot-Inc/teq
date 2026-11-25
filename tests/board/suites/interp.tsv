@@ -1023,8 +1023,11 @@ given_bound_equals	pass	-
 given_bound_singleton	pass	-	
 given_bound_singleton_fallback	pass	-	
 given_bounded_wildcard	pass	-	
+given_case_class_default	pass	-	
 given_class_index_export_given	fail	-	output
 given_class_index_match_part	fail	-	output
+given_class_lazy_val	pass	-	
+given_class_reads_given	pass	-	
 given_comma_parents	pass	-	
 given_conditional_arrow	pass	-	
 given_context_gadt_bounds	pass	-	
@@ -1052,6 +1055,7 @@ given_divergence_outer	pass	-
 given_divergence_refinements	pass	-	
 given_divergence_result_variable	pass	-	
 given_divergence_shared_types	pass	-	
+given_empty_clause_class	pass	-	
 given_enum_value_singleton_head	pass	-	
 given_export_by_givenness	pass	-	
 given_extension_context_chain	pass	-	
@@ -1100,7 +1104,9 @@ given_inferred_override_extension	pass	-
 given_inferred_override_extension_overloaded	pass	-	
 given_inferred_override_private_ancestor	pass	-	
 given_inherited_param_result	pass	-	
+given_init_cycle	pass	-	
 given_inline_trait_member	pass	-	
+given_inline_val_class	fail	-	compile
 given_instance_statement_effects	pass	-	
 given_instance_statement_paths	pass	-	
 given_intersection	pass	-	
@@ -1140,6 +1146,8 @@ given_memo_trait_site_member	pass	-
 given_memo_var_candidate	pass	-	
 given_memo_walk_levels	pass	-	
 given_named_conditional_type	pass	-	
+given_nested_early_init	pass	-	
+given_nested_init_cycle	pass	-	
 given_nested_trait_object	pass	-	
 given_not_given_fallback	pass	-	
 given_not_given_negation	pass	-	
@@ -1164,6 +1172,7 @@ given_open_variable_lambda	pass	-
 given_open_variable_overload	pass	-	
 given_open_variable_tapir_joins	pass	-	
 given_open_variable_variance	pass	-	
+given_owners	pass	-	
 given_param_bounds_scope	pass	-	
 given_patterns	pass	-	
 given_poly_member_def	pass	-	
@@ -1171,6 +1180,7 @@ given_polymorphic_def	pass	-
 given_pref_gadt_local_object	pass	-	
 given_preference_default_source	pass	-	
 given_preference_old_source	pass	-	
+given_publish_during_init	pass	-	
 given_ranked_abstract_member	pass	-	
 given_ranked_seen_from_receiver	pass	-	
 given_ranking_of_one_pair_for_many_targets	pass	-	
@@ -1179,6 +1189,7 @@ given_selector_end	pass	-
 given_structural_constructor	pass	-	
 given_structural_parameterized	pass	-	
 given_subtype_view	pass	-	
+given_value_class_explicit	pass	-	
 given_with_self_alias	pass	-	
 givens_ambiguity_healed	pass	-	
 givens_anonymous	pass	-	
@@ -1450,6 +1461,7 @@ inline_getter_assign_op_unqualified	pass	-
 inline_getter_assign_op_untaken	pass	-	
 inline_getter_private_param	pass	-	
 inline_given_by_name	pass	-	
+inline_given_class	pass	-	
 inline_given_pattern_fresh	pass	-	
 inline_guard_constant_type	pass	-	
 inline_hk_alias_summon	pass	-	
@@ -1930,6 +1942,7 @@ local_enum_shapes	pass	-
 local_enums	pass	-	
 local_extensions	pass	-	
 local_given_conversion	pass	-	
+local_given_inner_class	pass	-	
 local_imports	pass	-	
 local_imports_blocks	pass	-	
 local_imports_members	pass	-	
@@ -1940,6 +1953,7 @@ local_lazy_forward	pass	-
 local_lazy_val_return	pass	-	
 local_object_case_companion	pass	-	
 local_object_import	pass	-	
+local_object_inner_class	pass	-	
 local_objects	pass	-	
 local_right_assoc_default_operands	pass	-	
 local_right_assoc_lazy_operand	fail	-	output
@@ -2639,6 +2653,7 @@ reflect_declared_method	pass	-
 reflect_declared_parameters	pass	-	
 reflect_dynamic_encoded_parameter	pass	-	
 reflect_encoded_parameter	pass	-	
+reflect_given_classes	fail	-	output
 reflect_instantiation	pass	-	
 reflect_mirror_encoded	pass	-	
 reflect_nested_secondary	pass	-	

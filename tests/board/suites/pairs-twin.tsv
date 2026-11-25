@@ -1014,8 +1014,11 @@ cases/given_bound_equals	pass	-
 cases/given_bound_singleton	pass	-	
 cases/given_bound_singleton_fallback	pass	-	
 cases/given_bounded_wildcard	pass	-	
+cases/given_case_class_default	pass	-	
 cases/given_class_index_export_given	pass	-	
 cases/given_class_index_match_part	pass	-	
+cases/given_class_lazy_val	pass	-	
+cases/given_class_reads_given	pass	-	
 cases/given_comma_parents	pass	-	
 cases/given_conditional_arrow	pass	-	
 cases/given_context_gadt_bounds	pass	-	
@@ -1043,6 +1046,7 @@ cases/given_divergence_outer	pass	-
 cases/given_divergence_refinements	pass	-	
 cases/given_divergence_result_variable	pass	-	
 cases/given_divergence_shared_types	pass	-	
+cases/given_empty_clause_class	pass	-	
 cases/given_enum_value_singleton_head	pass	-	
 cases/given_export_by_givenness	pass	-	
 cases/given_extension_context_chain	pass	-	
@@ -1091,7 +1095,9 @@ cases/given_inferred_override_extension	pass	-
 cases/given_inferred_override_extension_overloaded	pass	-	
 cases/given_inferred_override_private_ancestor	pass	-	
 cases/given_inherited_param_result	pass	-	
+cases/given_init_cycle	pass	-	
 cases/given_inline_trait_member	pass	-	
+cases/given_inline_val_class	cannot run	-	no leg builds
 cases/given_instance_statement_effects	pass	-	
 cases/given_instance_statement_paths	pass	-	
 cases/given_intersection	pass	-	
@@ -1131,6 +1137,8 @@ cases/given_memo_trait_site_member	pass	-
 cases/given_memo_var_candidate	pass	-	
 cases/given_memo_walk_levels	pass	-	
 cases/given_named_conditional_type	pass	-	
+cases/given_nested_early_init	pass	-	
+cases/given_nested_init_cycle	pass	-	
 cases/given_nested_trait_object	pass	-	
 cases/given_not_given_fallback	pass	-	
 cases/given_not_given_negation	pass	-	
@@ -1154,6 +1162,7 @@ cases/given_open_variable_joins	pass	-
 cases/given_open_variable_lambda	pass	-	
 cases/given_open_variable_overload	pass	-	
 cases/given_open_variable_variance	pass	-	
+cases/given_owners	pass	-	
 cases/given_param_bounds_scope	pass	-	
 cases/given_patterns	pass	-	
 cases/given_poly_member_def	pass	-	
@@ -1161,6 +1170,7 @@ cases/given_polymorphic_def	pass	-
 cases/given_pref_gadt_local_object	pass	-	
 cases/given_preference_default_source	pass	-	
 cases/given_preference_old_source	pass	-	
+cases/given_publish_during_init	pass	-	
 cases/given_ranked_abstract_member	pass	-	
 cases/given_ranked_seen_from_receiver	pass	-	
 cases/given_ranking_of_one_pair_for_many_targets	pass	-	
@@ -1169,6 +1179,7 @@ cases/given_selector_end	pass	-
 cases/given_structural_constructor	pass	-	
 cases/given_structural_parameterized	pass	-	
 cases/given_subtype_view	pass	-	
+cases/given_value_class_explicit	pass	-	
 cases/given_with_self_alias	pass	-	
 cases/givens_ambiguity_healed	pass	-	
 cases/givens_byname	pass	-	
@@ -1437,6 +1448,7 @@ cases/inline_getter_assign_op_unqualified	pass	-
 cases/inline_getter_assign_op_untaken	pass	-	
 cases/inline_getter_private_param	pass	-	
 cases/inline_given_by_name	pass	-	
+cases/inline_given_class	pass	-	
 cases/inline_given_pattern_fresh	pass	-	
 cases/inline_guard_constant_type	pass	-	
 cases/inline_hk_alias_summon	pass	-	
@@ -1895,6 +1907,7 @@ cases/local_enum_shapes	pass	-
 cases/local_enums	pass	-	
 cases/local_extensions	pass	-	
 cases/local_given_conversion	pass	-	
+cases/local_given_inner_class	pass	-	
 cases/local_imports	pass	-	
 cases/local_imports_blocks	pass	-	
 cases/local_imports_members	pass	-	
@@ -1905,6 +1918,7 @@ cases/local_lazy_forward	pass	-
 cases/local_lazy_val_return	pass	-	
 cases/local_object_case_companion	pass	-	
 cases/local_object_import	pass	-	
+cases/local_object_inner_class	pass	-	
 cases/local_objects	pass	-	
 cases/local_right_assoc_default_operands	pass	-	
 cases/local_right_assoc_lazy_operand	pass	-	
@@ -2574,6 +2588,7 @@ cases/reflect_declared_method	pass	-
 cases/reflect_declared_parameters	pass	-	
 cases/reflect_dynamic_encoded_parameter	pass	-	
 cases/reflect_encoded_parameter	cannot run	-	no leg builds
+cases/reflect_given_classes	pass	-	
 cases/reflect_instantiation	pass	-	
 cases/reflect_mirror_encoded	pass	-	
 cases/reflect_nested_secondary	pass	-	

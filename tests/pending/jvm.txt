@@ -89,7 +89,9 @@ given_implicit_scope_match_part	compile
 given_import_index_part_selectors	compile
 given_index_dependent_parameter_later_clause	compile
 given_index_dependent_parameter_same_clause	compile
+given_inline_val_class	compile
 given_object_several_parents_mixed	< 3.6: 12; default: 12 (teq: 10 in both, a compilation with a file at 3.6 typed as before; queued: the part that ports 3.6 and 3.7-migration's comparison of givens)
+given_value_class_explicit	exception
 impure_function_alias	compile
 indexed_seq_defaults	exception
 inferred_result_java_enum	compile
@@ -97,6 +99,7 @@ inferred_result_tracked	compile
 inferred_result_types	compile
 inline_case_renewed_import	compile
 inline_default_this_receiver	exception
+inline_given_class	verify
 inline_inner_class_quote	backend
 inline_nested_local_objects	verify
 inline_outer_private_member	backend

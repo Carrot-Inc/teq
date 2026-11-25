@@ -398,6 +398,7 @@ given_deferred_self_recursive	pass	-
 given_divergence_after_sibling_clause	pass	-	
 given_divergence_open_variables	pass	-	
 given_divergence_sibling_givens	pass	-	
+given_empty_params_with	fail	-	missing '6:63: error: given instance g does not take parameters'
 given_export_given_alternative	pass	-	
 given_failed_heal_reports_original	fail	-	missing '19:26: error: ambiguous given instances for TC: a, b'
 given_implicit_ambiguous	pass	-	
@@ -423,6 +424,8 @@ given_scope_gadt_bounds	fail	-	exit code 0
 given_specificity_alias	pass	-	
 given_syntax_migration	pass	-	
 given_syntax_old_colon	pass	-	
+given_value_class_empty_clause	fail	-	exit code 0
+given_value_class_inline	fail	-	exit code 0
 given_wanted_names_val_in_progress	pass	-	
 givens_ambiguous	pass	-	
 givens_ambiguous_clause_before_missing	pass	-	
@@ -775,7 +778,7 @@ missing_given_contexts_package_object	pass	-
 missing_given_contexts_row_interpolation_definition	fail	-	missing '21 errors found'
 missing_given_contexts_row_local_given_class	fail	-	missing 'class_k01.scala:2:82: error: No given instance of type Numeric[String] was found for parameter need of given instance call in class C01'
 missing_given_contexts_row_local_given_parameters	fail	-	missing 'class_k01.scala:2:69: error: No given instance of type Numeric[String] was found for parameter need of given instance call in class C01'
-missing_given_contexts_row_pattern_definitions	fail	-	missing 'empty_package_k02.scala:1:73: error: No given instance of type Numeric[String] was found for parameter need of method call'
+missing_given_contexts_row_pattern_definitions	fail	-	missing 'given_instance_k02.scala:3:75: error: No given instance of type Numeric[String] was found for parameter need of method call in object gi02'
 missing_given_contexts_trait	pass	-	
 missing_given_function_alias	fail	-	missing '3:22: error: No given instance of type Need[Int] was found for parameter of F'
 missing_given_owners	pass	-	
@@ -1196,6 +1199,7 @@ using_list_splice_forms	pass	-
 using_list_splice_overloads	pass	-	
 using_list_splice_quote_arg	pass	-	
 value_class_contained	pass	-	
+value_class_owners	fail	-	missing '14:43: error: Value classes may not be a member of another class'
 value_class_rules	pass	-	
 value_import_given_conversion	pass	-	
 value_import_wildcard_givens	pass	-	
