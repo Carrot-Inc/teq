@@ -3132,6 +3132,7 @@ structural_value_class	pass	-
 summon_from_wildcard_given	pass	-	
 summoner_sugar	pass	-	
 super_call_java_library_template	pass	-	
+super_call_java_superclass	pass	-	
 super_call_kinds	pass	-	
 super_call_object_members_jvm	pass	-	
 super_rebind_result	fail	-	verify

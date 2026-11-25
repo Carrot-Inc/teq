@@ -2093,8 +2093,12 @@ impl<'a> Gen<'a> {
             };
             let special = match target {
                 Some((t, o)) => {
-                    let through = self.super_call_owner(tc.id, o);
-                    MethodRef { owner: self.class_name(through), owner_is_interface: cx.input.syms.class(through).kind == ClassKind::Trait, kind: Invoke::Special, ..(*self.mref(t)).clone() }
+                    let tm = self.mref(t);
+                    let through = match cx.input.syms.class(tc.id).superclass {
+                        Some(sc) if self.object_member_on_java_interface(o, &tm.name, &tm.desc) => sc,
+                        _ => self.super_call_owner(tc.id, o),
+                    };
+                    MethodRef { owner: self.class_name(through), owner_is_interface: cx.input.syms.class(through).kind == ClassKind::Trait, kind: Invoke::Special, ..(*tm).clone() }
                 }
                 None => MethodRef { owner: Rc::from(OBJECT), owner_is_interface: false, kind: Invoke::Special, ..(*self.mref(a.member)).clone() },
             };
@@ -2303,7 +2307,10 @@ impl<'a> Gen<'a> {
             self.begin_method(MethodFlags::PUBLIC, &name, &desc, false, &typed, ret.clone(), &[]);
             let special = match target {
                 Some((b, member)) => {
-                    let through = self.super_call_owner(c, b);
+                    let through = match syms.class(c).superclass {
+                        Some(sc) if self.object_member_on_java_interface(b, &member, &desc) => sc,
+                        _ => self.super_call_owner(c, b),
+                    };
                     let owner = self.class_name(through);
                     method_ref(Invoke::Special, &owner, syms.class(through).kind == ClassKind::Trait, &member, &params, &ret)
                 }

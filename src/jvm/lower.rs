@@ -2500,11 +2500,24 @@ impl<'a> Gen<'a> {
         (holds, args)
     }
 
+    /// Whether `name` with descriptor `desc` is Object's `toString()`, `hashCode()` or
+    /// `equals(Object)` as the Java interface `o` declares it. No interface holds a body for one of
+    /// them (an interface's default cannot override Object's public methods), so a super call of
+    /// it, written or through a trait's accessor, takes the body from the class chain and names the
+    /// class's superclass. A written call names it as scalac's does (`java/util/ArrayList.toString`
+    /// for an `ArrayList`'s `toString`, which the std declares on its `Collection`); a trait's
+    /// accessor names it where scalac names the declaring class, `java/util/AbstractCollection`,
+    /// which the std's model of the class does not hold: the JVM resolves both to the one method.
+    pub(super) fn object_member_on_java_interface(&self, o: ClassId, name: &str, desc: &str) -> bool {
+        self.java_interface(o) && matches!((name, desc), ("toString", "()Ljava/lang/String;") | ("hashCode", "()I") | ("equals", "(Ljava/lang/Object;)Z"))
+    }
+
     /// `super.s(args)`, the call `e`: through the accessor a class that mixes the trait in
     /// implements where `super` is a trait's, else the member of the superclass or of the trait
     /// named, called as that class's own. A Java interface's method is called on the interface
     /// itself, whatever brings it: the receiver of a super call is the method's owner
-    /// (`BCodeBodyBuilder.genCallMethod`), which the class then lists (`superCallTargets`).
+    /// (`BCodeBodyBuilder.genCallMethod`), which the class then lists (`superCallTargets`); one of
+    /// Object's three there names the superclass (`object_member_on_java_interface`).
     pub(super) fn lower_super_call(&mut self, e: TExprId, r: TExprId, s: SymId, args: ListRef) -> LirId {
         let cx = self.cx;
         let TExpr::Super(target) = cx.input.prog.expr(r) else { unreachable!("a super call, by the route") };
@@ -2520,6 +2533,9 @@ impl<'a> Gen<'a> {
                 let (args, order) = self.lower_arguments(Some(s), args, &accessor.params);
                 let ret = accessor.ret.clone();
                 return self.lir.push(Kind::Call { method: accessor, at: None, receiver, args, order }, ret);
+            }
+            SuperTarget::Chain if java.is_some_and(|o| self.object_member_on_java_interface(o, &m.name, &m.desc)) => {
+                self.this_class.and_then(|c| cx.input.syms.class(c).superclass)
             }
             _ if java.is_some() => java,
             SuperTarget::Chain => self.this_class.and_then(|c| cx.input.syms.class(c).superclass),

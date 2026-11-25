@@ -3062,6 +3062,7 @@ cases/structural_value_class	pass	-
 cases/summon_from_wildcard_given	pass	-	
 cases/summoner_sugar	pass	-	
 cases/super_call_java_library_template	pass	-	
+cases/super_call_java_superclass	pass	-	
 cases/super_call_kinds	pass	-	
 cases/super_call_object_members_jvm	pass	-	
 cases/super_rebind_result	pass	-	
