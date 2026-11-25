@@ -1637,8 +1637,8 @@ given GV: GvBase with {
     for n <- (byName.keys ++ found).toVector.distinct.sorted if !listed.contains(n) do fails += s"a build of no program listed: $n ($way)"
     (identical, fails.result())
 
-  // Planted bad builds, each of which the verdict must fail, and a control it must pass.
-  def selfTest(dir: Path): Vector[String] =
+  // Planted bad builds, each of which the verdict must fail, and a control it must pass; with their count.
+  def selfTest(dir: Path): (Vector[String], Int) =
     Files.createDirectories(dir)
     def put(name: String, bytes: String): Path =
       val p = dir.resolve(name)
@@ -1651,6 +1651,8 @@ given GV: GvBase with {
       "empty output" -> (Vector(good.copy(reference = put("e.ref", ""), head = put("e.head", ""))), Vector("a"), Vector("a")),
       "truncated" -> (Vector(good.copy(head = put("t.head", "PK-class"))), Vector("a"), Vector("a")),
       "timeout" -> (Vector(good.copy(codes = Vector(0, 124))), Vector("a"), Vector("a")),
+      "the head's build exiting non-zero after its output" -> (Vector(good.copy(codes = Vector(0, 1))), Vector("a"), Vector("a")),
+      "the reference's build exiting non-zero after its output" -> (Vector(good.copy(codes = Vector(1, 0))), Vector("a"), Vector("a")),
       "wrong value" -> (Vector(good.copy(head = put("w.head", "PK-class-bytez"))), Vector("a"), Vector("a")),
       "listed twice" -> (Vector(good), Vector("a", "a"), Vector("a")),
       "built twice" -> (Vector(good, good), Vector("a"), Vector("a")),
@@ -1661,8 +1663,12 @@ given GV: GvBase with {
     val wrong = Vector.newBuilder[String]
     if verdict(Vector(good), Vector("a"), Vector("a"), "control")._2.nonEmpty then wrong += "the control failed"
     for (what, (cells, listed, found)) <- planted if verdict(cells, listed, found, what)._2.isEmpty do wrong += s"$what passed"
+    // Each way has its own verdict: a program built well by one worker and exiting non-zero after its output at eight.
+    val byWorkers = Vector("program, one worker" -> good, "program, eight workers" -> good.copy(codes = Vector(0, 139)))
+    if byWorkers.forall((way, c) => verdict(Vector(c), Vector("a"), Vector("a"), way)._2.isEmpty) then
+      wrong += "a build exiting non-zero at eight workers alone passed"
     Sh.remove(dir)
-    wrong.result()
+    (wrong.result(), planted.length + 1)
 
   def hostsOf(shape: Shape, escape: Option[Escape] = None): Vector[String] =
     val own = shape.hosts match
@@ -1721,9 +1727,9 @@ given GV: GvBase with {
 
   val src = out.resolve("src")
   Sh.remove(out)
-  val wrong = selfTest(out.resolve("self-test"))
+  val (wrong, plants) = selfTest(out.resolve("self-test"))
   if wrong.nonEmpty then Log.die(s"lowered-shapes: the verdict's self-test failed: ${wrong.mkString("; ")}")
-  println("lowered-shapes self-test: 11 planted bad builds each failed, the control passed")
+  println(s"lowered-shapes self-test: $plants planted bad builds each failed, the control passed")
   Files.createDirectories(src)
   var total = 0
   val programs = Vector.newBuilder[String]
