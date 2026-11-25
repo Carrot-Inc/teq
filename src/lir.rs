@@ -160,6 +160,7 @@ pub enum Adaptation {
 /// method of the class that takes no receiver and, in this order, the instance its code runs
 /// on, the key of the non-local returns of the def around it, the captured values, then its own
 /// parameters. It has no name here: a writer names it.
+#[derive(PartialEq)]
 pub struct LiftedShape {
     /// The type the instance is taken at, where the code names it.
     pub instance: Option<ErasedType>,
@@ -194,13 +195,16 @@ pub enum LiftedFrom {
     LazyAccessor,
     /// A local lazy val, its initialiser, as the accessor.
     LazyInitialiser,
+    /// The getter of the default of a local definition's parameter (by its flattened position): a method of the class
+    /// being written, taking the definition's captures, then the parameters before the default's clause.
+    Default(u32),
 }
 
 /// A captured value as the code of a lifted method names it: the local `sym` of the declared
 /// type `ty`, held in its reference cell where `cell`; where `key`, not the local but the key of
 /// the non-local returns that travels with the local lazy val `sym`. Transitional with
 /// `LiftedBody`.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Capture {
     pub sym: SymId,
     pub cell: bool,
@@ -263,35 +267,17 @@ pub enum Unlowered {
     /// captures, or a local trait's member call, after an earlier part of the method was left to
     /// the old generator: what it captures is asked in the order the code is written.
     AfterEscape,
-    /// A right-associative member of a local trait that takes what the trait captures.
-    LocalTraitMemberRightAssociative,
-    /// A member of a local trait that takes what the trait captures, called on `super`, or with
-    /// a value for a capture that is no read of a local.
-    LocalTraitMemberUnplain,
-    /// A local def's default argument.
-    DefaultOfLocalDef,
-    /// A local `def`'s declaration, where its lifted method is named and queued (`Kind::LocalFun`).
-    LocalDefDeclaration,
     /// `class B extends A` where every parameter of `A` has a default and none is written.
     CtorSuperDefaults,
-    /// A class body whose local trait's initialiser takes values of the enclosing block.
-    CtorTraitProxies,
     /// An enum companion's `fromOrdinal` over its stored values.
     EnumCompanionMembers,
     /// A value class's method forwarding to its `m$extension`, and the copies of extension methods.
     ValueClassForwarder,
     /// The function a by-name default of a jar's method is passed as.
     JarGetterThunk,
-    /// The super accessor of a local trait's member that takes what the trait captures.
-    ProxiedSuperAccessor,
     /// An object's `<clinit>` own code: the handles of its lazy members, its instance made and
     /// stored in `MODULE$`.
     ModuleClinit,
-    /// A lambda's or local def's parameter that its lifted method takes as an `Object`, opened
-    /// into a local of its own type before the body.
-    LiftedParameterPrologue,
-    /// A local `def` without a body (reported).
-    LocalDefWithoutBody,
 }
 
 #[derive(Clone)]
@@ -326,10 +312,6 @@ pub enum Kind {
     Val { sym: SymId, init: LirId, cell: Option<ErasedType> },
     /// A local held as its value assigned.
     Assign { sym: SymId, value: LirId },
-    /// A local definition is declared here: nothing is evaluated. A writer that names lifted
-    /// methods in the order it meets them names this one here, where no call came first.
-    /// Transitional until a local definition is a method of the class-level plan.
-    LocalFun(SymId),
     /// The instance of an object, by its class's name, at the node's type: the class's own, or
     /// a type the class implements (a given object's declared type), taken with no check.
     Module(Rc<str>),
@@ -470,9 +452,9 @@ pub enum Kind {
     /// lifted method `lifted` with the captured values, then its own arguments, and gives its
     /// result. `captures` are those values as `lifted` takes them (the instance, the key, the
     /// captured ones), evaluated here in that order. The node's type is the interface. A writer
-    /// makes the lifted method and names it (a class file's `$anonfun$N` is numbered as the
-    /// closures are written, a node written twice making two). `body` is what the method is
-    /// made of, transitional (`LiftedBody`).
+    /// makes the lifted method and names it (as dotty's LambdaLift names it in the unit, one
+    /// method however often the node is written). `body` is what the method is made of,
+    /// transitional (`LiftedBody`).
     Closure { captures: List, method: Rc<MethodRef>, lifted: Rc<LiftedShape>, body: Rc<LiftedBody> },
     /// A call of a lifted method (`from`): the local definition `def`'s, or the accessor or the
     /// initialiser of the local lazy val `def`: the captured values as `Closure` has them, then the
@@ -630,7 +612,7 @@ impl Kind {
         match self {
             Kind::Legacy(..) | Kind::LegacyTail(..) | Kind::Test { .. } => true,
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => false,
-            Kind::Local(_) | Kind::Param(_) | Kind::Block { .. } | Kind::Val { .. } | Kind::Assign { .. } | Kind::LocalFun(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This => false,
+            Kind::Local(_) | Kind::Param(_) | Kind::Block { .. } | Kind::Val { .. } | Kind::Assign { .. } | Kind::Module(_) | Kind::ClassOf(_) | Kind::This => false,
             Kind::Field { .. } | Kind::Binary { .. } | Kind::Neg(_) | Kind::Not(_) | Kind::And(..) | Kind::Or(..) | Kind::Compare { .. } => false,
             Kind::Helper { .. } | Kind::If { .. } | Kind::While { .. } | Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::Synchronized { .. } => false,
             Kind::Try { .. } => false,
@@ -741,7 +723,7 @@ impl Body {
     pub fn operands(&self, id: LirId) -> Vec<LirId> {
         let mut out = Vec::new();
         match &self.node(id).kind {
-            Kind::Legacy(..) | Kind::LegacyTail(..) | Kind::LocalFun(_) => {}
+            Kind::Legacy(..) | Kind::LegacyTail(..) => {}
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => {}
             Kind::Local(_) | Kind::Param(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This | Kind::StaticField { .. } => {}
             Kind::ReturnKey | Kind::LazyKey(_) | Kind::GivenInstance(_) | Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
@@ -1017,6 +999,8 @@ pub struct MethodDef {
     /// is with a reference: a class is asked by it whether it holds a method.
     pub desc: String,
     pub flags: MethodFlags,
+    /// A lifted method's place among the class's lifted methods (`ClassDef::methods`), none for any other.
+    pub place: Option<u32>,
 }
 
 /// What a field is beside its name and type.
@@ -1083,11 +1067,24 @@ pub struct ClassDef {
     /// its member's accessor is written, an enum's values where its companion's initialiser
     /// stores them.
     pub fields: Vec<FieldDef>,
-    /// In the order they are written.
+    /// In the order they are written, the lifted methods excepted (closures, local defs, a local lazy val's
+    /// accessor and initialiser, a local def's default getters): they keep the slots lifted methods were written
+    /// in, in the order of their places (`MethodDef::place`, `order_lifted`), `LambdaLift`'s and so scalac's.
     pub methods: Vec<MethodDef>,
 }
 
 impl ClassDef {
+    /// The lifted methods in the order of their places, in the slots lifted methods were written in; every other
+    /// method where it was written. Once the class's last method is written.
+    pub fn order_lifted(&mut self) {
+        let slots: Vec<usize> = (0..self.methods.len()).filter(|&i| self.methods[i].place.is_some()).collect();
+        let mut lifted: Vec<MethodDef> = slots.iter().rev().map(|&i| self.methods.remove(i)).collect();
+        lifted.sort_by_key(|m| m.place);
+        for (&slot, m) in slots.iter().zip(lifted) {
+            self.methods.insert(slot, m);
+        }
+    }
+
     /// Whether the class holds a method of this name and signature (`MethodDef::desc`).
     pub fn has_method(&self, name: &str, desc: &str) -> bool {
         self.methods.iter().any(|m| &*m.name == name && m.desc == desc)

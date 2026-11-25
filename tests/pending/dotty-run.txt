@@ -202,8 +202,6 @@ i2964c.scala	output: line 1: the .check has 'class Foo$Inner$1', the program pri
 i2964d.scala	output: line 1: the .check has 'class Foo$Inner$2$', the program printed 'class Inner$3k0dl5_180'
 i2964e.scala	output: line 1: the .check has 'class foo.bar.Foo$$anon$1', the program printed 'class foo.bar.Foo$$anon$11p2z7y_164'
 i3000b.scala	output: line 1: the .check has 'Foo$$anon$1', the program printed 'Foo$$anon$oqzmt3_105'
-i3006.scala	output: line 4: the .check has 'f$4', the program printed 'f$1'
-i3006b.scala	output: line 3: the .check has 'bar$3', the program printed 'bar$1'
 i3207.scala	i3207.scala:3:37: expected ',' or ')', found identifier
 i3248d.scala	i3248d.scala:9:20: a sequence wildcard can only end a sequence pattern
 i3448.scala	i3448.scala:8:33: missing parameter type

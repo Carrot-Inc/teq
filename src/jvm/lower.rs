@@ -66,6 +66,10 @@ impl<'a> Gen<'a> {
             let own = std::mem::replace(&mut self.lower_declared, earlier);
             self.lower_declared.extend(own);
         }
+        // The local defs the lowering met are queued once it ends, in the context of the method it lowered for.
+        if !was {
+            self.queue_local_defs();
+        }
         out
     }
 
@@ -797,13 +801,15 @@ impl<'a> Gen<'a> {
             // Its holder stands at the head of the list (`Gen::lower_lazy_holders`).
             TStmt::Val(sym, _) if self.is_lazy_local(sym) => {}
             TStmt::Val(sym, init) => self.lower_val(sym, init, nodes),
+            // A local def evaluates nothing where it stands: the class writing the code writes its method
+            // (`Gen::queue_local_defs`).
             TStmt::Fun(f) => {
                 if cx.input.reach.funs[f.idx()] {
                     let sym = prog.funs[f.idx()].sym;
                     if self.analysis_in_order() {
                         self.local_fun_shape(sym);
                     }
-                    nodes.push(self.lir.push(Kind::LocalFun(sym), ErasedType::V));
+                    self.local_defs.push(sym);
                 }
             }
             TStmt::Pat(pat, init, PatDefForm::General) => self.lower_variables_definition(pat, init, false, nodes),
@@ -1631,7 +1637,7 @@ impl<'a> Gen<'a> {
         let Some(outer) = outer else { return (self.lower_declared_arguments(rest, &declared), declared) };
         // As the whole build passes it, so that the two builds' class files agree: through a
         // secondary constructor at the enclosing class (`Gen::lower_via_arguments`); through the
-        // primary as a captured outer is (`Gen::load_capture_arg`): a local at the enclosing
+        // primary as a captured outer is (`Gen::lower_capture_argument`): a local at the enclosing
         // class, the capture's type, whatever subclass the instance is of, and any other value
         // at its own type, cast where the verifier does not take that type for the parameter's
         // (a member of a generic value, which is an `Object`).
@@ -1716,8 +1722,8 @@ impl<'a> Gen<'a> {
             return Err(Unlowered::AfterEscape);
         }
         let (held, route) = match self.default_route(of, at, args) {
-            DefaultRoute::Unlowered(why) => return Err(why),
             DefaultRoute::Refused(refusal) => return Ok(self.lower_refused(refusal)),
+            DefaultRoute::LocalDef(s, i) => return self.lower_local_default(s, i, args),
             DefaultRoute::Held(held, route) => (Some(held), *route),
             route => (None, route),
         };
@@ -1781,8 +1787,55 @@ impl<'a> Gen<'a> {
                 nodes.extend(self.lower_getter_arguments(&args, held));
                 self.lower_getter_call_at(module, None, getter, &nodes, &want)
             }
-            DefaultRoute::Held(..) | DefaultRoute::Unlowered(_) | DefaultRoute::Refused(_) => unreachable!("a route of a call, by `lower_default`"),
+            DefaultRoute::Held(..) | DefaultRoute::Refused(_) | DefaultRoute::LocalDef(..) => unreachable!("a route of a call, by `lower_default`"),
         }
+    }
+
+    /// The default `i` of the local def `s`: its lifted getter called with the def's captures and the arguments
+    /// before the default's clause (`args`, in the declared order), each written where the getter takes it, as
+    /// scalac's caller passes them: the typer lifts an argument that is not a path into a val, and an inline
+    /// parameter's tree expanded there (`Worker::own_getter_expansion`) is evaluated once, in its place, after
+    /// captures that have no effect. The getter takes the parameters of the clauses before the default's in its class
+    /// file's order (`Gen::default_getter_shape`; a right-associative extension's own clause before its receiver's),
+    /// the arguments for them evaluated in the list's order (`Gen::reordered_operands`). Asked where the analysis of
+    /// captures is asked in order (`Gen::analysis_in_order`), as a call of the def is.
+    fn lower_local_default(&mut self, s: SymId, i: usize, args: ListRef) -> Result<LirId, Unlowered> {
+        if !self.analysis_in_order() {
+            return Err(Unlowered::AfterEscape);
+        }
+        if self.cx.fun_of_sym[s.idx()] == u32::MAX {
+            self.unsupported("the default of a local def without a body");
+            let (def, _) = self.local_fun_shape(s);
+            let want = def.params.get(i).cloned().unwrap_or_else(ErasedType::object);
+            let nothing = self.lir.push(Kind::Null, ErasedType::object());
+            return Ok(self.lower_adapt(nothing, &ErasedType::object(), &want));
+        }
+        let (lifted, body) = self.local_default_shape(s, i);
+        let (def, _) = self.local_fun_shape(s);
+        let before = self.default_getter_shape(s, i).before;
+        let types: Vec<ErasedType> = def.params[..before.min(def.params.len())].to_vec();
+        let priors: Vec<TExprId> = self.cx.input.prog.expr_list(args).to_vec();
+        // The declared index of the argument for each parameter the getter takes, in its order.
+        let taken: Vec<usize> = match self.jvm_param_order(s) {
+            Some(order) => order[..before.min(order.len())].to_vec(),
+            None => (0..before.min(priors.len())).collect(),
+        };
+        if taken.len() != types.len() || taken.iter().any(|&k| k >= priors.len()) {
+            self.unsupported("the default of a right-associative extension's receiver, whose getter takes the arguments of a clause the call gives after it");
+            let nothing = self.lir.push(Kind::Null, ErasedType::object());
+            return Ok(self.lower_adapt(nothing, &ErasedType::object(), &lifted.ret));
+        }
+        let mut listed = taken.clone();
+        listed.sort_unstable();
+        let items: Vec<TExprId> = listed.iter().map(|&k| priors[k]).collect();
+        let order: Vec<usize> = taken.iter().map(|k| listed.iter().position(|x| x == k).expect("a taken argument, listed")).collect();
+        let captures = self.lower_captures(lifted.instance.is_some(), body.home, lifted.key, None, &body.captures);
+        let (holds, args) = self.reordered_operands(None, false, &items, &order, |g, item, j| g.lower_argument_at(item, &types[j]));
+        let captures = self.lir.list(&captures);
+        let args = self.lir.list(&args);
+        let ret = lifted.ret.clone();
+        let call = self.lir.push(Kind::LiftedCall { def: s, from: LiftedFrom::Default(i as u32), lifted, captures, args, order: None }, ret);
+        Ok(if holds.is_empty() { call } else { self.lir.seq(&holds, call) })
     }
 
     /// The default of a parameter of a constructor of `c`, of the type `want`, over the arguments
@@ -2038,14 +2091,26 @@ impl<'a> Gen<'a> {
         self.lir.push(Kind::Closure { captures, method, lifted, body }, ft)
     }
 
-    /// A call of a local def: its lifted method over what it captures, then the arguments.
+    /// A call of a local def: its lifted method over what it captures, then the arguments; a right-associative
+    /// extension's in its class file's order (`Gen::jvm_param_order`), each operand held as `Gen::reordered_operands`
+    /// holds a local trait member's, the holds standing before the call.
     pub(super) fn lower_lifted_call(&mut self, s: SymId, args: ListRef) -> LirId {
+        let items: Vec<TExprId> = self.cx.input.prog.expr_list(args).to_vec();
         let (lifted, body) = self.local_fun_shape(s);
         let captures = self.lower_captures(lifted.instance.is_some(), body.home, lifted.key, None, &body.captures);
-        let (args, order) = self.lower_arguments(Some(s), args, &lifted.params);
+        let reordered = self.jvm_param_order(s).filter(|o| o.len() == items.len() && o.len() == lifted.params.len());
+        let (holds, args) = match reordered {
+            Some(order) => {
+                let params = lifted.params.clone();
+                let (holds, nodes) = self.reordered_operands(None, false, &items, &order, |g, item, j| g.lower_argument_at(item, &params[j]));
+                (holds, self.lir.list(&nodes))
+            }
+            None => (Vec::new(), self.lower_arguments(Some(s), args, &lifted.params).0),
+        };
         let captures = self.lir.list(&captures);
         let ret = lifted.ret.clone();
-        self.lir.push(Kind::LiftedCall { def: s, from: LiftedFrom::Def, lifted, captures, args, order }, ret)
+        let call = self.lir.push(Kind::LiftedCall { def: s, from: LiftedFrom::Def, lifted, captures, args, order: None }, ret);
+        if holds.is_empty() { call } else { self.lir.seq(&holds, call) }
     }
 
     /// A read of the local lazy val `s`; not while typed IR has been left to the writer
@@ -2153,10 +2218,7 @@ impl<'a> Gen<'a> {
         let mut lowered = Vec::with_capacity(items.len());
         for (i, a) in items.into_iter().enumerate() {
             let want = written.get(i).cloned().unwrap_or_else(ErasedType::object);
-            lowered.push(match &want {
-                ErasedType::L(array) if array.starts_with('[') => self.lower_array_argument(a, array),
-                _ => self.lower_expr(a, &want),
-            });
+            lowered.push(self.lower_argument_at(a, &want));
         }
         (self.lir.list(&lowered), order.map(Rc::from))
     }
@@ -2203,8 +2265,8 @@ impl<'a> Gen<'a> {
             CallRoute::Super => return Ok(self.lower_super_call(e, r, s, args)),
             CallRoute::Interpolator(helper) => return Ok(self.lower_interpolator(r, s, helper, args)),
             // The proxies are the capture analysis's, asked in order only (`Gen::analysis_in_order`).
-            CallRoute::Proxied(t) => return self.analysis_in_order().then(|| self.lower_proxied_call(t, s, args)).unwrap_or(Err(Unlowered::AfterEscape)),
-            CallRoute::Lifted => return self.analysis_in_order().then(|| self.lower_lifted_member_call(r, s, args)).unwrap_or(Err(Unlowered::AfterEscape)),
+            CallRoute::Proxied(t) => return self.analysis_in_order().then(|| self.lower_proxied_call(t, s, args)).ok_or(Unlowered::AfterEscape),
+            CallRoute::Lifted => return self.analysis_in_order().then(|| self.lower_lifted_member_call(r, s, args)).ok_or(Unlowered::AfterEscape),
             CallRoute::Js => return Ok(self.lower_refused(Refusal::JavaScriptMember)),
             CallRoute::Extension(c, route) => return Ok(self.lower_extension_call(r, s, args, c, route)),
             CallRoute::Object(c) => return Ok(self.lower_after_receiver(r, |g| g.lower_module(c))),
@@ -2493,87 +2555,104 @@ impl<'a> Gen<'a> {
 
     /// `super[T].s(args)` of a member of the local trait `t` that takes proxies, as scalac's
     /// forwarder calls it: the trait's static `s$` over the instance, the proxies as this code
-    /// holds them, their extras, then the arguments. Not a right-associative member, whose class
-    /// file takes the arguments in another order.
-    pub(super) fn lower_proxied_call(&mut self, t: ClassId, s: SymId, args: ListRef) -> Result<LirId, Unlowered> {
-        if self.jvm_param_order(s).is_some() {
-            return Err(Unlowered::LocalTraitMemberRightAssociative);
-        }
+    /// holds them, their extras, then the arguments (`Gen::lower_member_rest`).
+    pub(super) fn lower_proxied_call(&mut self, t: ClassId, s: SymId, args: ListRef) -> LirId {
         let proxies = self.member_proxies(s).expect("a member that takes proxies, by the route");
         let declared = self.proxied_declared(s);
         let m = self.mref(s);
         let owner = self.class_name(t);
         let extras = self.extras_of(&declared, None);
         let pm = self.proxied_mref(&m, &proxies, &extras);
-        let mut nodes = vec![self.lower_instance()];
         let items: Vec<TExprId> = self.cx.input.prog.expr_list(args).to_vec();
         let k = declared.len();
-        for &p in &proxies {
-            let want = self.anon_capture_type(p);
-            let arg = declared.iter().position(|&d| d == p).and_then(|i| items.get(i).copied());
-            nodes.push(match arg {
-                Some(a) if !matches!(self.cx.input.prog.expr(a), TExpr::Local(x) if x == p) => self.lower_expr(a, &want),
-                _ => self.lower_capture_as(p, &want),
-            });
-        }
-        let extras = self.extras_of(&declared, None);
-        nodes.extend(self.lower_extras(&extras));
-        self.lower_rest(s, args, k, &m.params, &mut nodes);
+        let mut nodes = vec![self.lower_instance()];
+        nodes.extend(self.lower_proxy_arguments(&proxies, &declared, &items));
+        let held = self.lower_member_rest(s, args, k, &m.params, None, &mut nodes);
         let mut params = vec![ErasedType::L(owner.clone())];
         params.extend(pm.params.iter().cloned());
         let desc = method_desc(&params, &pm.ret);
         let ret = pm.ret.clone();
         let method = Rc::new(MethodRef { owner, owner_is_interface: true, name: format!("{}$", pm.name), params, ret: ret.clone(), desc, kind: Invoke::Static });
         let args = self.lir.list(&nodes);
-        Ok(self.lir.push(Kind::StaticCall { method, args, order: None }, ret))
+        let call = self.lir.push(Kind::StaticCall { method, args, order: None }, ret);
+        if held.is_empty() { call } else { self.lir.seq(&held, call) }
     }
 
     /// `r.s(proxies, args)` of a local trait's lifted member, as dotty's `LambdaLift.addFreeArgs`
-    /// leaves it, on a receiver that is no `super`: the interface's method over the proxies, their
-    /// extras and the parameters, at the receiver's site (`Gen::call_lifted`). Not on `super`, a
-    /// right-associative member, nor where an argument for a proxy is no read of a local (a lazy
-    /// val's new holder: `Gen::load_capture_arg`).
-    pub(super) fn lower_lifted_member_call(&mut self, r: TExprId, s: SymId, args: ListRef) -> Result<LirId, Unlowered> {
+    /// leaves it: the interface's method over the proxies, their extras and the parameters
+    /// (`Gen::lower_member_rest`), at the receiver's site. Each proxy's argument is
+    /// what a lifted class would be handed for it (`Gen::capture_argument_route`): a local's read,
+    /// or `this` where the proxy stands for an enclosing instance. On `super`, which binds to the
+    /// trait's member where the class mixing it in is declared after the one calling (it has no
+    /// forwarder yet), the trait's static `s$`, as scalac calls it.
+    pub(super) fn lower_lifted_member_call(&mut self, r: TExprId, s: SymId, args: ListRef) -> LirId {
         let cx = self.cx;
         if matches!(cx.input.prog.expr(r), TExpr::Super(_)) {
-            return Err(Unlowered::LocalTraitMemberUnplain);
-        }
-        if self.jvm_param_order(s).is_some() {
-            return Err(Unlowered::LocalTraitMemberRightAssociative);
+            let Owner::Class(t) = cx.input.syms.sym(s).owner else { unreachable!("a local trait's member, by the route") };
+            return self.lower_proxied_call(t, s, args);
         }
         let declared = self.proxied_declared(s);
         let items: Vec<TExprId> = cx.input.prog.expr_list(args).to_vec();
         let k = declared.len();
-        // The arguments for the proxies, by the cases of `Gen::load_capture_arg` that are a tree.
-        let value_of_other = |g: &Self, p: SymId, x: SymId| x != p && g.held(p) == Held::Value && !g.is_local_def(p) && !cx.input.syms.sym(p).by_name;
-        let plain = declared.iter().zip(&items[..k.min(items.len())]).all(|(&p, &a)| match cx.input.prog.expr(a) {
-            TExpr::Local(x) => value_of_other(self, p, x) || self.is_capturable(x),
-            _ => false,
-        });
-        if !plain {
-            return Err(Unlowered::LocalTraitMemberUnplain);
-        }
         let proxies = self.member_proxies(s).expect("a member that takes proxies, by the route");
         let m = self.mref(s);
         let extras = self.extras_of(&declared, None);
         let pm = self.proxied_mref(&m, &proxies, &extras);
         let site = self.invoke_site(r, s, &m);
-        let receiver = self.lower_receiver(r, s, &site);
+        let mut receiver = self.lower_receiver(r, s, &site);
         let mut nodes = Vec::new();
         for &p in &proxies {
             let want = self.anon_capture_type(p);
-            let arg = declared.iter().position(|&d| d == p).and_then(|i| items.get(i).copied());
-            nodes.push(match arg.map(|a| (a, cx.input.prog.expr(a))) {
-                Some((a, TExpr::Local(x))) if value_of_other(self, p, x) => self.lower_expr(a, &want),
-                Some((_, TExpr::Local(x))) => self.lower_capture_as(x, &want),
-                _ => self.lower_capture_as(p, &want),
+            nodes.push(match declared.iter().position(|&d| d == p).and_then(|i| items.get(i).copied()) {
+                Some(a) => {
+                    let route = self.capture_argument_route(a, p);
+                    let value = self.lower_capture_argument(a, route);
+                    let t = self.lir.ty(value).clone();
+                    self.lower_adapt(value, &t, &want)
+                }
+                None => self.lower_capture_as(p, &want),
             });
         }
         nodes.extend(self.lower_extras(&extras));
-        self.lower_rest(s, args, k, &m.params, &mut nodes);
+        let held = self.lower_member_rest(s, args, k, &m.params, Some((r, &mut receiver)), &mut nodes);
         let ret = pm.ret.clone();
         let args = self.lir.list(&nodes);
-        Ok(self.lir.push(Kind::Call { method: Rc::new(pm), at: site.map(|site| (site.owner, site.interface)), receiver, args, order: None }, ret))
+        let call = self.lir.push(Kind::Call { method: Rc::new(pm), at: site.map(|site| (site.owner, site.interface)), receiver, args, order: None }, ret);
+        if held.is_empty() { call } else { self.lir.seq(&held, call) }
+    }
+
+    /// The values a local trait's member or initialiser takes first: each of its `proxies` as the
+    /// call's own argument for it among `given` (by `declared`'s order) where that is no read of
+    /// the proxy itself, else as this code holds the proxy; then their extras.
+    fn lower_proxy_arguments(&mut self, proxies: &[SymId], declared: &[SymId], given: &[TExprId]) -> Vec<LirId> {
+        let mut nodes = Vec::with_capacity(proxies.len());
+        for &p in proxies {
+            let want = self.anon_capture_type(p);
+            nodes.push(match declared.iter().position(|&d| d == p).and_then(|i| given.get(i).copied()) {
+                Some(a) if !matches!(self.cx.input.prog.expr(a), TExpr::Local(x) if x == p) => self.lower_expr(a, &want),
+                _ => self.lower_capture_as(p, &want),
+            });
+        }
+        let extras = self.extras_of(declared, None);
+        nodes.extend(self.lower_extras(&extras));
+        nodes
+    }
+
+    /// `T.$init$(this, proxies)` of the local trait `b`, whose body reads `proxies`, values of
+    /// the block (`TClass::captures`), in the constructor of a class that mixes it in, `given`
+    /// the class's own arguments for them.
+    pub(super) fn lower_proxied_trait_init(&mut self, b: ClassId, this: &ErasedType, proxies: &[SymId], declared: &[SymId], given: &[TExprId]) -> LirId {
+        let base = self.class_name(b);
+        let mut types = vec![ErasedType::L(base.clone())];
+        for &p in proxies {
+            types.push(self.anon_capture_type(p));
+        }
+        let extras = self.extras_of(declared, None);
+        types.extend(self.extras_types(&extras));
+        let mut args = vec![self.lir.this(this.clone())];
+        args.extend(self.lower_proxy_arguments(proxies, declared, given));
+        let init = method_ref(Invoke::Static, &base, true, "$init$", &types, &ErasedType::V);
+        self.lir.static_call(&init, &args)
     }
 
     /// The captures a local trait's member that takes proxies declares first.
@@ -2583,17 +2662,32 @@ impl<'a> Gen<'a> {
     }
 
     /// What the scope holds for the local `s` (`lower_capture`) as a value of the type `want`.
-    fn lower_capture_as(&mut self, s: SymId, want: &ErasedType) -> LirId {
+    pub(super) fn lower_capture_as(&mut self, s: SymId, want: &ErasedType) -> LirId {
         let held = self.lower_capture(s);
         let t = self.lir.ty(held).clone();
         self.lower_adapt(held, &t, want)
     }
 
     /// The `Extras` `e` as the code holds them (`Gen::load_extras`).
-    fn lower_extras(&mut self, e: &Extras) -> Vec<LirId> {
+    pub(super) fn lower_extras(&mut self, e: &Extras) -> Vec<LirId> {
         let mut nodes: Vec<LirId> = e.homes.iter().map(|&h| self.lower_instance_of(h)).collect();
         nodes.extend(e.keys.iter().map(|&x| self.lir.push(Kind::LazyKey(x), ErasedType::object())));
         nodes
+    }
+
+    /// The arguments after the first `k` (a local trait's member's proxies) of a call of `s` at `params`, onto
+    /// `nodes`, and the holds that stand before the call: a right-associative extension's in its class file's order
+    /// (`Gen::jvm_param_order`), each operand the order passes held as `Gen::reordered_operands` holds it, the call's
+    /// receiver `ahead` with them; any other's as written (`Gen::lower_rest`).
+    fn lower_member_rest(&mut self, s: SymId, args: ListRef, k: usize, params: &[ErasedType], ahead: Option<(TExprId, &mut LirId)>, nodes: &mut Vec<LirId>) -> Vec<LirId> {
+        let items: Vec<TExprId> = self.cx.input.prog.expr_list(args).iter().skip(k).copied().collect();
+        let Some(order) = self.jvm_param_order(s).filter(|o| o.len() == params.len() && o.len() == items.len()) else {
+            self.lower_rest(s, args, k, params, nodes);
+            return Vec::new();
+        };
+        let (holds, rest) = self.reordered_operands(ahead, false, &items, &order, |g, item, j| g.lower_argument_at(item, &params[j]));
+        nodes.extend(rest);
+        holds
     }
 
     /// The arguments after the first `k` of a call of `s` at `params`, onto `nodes`.

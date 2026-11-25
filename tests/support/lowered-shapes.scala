@@ -9,7 +9,10 @@
 // Each program is built four ways by each binary: as a program and as products (`--products`, an open world), with
 // one worker and with eight. A program that either binary does not build is a failure, never identical: the set
 // proves nothing through a program that does not compile. A slice that moves a shape adds its rows to SHAPES, and
-// to WANTS and POSITIONS where it brings a new type or place.
+// to WANTS and POSITIONS where it brings a new type or place. A second table holds the lifted methods (src/jvm/
+// lifted.rs names them): what a template's code lifts, in every place a kind of class holds code (PLACES by
+// HOLDERS); a third the order of a class's lifted methods (PLACE BODIES by PLACE HOSTS). The verdict's own self-test
+// runs first: planted bad builds, each of which it must fail.
 // Run from the repository's root:
 // `./teq interp tests/support/lowered-shapes.scala -- --reference <binary> [--teq <binary>] [--out <dir>] [--jobs <n>]
 // [--shapes <regex>]`, the reference the base's compiler, the compiler under test `--teq`, else $TEQ, else
@@ -1455,6 +1458,212 @@ given GV: GvBase with {
     val main = s"object Main {\n  def main(args: Array[String]): Unit = {\n$calls  }\n}\n"
     (prelude + escape.fold("")(_ => escapePrelude) + "trait KTr[A](val kt: A)\n" + classes.mkString + main, all.length * (if bare then 4 else 6))
 
+  // The lifted methods' table: a closure, a local def with a closure for its default, a local lazy val and a
+  // closure capturing a val of the local def's name (whose proxy takes a number of the def's counter), as the
+  // expression `$E` of each place a template holds code, in each kind of class. A place: its members, its
+  // constructor's parameters, its superclass's arguments, and how it is made (`secondary` through its secondary
+  // constructor, `named` its superclass's arguments named out of their order, `trait` with a trait's argument).
+  final case class Place(name: String, members: String, params: String = "", args: String = "", how: String = "")
+
+  def lifted(n: String): String =
+    "{ def g(x: Int, f: Int => Int = (y: Int) => y + 1): Int = f(x); lazy val l: Int => Int = (x: Int) => g(x); " +
+      s"val k = (x: Int) => l(x) + $n; List(1).map(x => k(x)).head + { val g = $n; List(2).map(y => y + g).head } }"
+
+  // The table's own top-level names, apart from the prelude's (`L` before each name the prelude may hold).
+  val liftedPrelude = "class LBase(val b: Int = 0)\nclass LBase2(val f: Int, val g: Int)\ntrait LTp(val t: Int)\ntrait LGo { def go: Int }\n"
+
+  val places: Vector[Place] = Vector(
+    Place("method", "def go: Int = $E"),
+    Place("field", "val f: Int = $E; def go: Int = f"),
+    Place("statement", "var s: Int = 0; locally { s = $E }; def go: Int = s"),
+    Place("lazy", "lazy val lz: Int = $E; def go: Int = lz"),
+    Place("method-default", "def d(a: Int = $E): Int = a; def go: Int = d()"),
+    Place("given", "given gi: Int = $E; def go: Int = gi"),
+    Place("extension", "extension (q: Int) def ext: Int = q + $E; def go: Int = 1.ext"),
+    Place("constructor-default", "def go: Int = p", params = "(p: Int = $E)"),
+    Place("superclass-argument", "def go: Int = b", args = "($E)"),
+    Place("trait-argument", "def go: Int = t", how = "trait"),
+    Place("secondary-constructor", "def this(s: String) = { this($E); println(s) }; def go: Int = p", params = "(p: Int)", how = "secondary"),
+    Place("by-name-default", "def d(a: => Int = $E): Int = a; def go: Int = d()"),
+    Place("by-name-constructor-default", "def go: Int = p", params = "(p: => Int = $E)"),
+    Place("secondary-default", "def this(s: String, q: Int = $E) = { this(q); println(s) }; def go: Int = p", params = "(p: Int)", how = "secondary"),
+    Place("named-arguments", "def go: Int = f + g", how = "named"))
+
+  // The kinds of class, each with the places it takes: a case class no by-name parameter (its parameters are vals),
+  // an inline method no case class (scalac's rules); a trait no constructor, a value class one method's places, a
+  // file's top level what a package object holds. An object's superclass argument, trait argument and named
+  // arguments are left out: the product mode does not pickle a local def's default getter there today.
+  val holders: Vector[(String, Vector[String])] =
+    val all = places.map(_.name)
+    val object_ = Vector("method", "field", "statement", "lazy", "method-default", "given", "extension", "by-name-default")
+    Vector(
+      "class" -> all, "case" -> all.filter(_ != "by-name-constructor-default"), "companion" -> all, "object" -> object_,
+      "trait" -> Vector("method", "field", "statement", "lazy", "method-default", "given", "extension"), "nested" -> all,
+      "object-in-class" -> object_, "object-in-object" -> object_, "local" -> all,
+      "local-case" -> all.filter(_ != "by-name-constructor-default"),
+      "anonymous" -> Vector("method", "field", "statement", "lazy", "method-default", "superclass-argument", "by-name-default", "named-arguments"),
+      "value" -> Vector("method", "method-default", "extension"),
+      "top-level" -> Vector("method", "field", "lazy", "method-default", "given", "extension"),
+      "inline" -> all)
+
+  def liftedParent(p: Place, e: String): String =
+    if p.how == "named" then s"LBase2(g = $e, f = $e + 1)"
+    else "LBase" + (if p.args.isEmpty then "()" else p.args.replace("$E", e)) + (if p.how == "trait" then s" with LTp($e)" else "")
+
+  def liftedClass(kind: String, p: Place, e: String, name: String = "H"): String =
+    val params = if p.params.nonEmpty then p.params.replace("$E", e) else if kind == "case" then "()" else ""
+    s"${if kind == "case" then "case class" else "class"} $name$params extends ${liftedParent(p, e)} { ${p.members.replace("$E", e)} }"
+
+  def liftedNew(p: Place, prefix: String = "new H"): String = prefix + (if p.how == "secondary" then "(\"x\")" else "()") + ".go"
+
+  // A program of the table: its file's text, and the text of a second file where the class comes from another (an
+  // inline method's).
+  def liftedProgram(holder: String, p: Place): (String, Option[String]) =
+    val (e3, en) = (lifted("3"), lifted("n"))
+    val members = p.members.replace("$E", e3)
+    val object_ = s"object H extends ${liftedParent(p, e3)} { $members }"
+    val made = (decl: String) => s"object Make { def make(n: Int): Int = { $decl } }"
+    val (text, use, lib) = holder match
+      case "class" => (liftedClass("class", p, e3), liftedNew(p), None)
+      case "case" => (liftedClass("case", p, e3), liftedNew(p), None)
+      case "companion" => (liftedClass("class", p, e3) + s"\nobject H { val q: Int = $e3 }", liftedNew(p) + " + H.q", None)
+      case "object" => (object_, "H.go", None)
+      case "trait" => (s"trait T { $members }\nclass H extends T", "new H().go", None)
+      case "nested" => (s"class LOuter { ${liftedClass("class", p, e3)} }", s"{ val o = new LOuter; ${liftedNew(p, "new o.H")} }", None)
+      case "object-in-class" => (s"class LOuter { $object_ }", "(new LOuter).H.go", None)
+      case "object-in-object" => (s"object LOuter { $object_ }", "LOuter.H.go", None)
+      case "local" => (made(liftedClass("class", p, en) + "; " + liftedNew(p)), "Make.make(2)", None)
+      case "local-case" => (made(liftedClass("case", p, en) + "; " + liftedNew(p)), "Make.make(2)", None)
+      case "anonymous" => (made(s"val h = new ${liftedParent(p, en)} with LGo { ${p.members.replace("$E", en)} }; h.go"), "Make.make(2)", None)
+      case "value" => (s"class H(val u: Int) extends AnyVal { $members }", "new H(1).go", None)
+      case "top-level" =>
+        val decl = p.name match
+          case "method" => "def go: Int = $E"
+          case "field" => "val tf: Int = $E\ndef go: Int = tf"
+          case "lazy" => "lazy val tl: Int = $E\ndef go: Int = tl"
+          case "method-default" => "def d(a: Int = $E): Int = a\ndef go: Int = d()"
+          case "given" => "given tg: Int = $E\ndef go: Int = tg"
+          case _ => "extension (q: Int) def ext: Int = q + $E\ndef go: Int = 1.ext"
+        (decl.replace("$E", e3), "go", None)
+      case _ =>
+        ("", "Lib.mk(2)", Some(s"object Lib { inline def mk(n: Int): Int = { ${liftedClass("class", p, en, "L")}; ${liftedNew(p, "new L")} } }\n"))
+    (prelude + liftedPrelude + text + s"\nobject Main { def main(args: Array[String]): Unit = println($use) }\n", lib)
+
+  // The order of a class's lifted methods (the class plan's places, LambdaLift's order): every body of lifted things
+  // in every host, their product. A body's local defs, closures, lazy vals, defaults and captured values over a value
+  // `k` its host gives; a host the definitions around `BODY` and what the program's main prints, every member
+  // reached. Each program in a package of its own.
+  val placeBodies: Vector[(String, String)] = Vector(
+    "def" -> "def g(x: Int): Int = x + k; g(1)",
+    "siblings" -> "def g(x: Int): Int = x + k; def h(x: Int): Int = g(x) * 2; h(1) + g(2)",
+    "nested" -> "def g(x: Int): Int = { def h(y: Int): Int = y + x + k; h(1) }; g(2)",
+    "closures" -> "val f = (x: Int) => x + k; def g(x: Int): Int = f(x); val f2 = (y: Int) => g(y); f2(3)",
+    "lazy" -> "lazy val z: Int = k + 1; def g(x: Int): Int = x + z; g(1)",
+    "default" -> "def g(x: Int, y: Int = k): Int = x + y; g(1)",
+    "proxy" -> "val p = k * 2; def g(x: Int): Int = x + p; val f = (y: Int) => g(y) + p; f(1)",
+    "def-in-lambda" -> "val f = (x: Int) => { def g(y: Int): Int = y + x + k; g(1) }; f(2)",
+    "lambda-in-def" -> "def g(x: Int): Int = { val f = (y: Int) => y + x + k; f(1) }; g(2)",
+    "mixed" -> "def a(x: Int): Int = x + k; val f = (y: Int) => a(y); lazy val z: Int = f(1); def b(x: Int, d: Int = 2): Int = x + z + d; b(a(1))",
+    "captures" -> "val a = k; val b = k * 2; def g(x: Int): Int = x + a; def h(x: Int): Int = g(x) + b; val f = (y: Int) => h(y) + a; f(1) + g(2)",
+    "guard" -> "(k + 1) match { case n if { def ok(m: Int): Boolean = m > k; ok(n) } => n; case _ => 0 }",
+    "for" -> "(for (i <- List(1, 2); j <- List(k, i)) yield { def g(x: Int): Int = x + i; g(j) }).sum",
+    "by-name" -> "{ def twice(x: => Int): Int = x + x; twice({ def g(y: Int): Int = y + k; g(1) }) }")
+
+  val placeHosts: Vector[(String, String, String)] = Vector(
+    ("method", "class C {\n  def m(k: Int): Int = { BODY }\n  def other: Int = 1\n}", "new C().m(1) + new C().other"),
+    ("ctor", "class C(k: Int) {\n  val r: Int = { BODY }\n  def other: Int = 1\n}", "new C(1).r + new C(1).other"),
+    ("lambda", "class C {\n  def m(k: Int): Int = { val run = () => { BODY }; run() }\n  def other: Int = 1\n}", "new C().m(1) + new C().other"),
+    ("local-class", "class C {\n  def m(k: Int): Int = { class L { def n: Int = { BODY } }; new L().n }\n  def other: Int = 1\n}", "new C().m(1) + new C().other"),
+    ("nested-class", "class C {\n  class In { def m(k: Int): Int = { BODY } }\n  def other: Int = 1\n}", "{ val c = new C(); new c.In().m(1) + c.other }"),
+    ("object", "object O {\n  def m(k: Int): Int = { BODY }\n  def other: Int = 1\n}", "O.m(1) + O.other"),
+    ("trait", "trait T {\n  def m(k: Int): Int = { BODY }\n  def other: Int = 1\n}\nclass TI extends T", "new TI().m(1) + new TI().other"),
+    ("trait-body", "trait T {\n  val k: Int = 5\n  val r: Int = { BODY }\n  def other: Int = 1\n}\nclass TI extends T", "new TI().r + new TI().other"),
+    ("two-methods", "class C {\n  def m(k: Int): Int = { BODY }\n  def other: Int = 1\n  def m2(k: Int): Int = { BODY }\n}", "new C().m(1) + new C().other + new C().m2(2)"),
+    ("value-class", "class V(val u: Int) extends AnyVal {\n  def m(k: Int): Int = { BODY } + u\n  def other: Int = u\n}", "new V(1).m(1) + new V(1).other"),
+    ("top-level", "def m(k: Int): Int = { BODY }\ndef other: Int = 1", "m(1) + other"),
+    ("method-then-field", "class C(k: Int) {\n  def m(q: Int): Int = { BODY }\n  val r: Int = { BODY }\n}", "new C(1).m(1) + new C(1).r"),
+    ("lazy-member", "class C(k: Int) {\n  lazy val r: Int = { BODY }\n  def other: Int = 1\n}", "new C(1).r + new C(1).other"),
+    ("member-default", "class C {\n  def m(k: Int)(d: Int = { BODY }): Int = d + k\n  def other: Int = 1\n}", "new C().m(1)() + new C().other"),
+    ("secondary-ctor", "class C(k0: Int) {\n  def this(s: String) = { this(s.length); val k = s.length; println({ BODY }) }\n  def other: Int = k0\n}", "new C(\"ab\").other"),
+    ("super-arg", "class B(val x: Int)\nclass C(k: Int) extends B({ BODY }) {\n  def other: Int = x\n}", "new C(1).other"),
+    ("companion", "class C {\n  def m(k: Int): Int = { BODY }\n}\nobject C {\n  def n(k: Int): Int = { BODY }\n}", "new C().m(1) + C.n(2)"),
+    ("enum", "enum E {\n  case A, B\n  def m(k: Int): Int = { BODY }\n}", "E.A.m(1) + E.B.m(2)"),
+    ("given", "trait Show { def m(k: Int): Int }\ngiven Show with {\n  def m(k: Int): Int = { BODY }\n}", "summon[Show].m(1)"),
+    ("extension", "extension (s: String) {\n  def m(k: Int): Int = { BODY } + s.length\n}", "\"ab\".m(1)"),
+    ("inline", "inline def im(k: Int): Int = { BODY }\nclass C {\n  def m(q: Int): Int = im(q)\n  def other: Int = 1\n}", "new C().m(1) + new C().other"),
+    ("anonymous", "trait N { def n: Int }\nclass C {\n  def m(k: Int): Int = { val t = new N { def n: Int = { BODY } }; t.n }\n  def other: Int = 1\n}", "new C().m(1) + new C().other"),
+    ("case-class", "case class C(k: Int) {\n  def m: Int = { BODY }\n}", "C(1).m"))
+
+  def placedProgram(host: String, body: String): String =
+    val (_, defs, run) = placeHosts.find(_._1 == host).get
+    val (_, text) = placeBodies.find(_._1 == body).get
+    val pkg = "p_" + host.replace("-", "_") + "_" + body.replace("-", "_")
+    s"package $pkg\n\n${defs.replace("BODY", text)}\n\nobject Main {\n  def main(args: Array[String]): Unit = println($run)\n}\n"
+
+  // A build's files by their paths, each with its bytes: a jar whole, a products directory file by file.
+  def files(p: Path): Vector[(String, Path)] =
+    if Files.isDirectory(p) then
+      val walk = Files.walk(p)
+      try walk.toArray.map(_.asInstanceOf[Path]).filter(f => Files.isRegularFile(f)).map(f => p.relativize(f).toString -> f).sortBy(_._1).toVector finally walk.close()
+    else if Files.isRegularFile(p) then Vector("" -> p)
+    else Vector.empty
+  // Whether a build gave something: a jar that is not empty, a directory with a file that is not.
+  def built(p: Path): Boolean = files(p).exists { case (_, f) => Files.size(f) > 0 }
+  def same(a: Path, b: Path): Boolean =
+    val (x, y) = (files(a), files(b))
+    built(a) && built(b) && x.map(_._1) == y.map(_._1) && x.zip(y).forall { case ((_, f), (_, g)) => java.util.Arrays.equals(Files.readAllBytes(f), Files.readAllBytes(g)) }
+
+  // A program's two builds of one way: each side's exit and output.
+  final case class Cell(name: String, codes: Vector[Int], reference: Path, head: Path)
+  // The verdict of one way: the programs identical, and a line for each failure: a program not built by either side
+  // (an exit other than 0, a timeout among them, or no output), built otherwise, listed twice, built twice, or a
+  // build of no program listed (`found`, the names its outputs carry).
+  def verdict(cells: Vector[Cell], listed: Vector[String], found: Vector[String], way: String): (Int, Vector[String]) =
+    var identical = 0
+    val fails = Vector.newBuilder[String]
+    if listed.isEmpty then fails += s"no program ($way)"
+    for (n, k) <- listed.groupBy(identity) if k.length > 1 do fails += s"$n listed ${k.length} times ($way)"
+    val byName = cells.groupBy(_.name)
+    for n <- listed.distinct do
+      byName.get(n) match
+        case None => fails += s"NOT BUILT $n ($way): no build"
+        case Some(cs) if cs.length > 1 => fails += s"$n built ${cs.length} times ($way)"
+        case Some(cs) =>
+          val c = cs.head
+          if c.codes.exists(_ != 0) || !built(c.reference) || !built(c.head) then
+            fails += s"NOT BUILT $n ($way): the reference's exit ${c.codes(0)}, the head's ${c.codes(1)} (${c.head.toString}.log)"
+          else if same(c.reference, c.head) then identical += 1
+          else fails += s"differs: $n ($way)"
+    for n <- (byName.keys ++ found).toVector.distinct.sorted if !listed.contains(n) do fails += s"a build of no program listed: $n ($way)"
+    (identical, fails.result())
+
+  // Planted bad builds, each of which the verdict must fail, and a control it must pass.
+  def selfTest(dir: Path): Vector[String] =
+    Files.createDirectories(dir)
+    def put(name: String, bytes: String): Path =
+      val p = dir.resolve(name)
+      Files.writeString(p, bytes)
+      p
+    val (a, a2) = (put("a.ref", "PK-class-bytes"), put("a.head", "PK-class-bytes"))
+    val good = Cell("a", Vector(0, 0), a, a2)
+    val planted = Vector(
+      "missing on one side" -> (Vector(good.copy(head = dir.resolve("none"))), Vector("a"), Vector("a")),
+      "empty output" -> (Vector(good.copy(reference = put("e.ref", ""), head = put("e.head", ""))), Vector("a"), Vector("a")),
+      "truncated" -> (Vector(good.copy(head = put("t.head", "PK-class"))), Vector("a"), Vector("a")),
+      "timeout" -> (Vector(good.copy(codes = Vector(0, 124))), Vector("a"), Vector("a")),
+      "wrong value" -> (Vector(good.copy(head = put("w.head", "PK-class-bytez"))), Vector("a"), Vector("a")),
+      "listed twice" -> (Vector(good), Vector("a", "a"), Vector("a")),
+      "built twice" -> (Vector(good, good), Vector("a"), Vector("a")),
+      "stray build" -> (Vector(good, good.copy(name = "s")), Vector("a"), Vector("a", "s")),
+      "stray output" -> (Vector(good), Vector("a"), Vector("a", "s")),
+      "missing program" -> (Vector(good), Vector("a", "m"), Vector("a")),
+      "nothing listed" -> (Vector.empty, Vector.empty, Vector.empty))
+    val wrong = Vector.newBuilder[String]
+    if verdict(Vector(good), Vector("a"), Vector("a"), "control")._2.nonEmpty then wrong += "the control failed"
+    for (what, (cells, listed, found)) <- planted if verdict(cells, listed, found, what)._2.isEmpty do wrong += s"$what passed"
+    Sh.remove(dir)
+    wrong.result()
+
   def hostsOf(shape: Shape, escape: Option[Escape] = None): Vector[String] =
     val own = shape.hosts match
       case "" => if shape.before.isEmpty then Vector("class", "constructor") else Vector("class")
@@ -1512,6 +1721,9 @@ given GV: GvBase with {
 
   val src = out.resolve("src")
   Sh.remove(out)
+  val wrong = selfTest(out.resolve("self-test"))
+  if wrong.nonEmpty then Log.die(s"lowered-shapes: the verdict's self-test failed: ${wrong.mkString("; ")}")
+  println("lowered-shapes self-test: 11 planted bad builds each failed, the control passed")
   Files.createDirectories(src)
   var total = 0
   val programs = Vector.newBuilder[String]
@@ -1524,20 +1736,32 @@ given GV: GvBase with {
     Files.writeString(src.resolve(s"$name.scala"), text)
     programs += name
     total += n
+  var liftedPrograms = 0
+  for (holder, held) <- holders; place <- places if held.contains(place.name) do
+    val (text, lib) = liftedProgram(holder, place)
+    val name = s"lifted-${place.name}.$holder"
+    lib match
+      case None => Files.writeString(src.resolve(s"$name.scala"), text)
+      case Some(other) =>
+        Files.createDirectories(src.resolve(name))
+        Files.writeString(src.resolve(name).resolve("main.scala"), text)
+        Files.writeString(src.resolve(name).resolve("lib.scala"), other)
+    programs += name
+    liftedPrograms += 1
+  var placedPrograms = 0
+  for (host, _, _) <- placeHosts; (body, _) <- placeBodies do
+    val name = s"placed-$host.$body"
+    Files.writeString(src.resolve(s"$name.scala"), placedProgram(host, body))
+    programs += name
+    placedPrograms += 1
   val names = programs.result()
   val after = escape.fold("")(e => s", after the escape ${e.name}")
   println(s"lowered-shapes: ${taken.length} shapes, ${names.length} programs, $total cases (shape by host by position by want)$after")
+  println(s"lowered-shapes lifted methods: $liftedPrograms programs (${holders.length} kinds of class by the places each holds)")
+  println(s"lowered-shapes lifted methods' order: $placedPrograms programs (${placeHosts.length} hosts by ${placeBodies.length} bodies)")
 
-  // A build's files by their paths, each with its bytes: a jar whole, a products directory file by file.
-  def files(p: Path): Vector[(String, Path)] =
-    if Files.isDirectory(p) then
-      val walk = Files.walk(p)
-      try walk.toArray.map(_.asInstanceOf[Path]).filter(f => Files.isRegularFile(f)).map(f => p.relativize(f).toString -> f).sortBy(_._1).toVector finally walk.close()
-    else if Files.isRegularFile(p) then Vector("" -> p)
-    else Vector.empty
-  def same(a: Path, b: Path): Boolean =
-    val (x, y) = (files(a), files(b))
-    x.nonEmpty && x.map(_._1) == y.map(_._1) && x.zip(y).forall { case ((_, f), (_, g)) => java.util.Arrays.equals(Files.readAllBytes(f), Files.readAllBytes(g)) }
+  // A program's source: its file, or the directory of its files.
+  def source(name: String): Path = if Files.isDirectory(src.resolve(name)) then src.resolve(name) else src.resolve(s"$name.scala")
 
   // The four ways a program is built: as a program or as products, by one worker or eight.
   val ways = Vector(("program", "1"), ("program", "8"), ("products", "1"), ("products", "8"))
@@ -1550,28 +1774,30 @@ given GV: GvBase with {
     val to = target(b.side, b.name, b.mode, b.threads)
     Files.createDirectories(to.getParent)
     val where = if b.mode == "program" then Vector("-o", to.toString) else Vector("--products", to.toString)
-    val cmd = Vector(b.binary, "compiler", "build", src.resolve(s"${b.name}.scala").toString, "--std=scala-library", "--classpath", lib, "--target", "jvm", "--threads", b.threads) ++ where
+    val cmd = Vector(b.binary, "compiler", "build", source(b.name).toString, "--std=scala-library", "--classpath", lib, "--target", "jvm", "--threads", b.threads) ++ where
     Sh.Then(Sh(cmd*).stdout(Paths.get(to.toString + ".log")).mergeErr.timeout(120).check(false), r => { status(b) = r.status; Sh.End })
   }
 
   var failed = false
   for (mode, threads) <- ways do
-    var identical = 0
-    var differ = 0
-    var unbuilt = 0
-    for name <- names do
-      val (a, b) = (target("reference", name, mode, threads), target("head", name, mode, threads))
-      val codes = Vector("reference", "head").map(side => status.getOrElse(Build(side, if side == "head" then teq else reference, name, mode, threads), -1))
-      if codes.exists(_ != 0) || files(a).isEmpty then
-        unbuilt += 1
-        println(s"NOT BUILT $name ($mode, $threads): the reference's exit ${codes(0)}, the head's ${codes(1)} (${b.toString}.log)")
-      else if same(a, b) then identical += 1
+    val cells = names.map(name =>
+      Cell(name, Vector("reference", "head").map(side => status.getOrElse(Build(side, if side == "head" then teq else reference, name, mode, threads), -1)),
+        target("reference", name, mode, threads), target("head", name, mode, threads)))
+    // The names the way's outputs carry, each side's (a build's log beside it).
+    val found = Vector("reference", "head").flatMap { side =>
+      val d = out.resolve(side).resolve(s"$mode-$threads")
+      if !Files.isDirectory(d) then Vector.empty
       else
-        differ += 1
-        println(s"differs: $name ($mode, $threads)")
+        val list = Files.list(d)
+        try list.toArray.map(_.asInstanceOf[Path].getFileName.toString).filter(!_.endsWith(".log")).map(_.stripSuffix(".jar")).toVector finally list.close()
+    }.distinct
+    val way = s"$mode, $threads"
+    val (identical, fails) = verdict(cells, names, found, way)
+    fails.foreach(println)
     val workers = if threads == "1" then "one worker" else s"$threads workers"
+    val (differ, unbuilt) = (fails.count(_.startsWith("differs")), fails.count(_.startsWith("NOT BUILT")))
     println(s"lowered-shapes $mode, $workers: $identical of ${names.length} programs identical, $differ differ, $unbuilt not built")
-    if differ > 0 || unbuilt > 0 then failed = true
+    if fails.nonEmpty then failed = true
   // The control after an escape, on a line of its own: a head that cannot write it reads "not built" there.
   for e <- escape do
     val control = names.filter(name => escapeShapes.exists(shape => name.startsWith(shape.name + ".")))

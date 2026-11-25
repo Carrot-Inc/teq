@@ -261,7 +261,9 @@ library_quote_pattern_nested_fresh	error: cannot resolve import: qnest not found
 library_quote_pattern_outer_type	error: cannot resolve import: qnest not found
 library_type_pattern_from_above	error: cannot resolve import: qnest not found
 library_val_overridden	error: cannot resolve import: lvlib not found
+lifted_names_shared_thunk	TypeError: Cannot read properties of undefined (reading 'getMethodName')
 local_class_nested_members	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+local_right_assoc_lazy_operand	output differs
 local_trait_default_clause	ReferenceError: a$1 is not defined
 local_trait_default_escape_prior	output differs
 local_trait_default_inline_capture	error: the inline call T.m in C.m was not expanded

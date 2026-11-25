@@ -174,6 +174,7 @@ builtin_ancestor_markers	pass	-
 byname_conversion	pass	-	
 byname_ctor_reads	pass	-	
 byname_default	pass	-	
+byname_default_anon_over_trait	pass	-	
 byname_in_function_type	pass	-	
 byname_varargs	pass	-	
 byte_buffer_longs	pass	-	
@@ -1851,6 +1852,7 @@ library_quote_pattern_outer_type	pass	-
 library_type_pattern_from_above	pass	-	
 library_val_overridden	pass	-	
 lifted_block_arguments	pass	-	
+lifted_names_shared_thunk	cannot run	-	the JVM's platform
 lifted_receiver_default	pass	-	
 line_continued_by_bracket	pass	-	
 linking_info	pass	-	
@@ -1920,6 +1922,8 @@ local_ctor_captures_subclass_primary_parent_via	pass	-
 local_ctor_captures_top_level_class	pass	-	
 local_ctor_captures_two_captures	pass	-	
 local_ctor_captures_var_written_after	pass	-	
+local_def_default_inline_priors	pass	-	
+local_def_default_priors	pass	-	
 local_enum_lifetime	pass	-	
 local_enum_shapes	pass	-	
 local_enums	pass	-	
@@ -1936,6 +1940,9 @@ local_lazy_val_return	pass	-
 local_object_case_companion	pass	-	
 local_object_import	pass	-	
 local_objects	pass	-	
+local_right_assoc_default_operands	pass	-	
+local_right_assoc_lazy_operand	fail	-	< x=1 y=5 c=7 Z,L
+local_right_assoc_object_operand	pass	-	
 local_trait_capture_as_argument	pass	-	
 local_trait_captures	pass	-	
 local_trait_default_clause	fail	-	< 21
@@ -1951,6 +1958,7 @@ local_trait_member_lifted	pass	-
 local_trait_member_loop	pass	-	
 local_trait_member_lowered	pass	-	
 local_trait_override	pass	-	
+local_trait_right_assoc	pass	-	
 local_trait_shapes	pass	-	
 local_traits	pass	-	
 local_type_aliases	pass	-	

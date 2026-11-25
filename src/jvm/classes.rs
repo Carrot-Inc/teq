@@ -1,6 +1,6 @@
 //! Classes, traits, objects, enums and the module class of a file's top-level definitions.
 
-use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LirId, MethodFlags, MethodRef, Refusal, Relation, Unlowered, Visibility};
+use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedFrom, LirId, MethodDef, MethodFlags, MethodRef, Refusal, Relation, TempId, Unlowered, Visibility};
 use super::classfile::*;
 use super::free;
 use super::gen::*;
@@ -150,6 +150,33 @@ pub(super) struct ModuleTree {
     fields: Vec<Declared>,
 }
 
+/// A lifted body lowered before its method is written (`Gen::lower_lifted`, `Gen::write_lifted`): the method's
+/// plan entry and context, and the tree with the locals its lowering declared; `lazy` for a local lazy val's
+/// accessor or initialiser.
+struct HeldLifted {
+    method: MethodDef,
+    lazy: bool,
+    m: MethodCx,
+    lir: crate::lir::Body,
+    declared: FxMap<SymId, (ErasedType, bool)>,
+    code: HeldCode,
+}
+
+/// What a held lifted body's method is written from.
+enum HeldCode {
+    Tree(LirId),
+    /// A local def's body.
+    Def(BodyTree),
+}
+
+/// A def's body lowered, to be written (`Gen::lower_method_body`, `Gen::write_method_body`): in return position, or,
+/// where a closure it makes returns from it, the `Let` of the key and the `try` that holds the body
+/// (`Gen::lower_keyed_body`).
+enum BodyTree {
+    Plain(LirId),
+    Keyed { key: TempId, made: LirId, tree: LirId },
+}
+
 /// A primary constructor as it is decided before its body is lowered.
 struct PrimaryCtor<'t> {
     tc: &'t TClass,
@@ -192,38 +219,57 @@ impl<'a> Gen<'a> {
     /// the same and left out at its end (`end_method`).
     pub fn begin_method(&mut self, flags: MethodFlags, name: &str, desc: &str, this_uninit: bool, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId]) {
         let method = begun_method_def(flags, name, desc, params, &ret);
-        self.repeated = if self.plan.has_method(name, desc) {
+        let m = self.method_cx(flags.is_static, params, ret, roots);
+        self.lir.clear();
+        self.lower_declared.clear();
+        self.open_method(method, m, this_uninit);
+    }
+
+    /// The context a method's code is lowered and written in: its parameters' slots, `this` first unless it is
+    /// static, its result, and the locals of `roots` that live in cells.
+    fn method_cx(&mut self, is_static: bool, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId]) -> MethodCx {
+        let mut m = MethodCx::default();
+        let mut slot = 0;
+        if !is_static {
+            m.this_slot = Some(0);
+            slot = 1;
+        }
+        for (sym, ty) in params {
+            if let Some(s) = sym {
+                m.locals.insert(*s, Local { slot, ty: ty.clone(), cell: false });
+            }
+            m.params.push((slot, ty.clone()));
+            slot += if ty.wide() { 2 } else { 1 };
+        }
+        m.ret = ret;
+        let syms: Vec<SymId> = params.iter().filter_map(|p| p.0).collect();
+        m.cells = free::cells(self.cx, &mut self.an, &syms, roots);
+        m
+    }
+
+    /// Starts the code of `method` in the context `m`, its first frame holding `this` and the parameters.
+    fn open_method(&mut self, method: MethodDef, m: MethodCx, this_uninit: bool) {
+        let is_static = method.flags.is_static;
+        self.repeated = if self.plan.has_method(&method.name, &method.desc) {
             Some(method)
         } else {
             self.plan.methods.push(method);
             None
         };
         let mut locals: Vec<VT> = Vec::new();
-        let mut m = MethodCx::default();
-        if !flags.is_static {
+        if !is_static {
             let this = self.this_name.clone();
             locals.push(if this_uninit { VT::UninitThis } else { VT::Object(self.cw.cp.class(&this)) });
-            m.this_slot = Some(0);
         }
-        for (sym, ty) in params {
-            let slot = locals.len() as u16;
+        for (_, ty) in &m.params {
             let vt = self.vt(ty);
             locals.push(vt);
             if ty.wide() {
                 locals.push(VT::Top2);
             }
-            if let Some(s) = sym {
-                m.locals.insert(*s, Local { slot, ty: ty.clone(), cell: false });
-            }
-            m.params.push((slot, ty.clone()));
         }
-        m.ret = ret;
-        let syms: Vec<SymId> = params.iter().filter_map(|p| p.0).collect();
-        m.cells = free::cells(self.cx, &mut self.an, &syms, roots);
         self.code = Code::new(locals);
         self.code.relax = self.relax;
-        self.lir.clear();
-        self.lower_declared.clear();
         self.m = m;
     }
 
@@ -231,7 +277,7 @@ impl<'a> Gen<'a> {
     /// method whose code could not be written is none of the class's, and leaves the plan. The
     /// code of a method the class held already (`begin_method`) is dropped, after it was written
     /// for all that writing it leaves in the class: the constants and the bootstrap methods its
-    /// instructions name, the names it takes and the lifted bodies it asks for (`fresh_name`,
+    /// instructions name, the names it takes and the lifted bodies it asks for (a closure's copy, a thunk:
     /// `defer`, the memos of what is lifted), the interfaces its `super` calls go to
     /// (`super_targets`), the function arities it names and what it reports. It asks for no
     /// second writing of the class with wide jumps (`overflow`).
@@ -263,13 +309,56 @@ impl<'a> Gen<'a> {
         self.overflow |= self.cw.overflow;
     }
 
-    /// The lifted methods that the methods emitted so far asked for, and the ones those ask for.
+    /// The lifted methods that the methods emitted so far asked for, and the ones those ask for, written in the order
+    /// of the plan's places: an inner body before the one around it, as `LambdaLift.liftDef` appends a definition
+    /// after what it holds and the back end writes the class's members in their order. Every queued body is lowered
+    /// first, and the bodies its tree asks for are queued and lowered too, before any is written. A body only a
+    /// writer asks for (a `Legacy` node's code, a local default's getter at its call) is queued while its container is
+    /// written, and comes in the next round; a jar default's thunk, placed nowhere, after the placed ones.
     pub fn drain_pending(&mut self) {
-        while let Some(p) = self.pending.pop() {
-            self.lifted_body = Some(self.lifted_span(&p));
-            self.emit_lifted(p);
-            self.lifted_body = None;
+        loop {
+            let mut held = Vec::new();
+            let mut thunks = Vec::new();
+            while let Some(p) = self.pending.pop() {
+                if matches!(p.body, PendingBody::JarGetter(_)) {
+                    thunks.push(p);
+                    continue;
+                }
+                let span = self.lifted_span(&p);
+                held.push((self.lower_lifted(p), span));
+            }
+            if held.is_empty() && thunks.is_empty() {
+                return;
+            }
+            held.sort_by_key(|(h, _)| h.method.place.map_or((1, 0), |place| (0, place)));
+            let held = self.refuse_second_methods(held);
+            for (h, span) in held {
+                self.lifted_body = Some(span);
+                self.write_lifted(h);
+                self.lifted_body = None;
+            }
+            for p in thunks {
+                if let PendingBody::JarGetter(g) = &p.body {
+                    self.jar_getter_thunk(&p.lifted, g);
+                }
+            }
         }
+    }
+
+    /// The held bodies of a round but each whose method is named as another of the class or as an earlier one of
+    /// the round, refused: never one dropped in silence.
+    fn refuse_second_methods(&mut self, held: Vec<(HeldLifted, (u32, u32))>) -> Vec<(HeldLifted, (u32, u32))> {
+        let mut kept: Vec<(HeldLifted, (u32, u32))> = Vec::with_capacity(held.len());
+        for (h, span) in held {
+            let named = |m: &MethodDef| m.name == h.method.name && m.desc == h.method.desc;
+            if self.plan.has_method(&h.method.name, &h.method.desc) || kept.iter().any(|(k, _)| named(&k.method)) {
+                let what = if h.lazy { "local lazy val's method" } else { "lifted method" };
+                self.unsupported(&format!("internal error: a second {} {}{} in the class", what, h.method.name, h.method.desc));
+                continue;
+            }
+            kept.push((h, span));
+        }
+        kept
     }
 
     /// The end and the start of a lifted body's text, by which the super calls of lifted bodies
@@ -279,24 +368,17 @@ impl<'a> Gen<'a> {
         let body = match &p.body {
             PendingBody::Lambda(_, body) | PendingBody::LazyInit(_, body) => Some(*body),
             PendingBody::Fun(f) => prog.funs[f.idx()].body,
-            PendingBody::Default(f, i) => prog.funs[f.idx()].defaults[*i],
+            PendingBody::Default(f, i) => prog.funs[f.idx()].own_default(*i),
             PendingBody::LazyAccessor(_) | PendingBody::JarGetter(_) => None,
         };
         body.and_then(|e| prog.span_of(e)).map_or((u32::MAX, 0), |(_, span)| (span.end, span.start))
     }
 
-    fn emit_lifted(&mut self, p: Pending) {
+    /// A lifted body lowered before its method is written (`Gen::write_lifted`).
+    fn lower_lifted(&mut self, p: Pending) -> HeldLifted {
         let cx = self.cx;
         let l = p.lifted.clone();
-        if let PendingBody::JarGetter(g) = &p.body {
-            self.jar_getter_thunk(&l, g);
-            return;
-        }
-        // A local lazy val's accessor or initialiser named as another's: never one dropped in silence.
-        if matches!(p.body, PendingBody::LazyAccessor(_) | PendingBody::LazyInit(..)) && self.plan.has_method(&l.name, &l.desc) {
-            self.unsupported(&format!("internal error: a second local lazy val's method {}{} in the class", l.name, l.desc));
-            return;
-        }
+        let lazy = matches!(p.body, PendingBody::LazyAccessor(_) | PendingBody::LazyInit(..));
         let mut params: Vec<(Option<SymId>, ErasedType)> = Vec::new();
         if l.this {
             // A copy of code declared in another class's code takes that class's instance.
@@ -323,14 +405,16 @@ impl<'a> Gen<'a> {
         let first_param = params.len();
         let (param_syms, body, roots): (Vec<SymId>, Option<TExprId>, Vec<TExprId>) = match &p.body {
             PendingBody::Lambda(syms, body) => (syms.clone(), Some(*body), vec![*body]),
+            // A def's parameters take the slots of its class file's order (a right-associative extension's own clause
+            // before its receiver's, `Gen::class_file_params`), as its lifted signature lists them.
             PendingBody::Fun(f) => {
                 let fun = &cx.input.prog.funs[f.idx()];
-                (fun.params.clone(), fun.body, fun.body.into_iter().collect())
+                (self.class_file_params(fun.sym, &fun.params), fun.body, fun.body.into_iter().collect())
             }
             PendingBody::Default(f, i) => {
                 let fun = &cx.input.prog.funs[f.idx()];
-                let before = self.clause_start(fun.sym, *i);
-                (fun.params[..before].to_vec(), fun.defaults[*i], fun.defaults[*i].into_iter().collect())
+                let before = self.default_getter_shape(fun.sym, *i).before;
+                (self.class_file_params(fun.sym, &fun.params)[..before].to_vec(), fun.own_default(*i), fun.own_default(*i).into_iter().collect())
             }
             PendingBody::LazyInit(_, init) => (Vec::new(), Some(*init), vec![*init]),
             PendingBody::LazyAccessor(_) => (Vec::new(), None, Vec::new()),
@@ -342,7 +426,11 @@ impl<'a> Gen<'a> {
             let sym = if is_lambda { None } else { param_syms.get(i).copied() };
             params.push((sym, t.clone()));
         }
-        self.begin_method(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, false, &params, l.ret.clone(), &roots);
+        let mut method = begun_method_def(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, &params, &l.ret);
+        method.place = l.place;
+        self.m = self.method_cx(true, &params, l.ret.clone(), &roots);
+        self.lir.clear();
+        self.lower_declared.clear();
         self.m.lambda = is_lambda;
         self.m.closure = is_lambda || matches!(p.body, PendingBody::LazyInit(..));
         if l.key {
@@ -373,52 +461,115 @@ impl<'a> Gen<'a> {
                 local.cell = c.cell;
             }
         }
+        // A lambda's parameters arrive as `Object`s: each not of a reference type is unboxed into a local of its own
+        // before the body (a parameter is never assigned, so none lives in a cell).
+        let mut unboxed: Vec<(SymId, u32, ErasedType)> = Vec::new();
         if is_lambda {
-            let object = ErasedType::object();
             let mut slot = params[..first_param].iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
-            for &s in &param_syms {
+            for (k, &s) in param_syms.iter().enumerate() {
                 let declared = self.sym_type(s);
                 if declared.is_object() && !self.is_vc_object(&declared) {
                     self.m.locals.insert(s, Local { slot, ty: declared, cell: false });
                 } else {
-                    self.outside(Unlowered::LiftedParameterPrologue);
-                    let declared = self.write_slot_to_sym(slot, &object, s);
-                    let cell = self.m.cells.contains(&s);
-                    self.declare_local(s, declared, cell);
+                    unboxed.push((s, (first_param + k) as u32, declared));
                 }
                 slot += 1;
             }
         }
-        match (&p.body, body) {
+        let code = match (&p.body, body) {
             // A local lazy val's accessor and initialiser take its holder last (`LazyVals.transformLocalDef`).
             (PendingBody::LazyAccessor(sym), _) => {
                 let slot = params[..params.len() - 1].iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
-                self.lazy_accessor_body(*sym, slot);
+                HeldCode::Tree(self.lazy_accessor_tree(*sym, slot))
             }
             (PendingBody::LazyInit(sym, init), _) => {
                 let slot = params[..params.len() - 1].iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
-                self.lazy_init_body(*sym, *init, slot);
+                HeldCode::Tree(self.lazy_init_tree(*sym, *init, slot))
             }
             (PendingBody::Fun(f), Some(body)) => {
                 let fun = &cx.input.prog.funs[f.idx()];
-                self.method_body(fun.sym, &fun.params, body);
+                HeldCode::Def(self.lower_method_body(fun.sym, &fun.params, body))
             }
             // A by-name parameter's getter returns the value (`Desugar.addDefaultGetters`).
             (PendingBody::Default(f, i), Some(body)) if self.local_param_by_name(cx.input.prog.funs[f.idx()].sym, *i) => {
                 let ret = l.ret.clone();
-                self.body(|g| {
+                HeldCode::Tree(self.lowering(|g| {
                     let value = g.lower_default_value(body, true, &ret);
                     g.lir.ret(value)
-                });
+                }))
             }
-            (_, Some(body)) => self.tail(body),
+            (_, Some(body)) => HeldCode::Tree(self.lowering(|g| {
+                let object = ErasedType::object();
+                let stmts: Vec<LirId> = unboxed
+                    .iter()
+                    .map(|(s, at, declared)| {
+                        // Declared in this lowering, which sees no earlier one's (`Gen::lowering`).
+                        g.lower_declared.insert(*s, (declared.clone(), false));
+                        let boxed = g.lir.push(Kind::Param(*at), object.clone());
+                        let init = g.lower_adapt_from_sym(boxed, *s, &object, declared);
+                        g.lir.push(Kind::Val { sym: *s, init, cell: None }, ErasedType::V)
+                    })
+                    .collect();
+                let tail = g.lower_tail(body);
+                if stmts.is_empty() {
+                    return tail;
+                }
+                let stmts = g.lir.list(&stmts);
+                let ty = g.lir.ty(tail).clone();
+                g.lir.push(Kind::Block { stmts, result: tail }, ty)
+            })),
             (_, None) => {
-                self.outside(Unlowered::LocalDefWithoutBody);
                 self.unsupported("a local def without a body");
                 let ret = l.ret.clone();
-                self.adapt(&ErasedType::V, &ret);
-                self.return_value(&ret);
+                HeldCode::Tree(self.lowering(|g| {
+                    let nothing = g.lir.push(Kind::Unit, ErasedType::V);
+                    let value = g.lower_adapt(nothing, &ErasedType::V, &ret);
+                    g.lir.ret(value)
+                }))
             }
+        };
+        match &code {
+            HeldCode::Tree(tree) | HeldCode::Def(BodyTree::Plain(tree)) => self.ask_lifted(*tree),
+            HeldCode::Def(BodyTree::Keyed { made, tree, .. }) => {
+                self.ask_lifted(*made);
+                self.ask_lifted(*tree);
+            }
+        }
+        let (m, lir, declared) = (std::mem::take(&mut self.m), std::mem::take(&mut self.lir), std::mem::take(&mut self.lower_declared));
+        HeldLifted { method, lazy, m, lir, declared, code }
+    }
+
+    /// Queues the lifted bodies the tree `root` asks for, the closures and local defs whose methods its writer calls,
+    /// before any of its code is written.
+    fn ask_lifted(&mut self, root: LirId) {
+        let mut stack = vec![root];
+        while let Some(id) = stack.pop() {
+            match &self.lir.node(id).kind {
+                Kind::Closure { lifted, body, .. } => {
+                    let (lifted, body) = (lifted.clone(), body.clone());
+                    self.lambda_method(&lifted, &body);
+                }
+                Kind::LiftedCall { def: s, from: LiftedFrom::Def, .. } => {
+                    let s = *s;
+                    self.lifted_fun(s);
+                }
+                _ => {}
+            }
+            let mut held = self.lir.operands(id);
+            held.reverse();
+            stack.extend(held);
+        }
+    }
+
+    /// Writes the method of a lifted body `Gen::lower_lifted` lowered, from its tree.
+    fn write_lifted(&mut self, held: HeldLifted) {
+        let HeldLifted { method, m, lir, declared, code, .. } = held;
+        self.lir = lir;
+        self.lower_declared = declared;
+        self.open_method(method, m, false);
+        match code {
+            HeldCode::Tree(tree) => self.write_body(tree),
+            HeldCode::Def(body) => self.write_method_body(body),
         }
         self.end_method();
     }
@@ -446,40 +597,62 @@ impl<'a> Gen<'a> {
     /// the loop's head, which stands inside the `try`, as TailRec runs before NonLocalReturns
     /// (Compiler.scala 122, 127).
     pub fn method_body(&mut self, sym: SymId, params: &[SymId], body: TExprId) {
+        let body = self.lower_method_body(sym, params, body);
+        self.write_method_body(body);
+    }
+
+    /// A def's body lowered (`Gen::write_method_body`); the def loops where it calls itself in tail position and
+    /// nothing can override it (`MethodCx::tail`).
+    fn lower_method_body(&mut self, sym: SymId, params: &[SymId], body: TExprId) -> BodyTree {
         let cx = self.cx;
         let (calls, _) = cx.input.prog.tail_self_calls(sym, params.len(), body);
         let jumps = cx.input.prog.tail_jumps(cx.input.syms, sym, params.len(), body).calls;
         let looping = (calls > 0 || !jumps.is_empty()) && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell));
         if !self.an.returns_through_closure(cx, body) {
             if looping {
-                let head = self.code.new_label();
-                self.code.bind(head);
-                self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head, jumps });
+                self.m.tail = Some(TailLoop { sym, params: params.to_vec(), jumps });
             }
-            self.tail(body);
-            self.m.tail = None;
-            return;
+            return BodyTree::Plain(self.lowering(|g| g.lower_tail(body)));
         }
         // The loop's jumps are lowered with the body, which is a value in the `try`: its calls in the tail positions
-        // `Program::tail_self_calls` counts are jumps as its `return`s' are. The head, a label of the locals after
-        // the key's, is made once the key is written.
-        let placeholder = self.code.new_label();
+        // `Program::tail_self_calls` counts are jumps as its `return`s' are.
         if looping {
             let mut jumps = jumps;
             self.tail_position_calls(sym, params.len(), body, &mut jumps);
-            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head: placeholder, jumps });
+            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), jumps });
         }
-        let (key, made, keyed) = self.lowering(|g| g.lower_keyed_body(body));
-        self.write(made);
-        let outer_key = self.m.return_key.replace(self.m.temps[&key]);
-        if let Some(tail) = self.m.tail.as_mut() {
+        let (key, made, tree) = self.lowering(|g| g.lower_keyed_body(body));
+        BodyTree::Keyed { key, made, tree }
+    }
+
+    /// Writes a def's body lowered by `Gen::lower_method_body`, from the loop's head where the def loops: a plain one
+    /// as the method's body, its root in return position; a keyed one's key first, then the `try` that holds the body
+    /// (the head inside it, after the key's local).
+    fn write_method_body(&mut self, body: BodyTree) {
+        match body {
+            BodyTree::Plain(tree) => {
+                self.bind_loop_head();
+                self.write_body(tree);
+            }
+            BodyTree::Keyed { key, made, tree } => {
+                self.write(made);
+                let outer_key = self.m.return_key.replace(self.m.temps[&key]);
+                self.bind_loop_head();
+                self.write(tree);
+                self.m.return_key = outer_key;
+            }
+        }
+        self.m.tail = None;
+        self.m.tail_head = None;
+    }
+
+    /// Binds the start of the loop where the def loops (`MethodCx::tail_head`).
+    fn bind_loop_head(&mut self) {
+        if self.m.tail.is_some() {
             let head = self.code.new_label();
             self.code.bind(head);
-            tail.head = head;
+            self.m.tail_head = Some(head);
         }
-        self.write(keyed);
-        self.m.tail = None;
-        self.m.return_key = outer_key;
     }
 
     /// The calls of the def by itself in the tail positions of `e` that `Program::tail_self_calls` counts.
@@ -560,8 +733,7 @@ impl<'a> Gen<'a> {
         }
         // scalac's getters: each takes the parameters of the clauses before its own, and a
         // by-name parameter's returns the value, which the caller wraps.
-        for (i, d) in fun.defaults.iter().enumerate() {
-            let Some(d) = *d else { continue };
+        for (i, d) in fun.own_defaults() {
             let shape = self.default_getter_shape(fun.sym, i);
             let (before, ret) = (shape.before, shape.ret.clone());
             let getter = format!("{}$default${}", self.source_method_name(fun.sym), shape.index);
@@ -608,10 +780,7 @@ impl<'a> Gen<'a> {
             self.abstract_method(MethodFlags::ABSTRACT, &m.name, &m.desc);
         }
         // A default's getter reads the block's values too: the forwarders' implement it.
-        for (i, d) in fun.defaults[k..].iter().enumerate() {
-            if d.is_none() {
-                continue;
-            }
+        for (i, _) in fun.own_defaults() {
             let shape = self.default_getter_shape(fun.sym, i);
             let getter = format!("{}$default${}", self.source_method_name(fun.sym), shape.index);
             let desc = method_desc(&m.params[..shape.before], &shape.ret);
@@ -626,7 +795,7 @@ impl<'a> Gen<'a> {
         let mut params: Vec<(Option<SymId>, ErasedType)> = proxies.iter().zip(&pm.params).map(|(&s, t)| (Some(s), t.clone())).collect();
         let extras_slot = 1 + params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
         params.extend(pm.params[proxies.len()..pm.params.len() - m.params.len()].iter().map(|t| (None, t.clone())));
-        params.extend(declared.iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
+        params.extend(self.class_file_params(fun.sym, declared).iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
         self.begin_method(MethodFlags::PUBLIC, &pm.name, &pm.desc, false, &params, pm.ret.clone(), &[body]);
         self.bind_proxies(&proxies);
         self.bind_extras(&extras, extras_slot);
@@ -1521,17 +1690,7 @@ impl<'a> Gen<'a> {
                         return;
                     }
                     if let Some((_, proxies, declared)) = proxies {
-                        // The values as the code holds them: written in place (`Gen::class_body_lowers`).
-                        assert!(matches!(parts, Parts::Written), "a local trait's proxies in a tree");
-                        let base = self.class_name(b);
-                        let mut types = vec![ErasedType::L(base.clone())];
-                        types.extend(proxies.iter().map(|&p| self.anon_capture_type(p)));
-                        let extras = self.extras_of(&declared, None);
-                        types.extend(self.extras_types(&extras));
-                        let slot = self.m.this_slot.unwrap_or(0);
-                        self.load(slot, this);
-                        self.load_proxies(&proxies, &declared, &given);
-                        self.invoke(Invoke::Static, &base, true, "$init$", &types, &ErasedType::V);
+                        self.part(parts, |g| g.lower_proxied_trait_init(b, this, &proxies, &declared, &given));
                     } else if self.trait_has_init(b) {
                         self.part(parts, |g| g.lower_trait_init(b, this));
                     }
@@ -1541,15 +1700,6 @@ impl<'a> Gen<'a> {
         for b in scala2 {
             self.part(parts, |g| g.lower_trait_init(b, this));
         }
-    }
-
-    /// Whether every part of a class's body has nodes (`Gen::class_body`), or why not: no local
-    /// trait's initialiser takes the values of the block (`Gen::load_proxies` reads the `Extras`).
-    fn class_body_lowers(&mut self, tc: &TClass) -> Result<(), Unlowered> {
-        tc.init.iter().try_for_each(|init| match *init {
-            TInit::Parent(b, _) if self.trait_init_proxies(b).is_some() => Err(Unlowered::CtorTraitProxies),
-            TInit::Parent(..) | TInit::Field(..) | TInit::Stmt(_) => Ok(()),
-        })
     }
 
     /// The node `lower` makes, put in the parts of the body.
@@ -2014,8 +2164,7 @@ impl<'a> Gen<'a> {
     /// Whether every part of a primary constructor has nodes, an object's body among them, so
     /// that the constructor is one tree; or why not.
     fn constructor_lowers(&mut self, k: &PrimaryCtor) -> Result<(), Unlowered> {
-        self.super_call_lowers(k)?;
-        self.class_body_lowers(k.tc)
+        self.super_call_lowers(k)
     }
 
     /// Whether the lowering has nodes for the superclass's call by its route, or why not: every

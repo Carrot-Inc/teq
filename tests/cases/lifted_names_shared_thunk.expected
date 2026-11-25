@@ -1,0 +1,9 @@
+apply main$$anonfun$2
+update main$$anonfun$1 12
+apply $anonfun$1
+update $anonfun$1 4
+body
+finally $anonfun$2
+body
+apply main$$anonfun$4
+update main$$anonfun$3 14

@@ -172,6 +172,7 @@ cases/builtin_ancestor_markers	pass	-
 cases/byname_conversion	pass	-	
 cases/byname_ctor_reads	pass	-	
 cases/byname_default	pass	-	
+cases/byname_default_anon_over_trait	pass	-	
 cases/byname_in_function_type	pass	-	
 cases/byname_varargs	pass	-	
 cases/byte_buffer_longs	pass	-	
@@ -1816,6 +1817,7 @@ cases/lexical_extension_ranked_macro	pass	-
 cases/lexical_extension_ranked_receiver	pass	-	
 cases/lexical_extension_retry_leading	pass	-	
 cases/lifted_block_arguments	pass	-	
+cases/lifted_names_shared_thunk	pass	-	
 cases/lifted_receiver_default	pass	-	
 cases/line_continued_by_bracket	pass	-	
 cases/linking_info	pass	-	
@@ -1885,6 +1887,8 @@ cases/local_ctor_captures_subclass_primary_parent_via	pass	-
 cases/local_ctor_captures_top_level_class	pass	-	
 cases/local_ctor_captures_two_captures	pass	-	
 cases/local_ctor_captures_var_written_after	pass	-	
+cases/local_def_default_inline_priors	pass	-	
+cases/local_def_default_priors	pass	-	
 cases/local_enum_lifetime	pass	-	
 cases/local_enum_shapes	pass	-	
 cases/local_enums	pass	-	
@@ -1901,6 +1905,9 @@ cases/local_lazy_val_return	pass	-
 cases/local_object_case_companion	pass	-	
 cases/local_object_import	pass	-	
 cases/local_objects	pass	-	
+cases/local_right_assoc_default_operands	pass	-	
+cases/local_right_assoc_lazy_operand	pass	-	
+cases/local_right_assoc_object_operand	pass	-	
 cases/local_trait_capture_as_argument	pass	-	
 cases/local_trait_captures	pass	-	
 cases/local_trait_default_clause	pass	-	
@@ -1916,6 +1923,7 @@ cases/local_trait_member_lifted	pass	-
 cases/local_trait_member_loop	pass	-	
 cases/local_trait_member_lowered	pass	-	
 cases/local_trait_override	pass	-	
+cases/local_trait_right_assoc	pass	-	
 cases/local_trait_shapes	pass	-	
 cases/local_traits	pass	-	
 cases/local_type_aliases	pass	-	

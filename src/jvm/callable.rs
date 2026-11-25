@@ -522,6 +522,8 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+        // A constructor, a static, private or bridge method gets no forwarder: the rest sorted, apart from them.
+        table.retain(|(flags, name, _)| !name.starts_with('<') && !flags.is_static && flags.visibility != Visibility::Private && !flags.bridge);
         table.sort_by(|(_, an, ad), (_, bn, bd)| forwarder_order(an, ad, bn, bd));
         let mut inherited_names: Vec<String> = match self.this_class {
             Some(x) => self.inherited_methods(x, false).into_iter().map(|(n, _)| n).collect(),
@@ -567,8 +569,8 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        for ((flags, name, desc), declared) in table.iter().zip(declared) {
-            if declared || name.starts_with('<') || flags.is_static || flags.visibility == Visibility::Private || flags.bridge {
+        for ((_, name, desc), declared) in table.iter().zip(declared) {
+            if declared {
                 continue;
             }
             let member = declarations.iter().find(|(n, d, _)| n == name && d.as_ref().map_or(true, |d| d == desc));
@@ -1335,8 +1337,7 @@ impl<'a> Gen<'a> {
             self.code.line(cx.line_of(info.file, info.span.start));
             self.method_body(fun.sym, &fun.params, body);
             self.end_method();
-            for (i, d) in fun.defaults.iter().enumerate() {
-                let Some(d) = *d else { continue };
+            for (i, d) in fun.own_defaults() {
                 let shape = self.default_getter_shape(fun.sym, i);
                 let (before, ret) = (shape.before, shape.ret.clone());
                 let getter = format!("{}$default${}$extension", self.source_method_name(fun.sym), shape.index);
@@ -2170,33 +2171,32 @@ impl<'a> Gen<'a> {
     fn proxied_super_accessor(&mut self, m: &MethodRef, t: SymId, o: ClassId, proxies: &[SymId]) {
         let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
         self.begin_method(MethodFlags { synthetic: true, ..MethodFlags::PUBLIC }, &m.name, &m.desc, false, &params, m.ret.clone(), &[]);
-        self.outside(Unlowered::ProxiedSuperAccessor);
         let this = ErasedType::L(self.this_name.clone());
-        self.load(0, &this);
-        for &p in proxies {
-            let want = self.anon_capture_type(p);
-            let held = self.load_capture(p);
-            self.adapt(&held, &want);
-        }
         let extras = self.member_extras(t);
-        self.load_extras(&extras);
         let tm = self.mref(t);
         let pm = self.proxied_mref(&tm, proxies, &extras);
-        let mut slot = 1u16;
-        for (i, ty) in m.params.iter().enumerate() {
-            self.load(slot, ty);
-            if let Some(to) = tm.params.get(i) {
-                self.adapt(ty, to);
-            }
-            slot += if ty.wide() { 2 } else { 1 };
-        }
         let owner = self.class_name(o);
         let mut all = vec![ErasedType::L(owner.clone())];
         all.extend(pm.params.iter().cloned());
-        let desc = method_desc(&all, &pm.ret);
-        self.invoke_desc(Invoke::Static, &owner, true, &format!("{}$", pm.name), &desc, all.len(), &pm.ret);
-        self.adapt(&pm.ret, &m.ret);
-        self.return_value(&m.ret);
+        let static_t = method_ref(Invoke::Static, &owner, true, &format!("{}$", pm.name), &all, &pm.ret);
+        self.body(|g| {
+            let mut args = vec![g.lir.this(this)];
+            for &p in proxies {
+                let want = g.anon_capture_type(p);
+                args.push(g.lower_capture_as(p, &want));
+            }
+            args.extend(g.lower_extras(&extras));
+            for (i, ty) in m.params.iter().enumerate() {
+                let given = g.param(i);
+                args.push(match tm.params.get(i) {
+                    Some(to) => g.lower_adapt(given, ty, to),
+                    None => given,
+                });
+            }
+            let result = g.lir.static_call(&static_t, &args);
+            let result = g.lower_adapt(result, &pm.ret, &m.ret);
+            g.lir.ret(result)
+        });
         self.end_method();
     }
 

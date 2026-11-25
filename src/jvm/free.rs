@@ -25,6 +25,8 @@ pub struct Analysis {
     /// The captures of the local defs and local lazy vals looked at so far.
     memo: FxMap<SymId, Rc<Free>>,
     in_progress: Vec<SymId>,
+    /// The defaults whose captures are being collected (a default that leaves itself out, `g(a, b = g(1))`).
+    defaults_in_progress: Vec<(SymId, usize)>,
     /// The initialiser of every local lazy val met so far.
     pub lazy_inits: FxMap<SymId, TExprId>,
 }
@@ -58,7 +60,58 @@ impl Analysis {
         c.nonlocal
     }
 
-    /// The captures of a local def: what its body and its defaults refer to.
+    /// The captures of the getter of the default `i` of the local def `sym`: what that default refers to, the def's
+    /// parameters (those of the clauses before it, the getter's own) left out. dotty's `LambdaLift` gives each lifted
+    /// method the free variables of its own body (`Dependencies.freeVars`), and a getter is the def's sibling from
+    /// `Desugar.defaultGetters` on.
+    pub fn of_default(&mut self, cx: &Cx, sym: SymId, i: usize) -> Free {
+        let f = cx.fun_of_sym[sym.idx()];
+        let Some(d) = (f != u32::MAX).then(|| cx.input.prog.funs[f as usize].own_default(i)).flatten() else {
+            return Free::default();
+        };
+        if self.defaults_in_progress.contains(&(sym, i)) {
+            return Free::default();
+        }
+        self.defaults_in_progress.push((sym, i));
+        let params = cx.input.prog.funs[f as usize].params.clone();
+        let mut c = Collector { cx, an: self, referenced: Vec::new(), declared: params, this: false, closures: 0, nonlocal: false };
+        c.expr(d);
+        let free = Free { nonlocal: false, ..c.finish() };
+        self.defaults_in_progress.pop();
+        free
+    }
+
+    /// What a copy of the local def `sym` in a lifted class or a local trait needs, the copy taking its default getters
+    /// with it: what its defaults refer to, in their order, then what its body does (`Analysis::of_fun`).
+    pub fn of_copy(&mut self, cx: &Cx, sym: SymId) -> Free {
+        let f = cx.fun_of_sym[sym.idx()];
+        if f == u32::MAX {
+            return Free::default();
+        }
+        let own: Vec<usize> = cx.input.prog.funs[f as usize].own_defaults().map(|(i, _)| i).collect();
+        let mut out = Free::default();
+        for i in own {
+            let d = self.of_default(cx, sym, i);
+            for s in d.syms {
+                if !out.syms.contains(&s) {
+                    out.syms.push(s);
+                }
+            }
+            out.this |= d.this;
+        }
+        let body = self.of_fun(cx, sym);
+        for &s in &body.syms {
+            if !out.syms.contains(&s) {
+                out.syms.push(s);
+            }
+        }
+        out.this |= body.this;
+        out
+    }
+
+    /// The captures of a local def: what its body refers to, and what the local defs it calls need. Its defaults are
+    /// its getters', methods of their own (`Analysis::of_default`): dotty's `LambdaLift` gives each lifted method the
+    /// free variables of its own body (`Dependencies.freeVars`, closed over the calls in `computeFreeVars`).
     pub fn of_fun(&mut self, cx: &Cx, sym: SymId) -> Rc<Free> {
         if let Some(f) = self.memo.get(&sym) {
             return f.clone();
@@ -70,9 +123,6 @@ impl Analysis {
         self.in_progress.push(sym);
         let fun = &cx.input.prog.funs[f as usize];
         let mut c = Collector { cx, an: self, referenced: Vec::new(), declared: fun.params.clone(), this: false, closures: 0, nonlocal: false };
-        for &d in fun.defaults.iter().flatten() {
-            c.expr(d);
-        }
         if let Some(body) = fun.body {
             c.expr(body);
         }
@@ -152,8 +202,8 @@ impl Collector<'_, '_> {
             let free = self.an.of_lazy(self.cx, s);
             self.merge_captures(&free);
         } else if info.kind == SymKind::Def && info.owner == Owner::Local {
-            // A local def a lifted class takes, whose copy there reads what the def captures.
-            let free = self.an.of_fun(self.cx, s);
+            // A local def a lifted class takes, whose copy there (its getters with it) reads what the def captures.
+            let free = self.an.of_copy(self.cx, s);
             self.merge_captures(&free);
         }
     }
@@ -189,12 +239,13 @@ impl Collector<'_, '_> {
             }
             TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args)
             | TExpr::ObjLit(args) => self.list(args),
-            // A getter's application takes what its getter captures: a local def's, or a local
-            // class's for its constructor's getter, which receives them as the constructor does.
+            // A getter's application takes what its getter captures: a local def's default's own
+            // (`Analysis::of_default`), or a local class's for its constructor's getter, which receives
+            // them as the constructor does.
             TExpr::Default(of, at, args) => {
                 match of {
                     DefaultOf::Method(s) if self.cx.input.syms.sym(s).owner == Owner::Local && self.cx.input.syms.sym(s).kind == SymKind::Def => {
-                        let free = self.an.of_fun(self.cx, s);
+                        let free = self.an.of_default(self.cx, s, (at & !DEFAULT_RECEIVER) as usize);
                         self.merge(&free);
                     }
                     // A local class's getter is its companion's, the receiver among the arguments.
@@ -208,7 +259,7 @@ impl Collector<'_, '_> {
                             for &k in tc.ctor_params[..tc.captures].iter().skip(from) {
                                 let info = self.cx.input.syms.sym(k);
                                 if info.owner == Owner::Local && info.kind == SymKind::Def {
-                                    let free = self.an.of_fun(self.cx, k);
+                                    let free = self.an.of_copy(self.cx, k);
                                     self.merge(&free);
                                 } else {
                                     self.local(k);

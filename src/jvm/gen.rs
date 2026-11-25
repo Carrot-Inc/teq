@@ -5,6 +5,7 @@
 use crate::lir::{Adaptation, Capture, Comparing, ErasedType, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodRef, Relation, Unlowered};
 use super::classfile::*;
 use super::free::{Analysis, Free};
+use super::lifted::Placed;
 use super::names::*;
 use super::{Cx, Unit};
 use crate::ast::{mods, ListRef};
@@ -200,8 +201,8 @@ pub(super) enum PassedCapture {
     Held(SymId),
 }
 
-/// How the argument that hands a lifted class a local is passed: one decision
-/// (`Gen::capture_argument_route`), read by `Gen::load_capture_arg` and by the lowering.
+/// How the argument that hands a lifted class or a local trait's lifted member a local is passed:
+/// one decision (`Gen::capture_argument_route`), read by the lowering (`Gen::lower_capture_argument`).
 pub(super) enum CaptureArgument {
     /// The argument's value at this type, where the class takes a value and the creation reads
     /// another local.
@@ -273,8 +274,8 @@ pub(super) enum DefaultRoute {
     /// effect is evaluated once and in its place (a constructor's receiver is evaluated where the
     /// route has it, after the arguments).
     Held(Vec<(TExprId, ErasedType)>, Box<DefaultRoute>),
-    /// Not lowered yet, and why: a local def's getter is lifted (`Gen::local_default`).
-    Unlowered(Unlowered),
+    /// The default `i` of a local def, its getter lifted with the def's captures (`Gen::lower_local_default`).
+    LocalDef(SymId, usize),
     /// A default refused where it stands (`Kind::Refused`).
     Refused(crate::lir::Refusal),
 }
@@ -325,16 +326,6 @@ pub enum ExtensionRoute {
 pub enum Referenced<'s> {
     Sym(SymId),
     Method(&'s str),
-}
-
-impl Site {
-    pub fn kind(&self) -> Invoke {
-        if self.interface {
-            Invoke::Interface
-        } else {
-            Invoke::Virtual
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -393,6 +384,8 @@ pub struct Lifted {
     /// Where `this` is a module read statically, its class, taking no `this` (`MethodCx::this_module`):
     /// what a copy whose `this` is that module lifts.
     pub module: Option<Rc<str>>,
+    /// Its place among the class's lifted methods (`lifted::Placed`), none for a jar default's thunk (teq's own).
+    pub place: Option<u32>,
 }
 
 impl std::ops::Deref for Lifted {
@@ -404,9 +397,9 @@ impl std::ops::Deref for Lifted {
 }
 
 impl Lifted {
-    pub(super) fn new(name: String, shape: Rc<LiftedShape>, captures: Vec<Capture>, home: Option<ClassId>, module: Option<Rc<str>>) -> Lifted {
+    pub(super) fn new(name: String, shape: Rc<LiftedShape>, captures: Vec<Capture>, home: Option<ClassId>, module: Option<Rc<str>>, place: Option<u32>) -> Lifted {
         let desc = method_desc(&shape.takes(), &shape.ret);
-        Lifted { name, desc, this: shape.instance.is_some(), shape, captures, home, module }
+        Lifted { name, desc, this: shape.instance.is_some(), shape, captures, home, module, place }
     }
 
     /// How many arguments a call passes.
@@ -419,7 +412,7 @@ pub enum PendingBody {
     /// The parameters arrive as `Object`s and are unboxed into locals of their declared types.
     Lambda(Vec<SymId>, TExprId),
     Fun(FunId),
-    /// The default of parameter `n` of a local def.
+    /// The default of a local def's own parameter `n` (`TFun::own_default`).
     Default(FunId, usize),
     /// A local lazy val's accessor, `if x$lzy.initialized() then x$lzy.value() else x$lzyINIT()`,
     /// its holder the last parameter (`LazyVals.transformLocalDef`).
@@ -487,10 +480,11 @@ pub struct Pending {
     pub body: PendingBody,
 }
 
+/// A def whose self calls in tail position are jumps to the start of its code, as the lowering decides it: the
+/// writer binds the start (`MethodCx::tail_head`).
 pub struct TailLoop {
     pub sym: SymId,
     pub params: Vec<SymId>,
-    pub head: Label,
     /// The calls of the def by itself under its `return`s that go round the loop
     /// (`Program::tail_jumps`).
     pub jumps: Vec<TExprId>,
@@ -503,6 +497,8 @@ pub struct MethodCx {
     pub this_slot: Option<u16>,
     pub ret: ErasedType,
     pub tail: Option<TailLoop>,
+    /// Where the code of a def that loops (`tail`) starts.
+    pub tail_head: Option<Label>,
     /// The locals of the method that live in a cell (`free::cells`).
     pub cells: Vec<SymId>,
     /// Set while the arguments of the super constructor are evaluated: `this` is not there
@@ -533,6 +529,8 @@ pub struct MethodCx {
     /// stands in, innermost last: a `return` leaves through each one's finalizer or monitor exit
     /// (`Gen::write_try`, `Gen::monitor_block`).
     pub finalizers: Vec<FinallyFrame>,
+    /// The copies of finalizers being written, outermost first (`Gen::write_finalizer`).
+    pub finally_copies: Vec<FinallyCopy>,
     /// The exits of those frames a `return` has jumped to, as dotty's `shouldEmitCleanup` records
     /// that a cleanup block is wanted (BCodeBodyBuilder `genReturn`).
     pub exits_taken: Vec<Label>,
@@ -586,6 +584,18 @@ pub struct FinallyFrame {
     pub cleanup: Label,
 }
 
+/// One copy of a finalizer being written (`Gen::write_finalizer`): what its places are among those of every copy.
+pub struct FinallyCopy {
+    /// The `try` whose finalizer it is, the same in every copy of the finalizers around it (`Gen::finalizer_of`).
+    pub of: u32,
+    /// The lowered bodies of lambdas the copy has met, each its place among its typed body's in the finalizer.
+    pub lambdas: FxMap<*const LiftedBody, u32>,
+    /// How many places of each lambda's typed body the copy has met.
+    pub places: FxMap<TExprId, u32>,
+    /// How many `try` blocks with a finalizer the copy has written.
+    pub tries: u32,
+}
+
 impl Default for MethodCx {
     fn default() -> Self {
         MethodCx {
@@ -594,6 +604,7 @@ impl Default for MethodCx {
             this_slot: None,
             ret: ErasedType::V,
             tail: None,
+            tail_head: None,
             cells: Vec::new(),
             before_super: false,
             lambda: false,
@@ -605,6 +616,7 @@ impl Default for MethodCx {
             lazy_keys: FxMap::default(),
             home_slots: Vec::new(),
             finalizers: Vec::new(),
+            finally_copies: Vec::new(),
             exits_taken: Vec::new(),
             early_return: None,
             temps: FxMap::default(),
@@ -709,8 +721,24 @@ pub struct Gen<'a> {
     /// (`Gen::lazy_holder`).
     pub lazy_holders: Vec<super::lazy::LazyHolder>,
     pub lifted_defaults: FxMap<(SymId, usize), Rc<Lifted>>,
+    /// What the getter of a local def's default takes and binds, decided where it is first lowered or written.
+    pub(super) lifted_default_shapes: FxMap<(SymId, usize), (Rc<LiftedShape>, Rc<LiftedBody>)>,
     pub an: Analysis,
-    pub counter: u32,
+    /// The thunks of jars' defaults the class's code made (`$default$thunk$N`).
+    pub thunks: u32,
+    /// The lifted methods of the lambdas of the class's code, by the lowered body each closure carries
+    /// (`Gen::lambda_method`), the body kept so that its address names it while the class is written.
+    pub lambdas: FxMap<*const LiftedBody, (Rc<LiftedBody>, Rc<Lifted>)>,
+    /// How many lowered bodies of each lambda's typed body the class's code has met (`Gen::lambda_method`).
+    pub lambda_places: FxMap<TExprId, u32>,
+    /// The lifted methods of the lambdas of finalizers, by their typed body, the `try` whose finalizer holds them
+    /// and their place among the body's in it: one method for every copy (`Gen::write_finalizer`).
+    pub finally_lambdas: FxMap<(TExprId, u32, u32), Rc<Lifted>>,
+    /// The `try` blocks with a finalizer the class's code has written, each by the one whose finalizer holds it and
+    /// its place among that finalizer's (`Gen::finalizer_of`).
+    pub finally_tries: FxMap<(u32, u32), u32>,
+    /// How many `try` blocks with a finalizer the class's code has numbered (`Gen::finalizer_of`).
+    pub tries_written: u32,
     /// The locals an anonymous class holds in fields: symbol, field name, type, and how.
     pub class_captures: Vec<(SymId, String, ErasedType, Held)>,
     /// The fields of the class being written holding its `Extras`: the other classes' instances and
@@ -724,6 +752,8 @@ pub struct Gen<'a> {
     /// whether it is kept in a cell: a later statement of the block is lowered before the
     /// declaration is written.
     pub(super) lower_declared: FxMap<SymId, (ErasedType, bool)>,
+    /// The local defs the lowering running met, queued when it ends (`Gen::queue_local_defs`).
+    pub(super) local_defs: Vec<SymId>,
     /// The templates read, by their text (`Gen::template`).
     pub(super) templates: FxMap<Box<str>, Rc<super::template::Template>>,
     /// The constructor tree of the object being written, between its two methods
@@ -822,14 +852,21 @@ impl<'a> Gen<'a> {
             lifted_lazy_inits: FxMap::default(),
             lazy_holders: Vec::new(),
             lifted_defaults: FxMap::default(),
+            lifted_default_shapes: FxMap::default(),
             an: Analysis::default(),
-            counter: 0,
+            thunks: 0,
+            lambdas: FxMap::default(),
+            lambda_places: FxMap::default(),
+            finally_lambdas: FxMap::default(),
+            finally_tries: FxMap::default(),
+            tries_written: 0,
             class_captures: Vec::new(),
             class_homes: Vec::new(),
             class_keys: Vec::new(),
             code: Code::new(Vec::new()),
             lir: crate::lir::Body::default(),
             lower_declared: FxMap::default(),
+            local_defs: Vec::new(),
             templates: FxMap::default(),
             module_tree: None,
             vc_temps: FxMap::default(),
@@ -912,14 +949,20 @@ impl<'a> Gen<'a> {
 
     pub fn reset_class(&mut self) {
         self.pending.clear();
+        self.local_defs.clear();
         self.pair_bridged.clear();
         self.lifted.clear();
         self.lifted_shapes.clear();
         self.lifted_lazy_inits.clear();
         self.lazy_holders.clear();
         self.lifted_defaults.clear();
+        self.lifted_default_shapes.clear();
         self.an = Analysis::default();
-        self.counter = 0;
+        self.thunks = 0;
+        self.lambdas.clear();
+        self.lambda_places.clear();
+        self.finally_lambdas.clear();
+        self.finally_tries.clear();
         self.class_captures.clear();
         self.class_homes.clear();
         self.class_keys.clear();
@@ -2376,23 +2419,6 @@ impl<'a> Gen<'a> {
             None => self.lower_adapt(value, from, &declared),
         };
         (to, declared)
-    }
-
-    /// The value the code here holds in `slot`, of the type `from`, written as the type the symbol
-    /// `s` is declared with (`Gen::lower_to_sym`), which it gives.
-    pub(super) fn write_slot_to_sym(&mut self, slot: u16, from: &ErasedType, s: SymId) -> ErasedType {
-        let value = self.slot_value(slot, from);
-        let (to, declared) = self.lowering(|g| g.lower_to_sym(value, from, s));
-        self.write(to);
-        declared
-    }
-
-    /// A read of the value the code here holds in `slot`, of the type `ty`, as a node: the slot
-    /// read as a temporary of the lowering.
-    pub(super) fn slot_value(&mut self, slot: u16, ty: &ErasedType) -> LirId {
-        let temp = self.lir.temp();
-        self.m.temps.insert(temp, slot);
-        self.lir.push(Kind::Temp(temp), ty.clone())
     }
 
     /// The value of `s`, stored as `from`, brought to `want`: a value class's underlying value
@@ -3951,6 +3977,7 @@ impl<'a> Gen<'a> {
             }
         }
         if let Some(f) = finalizer {
+            let t = self.finalizer_of();
             // A `return` inside the finalizer itself belongs to the enclosing frame; one in the body
             // or a case asked for the cleanup copy (`currentFinallyBlockNeedsCleanup`, 329-332).
             self.m.finalizers.pop();
@@ -3965,7 +3992,7 @@ impl<'a> Gen<'a> {
             // after it take the slots after it, and a finalizer's own vals the same slots in every
             // copy, as dotty's (`getOrMakeLocal`, BCodeBodyBuilder.scala 331-335).
             let thrown = self.store_new(&throwable);
-            self.write(f);
+            self.write_finalizer(f, t);
             self.load(thrown, &throwable);
             self.code.op(op::ATHROW);
             self.code.pop();
@@ -3973,7 +4000,7 @@ impl<'a> Gen<'a> {
             if needs_cleanup {
                 self.code.bind(cleanup);
                 self.code.hold_local(thrown);
-                self.write(f);
+                self.write_finalizer(f, t);
                 self.pending_cleanups(&ret);
             }
             self.code.bind(normal_exit);
@@ -3983,7 +4010,7 @@ impl<'a> Gen<'a> {
                 self.code.type_local(reserved, vt);
                 self.store(reserved.slot, want);
             }
-            self.write(f);
+            self.write_finalizer(f, t);
             if let Some(reserved) = kept {
                 self.load(reserved.slot, want);
             }
@@ -4382,24 +4409,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Declares a local with the value on the stack (of the local's declared type).
-    pub fn declare_local(&mut self, s: SymId, ty: ErasedType, cell: bool) {
-        if cell {
-            let object = ErasedType::object();
-            self.adapt(&ty, &object);
-            let tmp = self.store_new(&object);
-            self.new_object(OBJECT_REF);
-            self.load(tmp, &object);
-            self.invoke(Invoke::Special, OBJECT_REF, false, "<init>", &[object], &ErasedType::V);
-            let cell_type = ErasedType::L(Rc::from(OBJECT_REF));
-            let slot = self.store_new(&cell_type);
-            self.m.locals.insert(s, Local { slot, ty, cell: true });
-        } else {
-            let slot = self.store_new(&ty);
-            self.m.locals.insert(s, Local { slot, ty, cell: false });
-        }
-    }
-
     /// The class the constant `classOf[t]` of the constant type `class_type`, `Class[t]` (`LitVal::Class`), is the
     /// value of, as `lower_class_of` names a class literal's (`class_kind`).
     pub(super) fn class_constant(&mut self, class_type: TypeId) -> ErasedType {
@@ -4547,12 +4556,6 @@ impl<'a> Gen<'a> {
         StaticRoute::Accessor
     }
 
-    /// The receiver of a reference to `s` evaluated where the reference points.
-    fn site_receiver(&mut self, r: TExprId, s: SymId, site: &Option<Site>) {
-        let t = self.receiver_type(s, site);
-        self.expr(r, &t);
-    }
-
     /// The class a reference to `s` evaluates its receiver at: the site's, or the declaring one.
     pub(super) fn receiver_type(&mut self, s: SymId, site: &Option<Site>) -> ErasedType {
         match (site, self.cx.input.syms.sym(s).owner) {
@@ -4573,7 +4576,7 @@ impl<'a> Gen<'a> {
     /// `Typer.typedBlock` types it, the recorded type's for a conditional, a cast and the rest) where that derives from the owner and the JVM lets this class name it
     /// (`isJvmAccessible`: a Java class that is not public, from its own package alone); else the
     /// cast's target, the owner (`None`: the declaring class, the receiver cast to it as
-    /// `site_receiver` casts it) or, where the owner is not accessible, the qualifier's type before
+    /// `Gen::lower_receiver` casts it) or, where the owner is not accessible, the qualifier's type before
     /// erasure (`originalQual`, scala3#8661). Where that is not accessible either, or is the
     /// erased type itself, the reference cannot be written: refused as dotty refuses it
     /// (Erasure.scala 746-758), `member` naming what is referenced. An array, a primitive or a
@@ -4859,13 +4862,6 @@ impl<'a> Gen<'a> {
     }
 
     // ---- calls ----
-
-    /// The arguments of a call against the parameter types, evaluated as they stand: an
-    /// argument the source left out is its default getter's application (`TExpr::Default`).
-    fn arguments(&mut self, callee: Option<SymId>, args: ListRef, params: &[ErasedType]) {
-        let (args, order) = self.lowering(|g| g.lower_arguments(callee, args, params));
-        self.write_arguments(args, order.as_deref());
-    }
 
     /// Parameter types in the class file's order (`jvm_param_order`) put back in the signature's.
     pub(super) fn signature_order(&self, order: &[usize], params: &[ErasedType]) -> Vec<ErasedType> {
@@ -5153,7 +5149,7 @@ impl<'a> Gen<'a> {
         let items = cx.input.prog.expr_list(args).to_vec();
         let index = (at & !DEFAULT_RECEIVER) as usize;
         let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (Some(items[0]), items[1..].to_vec()) } else { (None, items) };
-        if !matches!(self.default_route(of, at, args), DefaultRoute::Unlowered(_)) {
+        if !matches!(self.default_route(of, at, args), DefaultRoute::LocalDef(..)) {
             return self.lowered_where_written(|g| g.lower_default(of, at, args));
         }
         match of {
@@ -5168,7 +5164,11 @@ impl<'a> Gen<'a> {
         let index = (at & !DEFAULT_RECEIVER) as usize;
         let recv = (at & DEFAULT_RECEIVER != 0).then(|| items[0]);
         if let DefaultOf::Method(s) = of {
-            if cx.input.syms.sym(s).name != crate::names::INIT {
+            let info = cx.input.syms.sym(s);
+            if recv.is_none() && info.owner == Owner::Local && info.name != crate::names::INIT {
+                return DefaultRoute::LocalDef(s, index);
+            }
+            if info.name != crate::names::INIT {
                 let priors = items[recv.is_some() as usize..].to_vec();
                 return self.method_default_route(s, index, recv, &priors);
             }
@@ -5226,9 +5226,6 @@ impl<'a> Gen<'a> {
     fn method_default_route(&mut self, s: SymId, i: usize, recv: Option<TExprId>, priors: &[TExprId]) -> DefaultRoute {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
-        if info.owner == Owner::Local && recv.is_none() {
-            return DefaultRoute::Unlowered(Unlowered::DefaultOfLocalDef);
-        }
         if let Some(route) = recv.and_then(|r| self.value_class_default_route(r, s, i, priors)) {
             return route;
         }
@@ -5307,15 +5304,6 @@ impl<'a> Gen<'a> {
         };
         let getter = MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name, params, ret, desc, kind: m.kind };
         DefaultRoute::Method { receiver: r, receiver_type, getter, at, args, want }.held_unless_paths(paths, &written)
-    }
-
-    /// How many of `s`'s parameters, flattened, come before the clause of parameter `i`: those
-    /// its default getter takes.
-    pub fn clause_start(&self, s: SymId, i: usize) -> usize {
-        match self.cx.input.syms.sym(s).info.sig.as_ref() {
-            Some(sig) => clause_shape(&sig.clauses, i).0,
-            None => i,
-        }
     }
 
     /// The arguments of a constructor of `c` whose every parameter has a default and which a
@@ -5670,24 +5658,8 @@ impl<'a> Gen<'a> {
             CallRoute::Extension(..) => unreachable!("lowered (`Gen::lower_extension_call`)"),
             // Lowered where it is written, the capture analysis asked in order, where the lowering
             // takes the call (`Gen::lower_proxied_call`, `Gen::lower_lifted_member_call`).
-            CallRoute::Proxied(t) => {
-                if let Ok(call) = self.lowering(|g| g.lower_proxied_call(t, s, args)) {
-                    self.write(call);
-                    return self.lir.ty(call).clone();
-                }
-                let proxies = self.member_proxies(s).expect("a member that takes proxies, by the route");
-                let m = self.mref(s);
-                self.call_proxied(t, s, &m, &proxies, args)
-            }
-            CallRoute::Lifted => {
-                if let Ok(call) = self.lowering(|g| g.lower_lifted_member_call(r, s, args)) {
-                    self.write(call);
-                    return self.lir.ty(call).clone();
-                }
-                let proxies = self.member_proxies(s).expect("a member that takes proxies, by the route");
-                let m = self.mref(s);
-                self.call_lifted(r, s, &m, &proxies, args)
-            }
+            CallRoute::Proxied(t) => self.lowered_where_written(|g| Ok(g.lower_proxied_call(t, s, args))),
+            CallRoute::Lifted => self.lowered_where_written(|g| Ok(g.lower_lifted_member_call(r, s, args))),
             CallRoute::Object(_) | CallRoute::Spread(_) | CallRoute::Interpolator(_) | CallRoute::JavaStatic | CallRoute::JdkStatic | CallRoute::Super | CallRoute::Plain => {
                 unreachable!("lowered (`Gen::lower_call_method`)")
             }
@@ -5700,81 +5672,6 @@ impl<'a> Gen<'a> {
     /// asked where the call is written (`Gen::analysis_in_order`).
     fn lifted_call(&self, s: SymId, args: ListRef) -> bool {
         self.proxied_fun(s).is_some_and(|fun| fun.params.len() == args.len as usize)
-    }
-
-    /// `r.s(proxies, args)` of a local trait's lifted member, as dotty's `LambdaLift.addFreeArgs`
-    /// leaves it: the interface's method over the proxies and the parameters, which a class's
-    /// method of the source descriptor does not implement; `super.s(..)` through the superclass.
-    fn call_lifted(&mut self, r: TExprId, s: SymId, m: &MethodRef, proxies: &[SymId], args: ListRef) -> ErasedType {
-        let cx = self.cx;
-        let fun = &cx.input.prog.funs[cx.fun_of_sym[s.idx()] as usize];
-        let k = fun.captures as usize;
-        let declared: Vec<SymId> = fun.params[..k].to_vec();
-        let extras = self.extras_of(&declared, None);
-        let mut pm = self.proxied_mref(m, proxies, &extras);
-        if let TExpr::Super(_) = cx.input.prog.expr(r) {
-            let superclass = self.this_class.and_then(|c| cx.input.syms.class(c).superclass);
-            self.load_this();
-            if let Some(c) = superclass {
-                pm.owner = self.class_name(c);
-                pm.owner_is_interface = false;
-                pm.kind = Invoke::Special;
-            }
-        } else {
-            let site = self.invoke_site(r, s, m);
-            self.site_receiver(r, s, &site);
-            if let Some(site) = site {
-                pm.kind = site.kind();
-                pm.owner = site.owner;
-                pm.owner_is_interface = site.interface;
-            }
-        }
-        let given: Vec<TExprId> = cx.input.prog.expr_list(args).iter().take(k).copied().collect();
-        for &p in proxies {
-            let want = self.anon_capture_type(p);
-            match declared.iter().position(|&d| d == p).and_then(|i| given.get(i).copied()) {
-                // A proxy the caller holds as it holds a captured local, a lazy val as the thunk
-                // that a lifted class takes.
-                Some(a) => {
-                    let t = self.load_capture_arg(a, p);
-                    self.adapt(&t, &want);
-                }
-                None => {
-                    let t = self.load_capture(p);
-                    self.adapt(&t, &want);
-                }
-            }
-        }
-        self.load_extras(&extras);
-        let rest = ListRef { start: args.start + k as u32, len: args.len.saturating_sub(k as u32) };
-        let params = m.params.clone();
-        self.arguments(Some(s), rest, &params);
-        self.invoke_mref(&pm);
-        pm.ret.clone()
-    }
-
-    /// `super[T].s(proxies, args)` of a member of a local trait, as scalac's forwarder calls it:
-    /// the trait's static `s$` on `this`, the proxies as this class holds them.
-    fn call_proxied(&mut self, t: ClassId, s: SymId, m: &MethodRef, proxies: &[SymId], args: ListRef) -> ErasedType {
-        let cx = self.cx;
-        let fun = &cx.input.prog.funs[cx.fun_of_sym[s.idx()] as usize];
-        let k = fun.captures as usize;
-        let declared: Vec<SymId> = fun.params[..k].to_vec();
-        let owner = self.class_name(t);
-        let this = ErasedType::L(owner.clone());
-        let extras = self.extras_of(&declared, None);
-        let pm = self.proxied_mref(m, proxies, &extras);
-        self.load_this();
-        let given: Vec<TExprId> = cx.input.prog.expr_list(args).iter().take(k).copied().collect();
-        self.load_proxies(proxies, &declared, &given);
-        let rest = ListRef { start: args.start + k as u32, len: args.len.saturating_sub(k as u32) };
-        let params = m.params.clone();
-        self.arguments(Some(s), rest, &params);
-        let mut all = vec![this];
-        all.extend(pm.params.iter().cloned());
-        let desc = method_desc(&all, &pm.ret);
-        self.invoke_desc(Invoke::Static, &owner, true, &format!("{}$", pm.name), &desc, all.len(), &pm.ret);
-        pm.ret.clone()
     }
 
     /// How `s`, a method of a value class, is called, with the class; None for any other member
@@ -6110,17 +6007,6 @@ impl<'a> Gen<'a> {
         found
     }
 
-    /// Loads the argument `a` that hands a lifted class or a local trait's lifted member the
-    /// local `p` it takes, as `p` is held there (`anon_capture_type`).
-    fn load_capture_arg(&mut self, a: TExprId, p: SymId) -> ErasedType {
-        let route = self.capture_argument_route(a, p);
-        // The unit value stands for an argument of no value, which is passed as an `Object`.
-        let unit = matches!(route, CaptureArgument::Own) && self.static_type(a) == ErasedType::V;
-        let node = self.lowering(|g| g.lower_capture_argument(a, route));
-        self.write(node);
-        if unit { ErasedType::object() } else { self.lir.ty(node).clone() }
-    }
-
     pub(super) fn capture_argument_route(&mut self, a: TExprId, p: SymId) -> CaptureArgument {
         let cx = self.cx;
         match cx.input.prog.expr(a) {
@@ -6244,7 +6130,7 @@ impl<'a> Gen<'a> {
         // initialiser captures, as a local def's copy does (`LambdaLift`'s free variables of both).
         let lazies: Vec<SymId> = named.iter().copied().filter(|&s| self.is_lazy_local(s)).collect();
         for s in defs {
-            let free = self.an.of_fun(cx, s);
+            let free = self.an.of_copy(cx, s);
             for &f in &free.syms {
                 if !out.contains(&f) && !self.is_local_def(f) {
                     out.push(f);
@@ -6315,7 +6201,7 @@ impl<'a> Gen<'a> {
         let mut lazies: Vec<SymId> = Vec::new();
         for &s in declared {
             if self.is_local_def(s) {
-                let free = self.an.of_fun(cx, s);
+                let free = self.an.of_copy(cx, s);
                 if free.this {
                     self.add_home(&mut out, s, own);
                 }
@@ -6472,7 +6358,7 @@ impl<'a> Gen<'a> {
                 }
                 continue;
             }
-            let free = self.an.of_fun(cx, p);
+            let free = self.an.of_copy(cx, p);
             for &f in &free.syms {
                 if !out.contains(&f) && !self.is_local_def(f) {
                     out.push(f);
@@ -6545,26 +6431,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Pushes the proxies `proxies` (as `proxy_syms` expands the `declared` ones) that a call
-    /// passes with `args`, each as the caller holds it: an argument that is no read of the proxy
-    /// (a copied inline body's, the argument of its parameter) as its value.
-    pub fn load_proxies(&mut self, proxies: &[SymId], declared: &[SymId], args: &[TExprId]) {
-        let cx = self.cx;
-        for &p in proxies {
-            let want = self.anon_capture_type(p);
-            let arg = declared.iter().position(|&d| d == p).and_then(|i| args.get(i).copied());
-            match arg {
-                Some(a) if !matches!(cx.input.prog.expr(a), TExpr::Local(s) if s == p) => self.expr(a, &want),
-                _ => {
-                    let t = self.load_capture(p);
-                    self.adapt(&t, &want);
-                }
-            }
-        }
-        let extras = self.extras_of(declared, None);
-        self.load_extras(&extras);
-    }
-
     pub fn anon_capture_type(&mut self, s: SymId) -> ErasedType {
         let info = self.cx.input.syms.sym(s);
         if self.held(s) == Held::Cell {
@@ -6587,10 +6453,11 @@ impl<'a> Gen<'a> {
         self.pending.push(body);
     }
 
+    /// A name for a jar default's thunk (`$default$thunk$N`), numbered in the class.
     pub(super) fn fresh_name(&mut self, base: &str) -> String {
         assert!(!self.code.frozen, "a name is numbered while a lowering runs");
-        self.counter += 1;
-        format!("{}${}", base, self.counter)
+        self.thunks += 1;
+        format!("{}${}", base, self.thunks)
     }
 
     /// What the lifted method of the code whose captures are `free` takes and binds: of a lambda (`code`, its
@@ -6655,6 +6522,71 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The method of the lambda whose shape is `shape` and whose body and captures `body` holds, in the class being
+    /// written: named by its unit (`lambda_name`) and queued where the class's code first meets it. A closure is the
+    /// lowering of one place of the typed tree, and a second lowered body of the same typed body a second place (a tree
+    /// the typer shares between two places, `LiftWalk::lambda`), the method of that place's name, as scalac lifts
+    /// each. What the BACK END copies is one method, as dotty's back end copies a finalizer after `LambdaLift` lifted
+    /// its closures once: one lowered body however often it is written, and a lambda at a place of a finalizer the
+    /// method of that place in every copy, which the writer may lower again (`Gen::write_finalizer`). The places are
+    /// counted in the order the code is written, though a held body's lowered closures are met before it is written
+    /// (`ask_lifted`) and an escape's only when the writer lowers it: a lowering runs in the order its code is written
+    /// and lowers no lambda once it has left typed IR (`Unlowered::AfterEscape`), so every lowered closure of a body
+    /// comes before every escape of it. A lambda written again with another shape is an internal error.
+    pub(super) fn lambda_method(&mut self, shape: &Rc<LiftedShape>, body: &Rc<LiftedBody>) -> Rc<Lifted> {
+        let (params, code) = body.code.clone().expect("a closure's body");
+        let copy = self.m.finally_copies.last_mut().map(|copy| {
+            let places = &mut copy.places;
+            let at = *copy.lambdas.entry(Rc::as_ptr(body)).or_insert_with(|| {
+                let n = places.entry(code).or_insert(0);
+                *n += 1;
+                *n - 1
+            });
+            (code, copy.of, at)
+        });
+        let met = self.lambdas.get(&Rc::as_ptr(body)).map(|(_, l)| l).or_else(|| copy.and_then(|k| self.finally_lambdas.get(&k)));
+        if let Some(l) = met.cloned() {
+            if (&*l.shape, &l.captures, l.home, &l.module) != (&**shape, &body.captures, body.home, &body.module) {
+                self.unsupported(&format!("internal error: the lambda {} is written again with other captures", l.name));
+            }
+            self.lambdas.insert(Rc::as_ptr(body), (body.clone(), l.clone()));
+            return l;
+        }
+        assert!(!self.code.frozen, "a lambda is named while a lowering runs");
+        let at = *self.lambda_places.entry(code).and_modify(|n| *n += 1).or_insert(0);
+        let place = self.lifted_place(Placed::Lambda(code, at));
+        let lifted = Rc::new(Lifted::new(self.lambda_name(code, at), shape.clone(), body.captures.clone(), body.home, body.module.clone(), place));
+        self.lambdas.insert(Rc::as_ptr(body), (body.clone(), lifted.clone()));
+        if let Some(k) = copy {
+            self.finally_lambdas.insert(k, lifted.clone());
+        }
+        self.defer(Pending { lifted: lifted.clone(), body: PendingBody::Lambda(params, code) });
+        lifted
+    }
+
+    /// The number of the `try` whose finalizer is about to be written, the same in every copy of the finalizers
+    /// around it: by the one whose copy is being written and its place among that finalizer's `try` blocks.
+    fn finalizer_of(&mut self) -> u32 {
+        let Some(copy) = self.m.finally_copies.last_mut() else {
+            self.tries_written += 1;
+            return self.tries_written;
+        };
+        copy.tries += 1;
+        let written = &mut self.tries_written;
+        *self.finally_tries.entry((copy.of, copy.tries)).or_insert_with(|| {
+            *written += 1;
+            *written
+        })
+    }
+
+    /// One copy of the finalizer of the `try` numbered `of` (`Gen::finalizer_of`), `f`: a lambda at each of its places
+    /// the method of that place in the copy written first (`Gen::lambda_method`).
+    fn write_finalizer(&mut self, f: LirId, of: u32) {
+        self.m.finally_copies.push(FinallyCopy { of, lambdas: FxMap::default(), places: FxMap::default(), tries: 0 });
+        self.write(f);
+        self.m.finally_copies.pop();
+    }
+
     /// The receiver (unless the getter is static) and its arguments are on the stack: they
     /// become a `Function0` whose `apply` calls the getter.
     fn jar_default_thunk(&mut self, getter: JarGetter, params: &[ErasedType]) {
@@ -6666,7 +6598,7 @@ impl<'a> Gen<'a> {
         let name = self.fresh_name("$default$thunk");
         let object = ErasedType::object();
         let shape = LiftedShape { instance: None, key: false, captured: captured.clone(), params: Vec::new(), ret: object.clone() };
-        let lifted = Rc::new(Lifted::new(name, Rc::new(shape), Vec::new(), None, None));
+        let lifted = Rc::new(Lifted::new(name, Rc::new(shape), Vec::new(), None, None, None));
         self.defer(Pending { lifted: lifted.clone(), body: PendingBody::JarGetter(getter) });
         let ft = self.function_type(0);
         self.call_site(&lifted, &ft, "apply", &method_desc(&[], &object), &captured);
@@ -6744,16 +6676,25 @@ impl<'a> Gen<'a> {
         made
     }
 
-    /// The lifted method of the local def `s`, named and its body queued where the writer first meets the def.
+    /// Queues the methods of the local defs a lowering met (`Gen::lowering`, once it ends), in the context of the
+    /// method that code is written in, so that the class writing a local def's declaration writes its method
+    /// whether or not a call of the class reaches it (`LambdaLift.liftDef` lifts every local def of the class).
+    pub(super) fn queue_local_defs(&mut self) {
+        for s in std::mem::take(&mut self.local_defs) {
+            self.lifted_fun(s);
+        }
+    }
+
+    /// The lifted method of the local def `s`, named and its body queued where the class first asks for it.
     pub fn lifted_fun(&mut self, s: SymId) -> Rc<Lifted> {
         if let Some(l) = self.lifted.get(&s) {
             return l.clone();
         }
         let cx = self.cx;
         let (shape, body) = self.local_fun_shape(s);
-        let base = encode(cx.input.interner.get(cx.input.syms.sym(s).name));
-        let name = self.fresh_name(&base);
-        let lifted = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone()));
+        let name = self.def_name(s);
+        let place = self.lifted_place(Placed::Def(s));
+        let lifted = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone(), place));
         self.lifted.insert(s, lifted.clone());
         // A local inline method has its getters alone (`Desugar.addDefaultGetters`), which
         // take their names from it.
@@ -6771,45 +6712,56 @@ impl<'a> Gen<'a> {
 
     /// The default `i` of the local def `s`, its getter applied to `temps`: the value it leaves.
     fn local_default(&mut self, s: SymId, i: usize, temps: &[Prior]) -> ErasedType {
-        let cx = self.cx;
-        let f = cx.fun_of_sym[s.idx()];
-        if f == u32::MAX {
+        if self.cx.fun_of_sym[s.idx()] == u32::MAX {
             self.unsupported("the default of a local def without a body");
             return ErasedType::V;
         }
-        // The getter's body is deferred once the arguments are written: their lambdas come first in the class.
-        let mut pending = None;
-        let lifted = match self.lifted_defaults.get(&(s, i)) {
-            Some(l) => l.clone(),
-            None => {
-                let free = self.an.of_fun(cx, s);
-        let free = self.copy_free(s, free);
-                let fun = self.lifted_fun(s);
-                let name = format!("{}$default${}", fun.name, i + 1);
-                let params: Vec<ErasedType> = fun.params[..self.clause_start(s, i)].to_vec();
-                // A by-name parameter's getter returns the value (`Desugar.addDefaultGetters`).
-                let by_name = cx.input.syms.sym(s).sig.as_ref().and_then(|sig| clause_shape(&sig.clauses, i).1);
-                let ret = match by_name {
-                    Some(t) => self.erase(t),
-                    None => fun.params[i].clone(),
-                };
-                let (shape, body) = self.lifted_shape(&free, params, ret, Some(s), None);
-                let l = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone()));
-                self.lifted_defaults.insert((s, i), l.clone());
-                pending = Some(Pending { lifted: l.clone(), body: PendingBody::Default(FunId(f), i) });
-                l
-            }
-        };
+        let (lifted, pending) = self.local_default_method(s, i);
         self.load_captures(&lifted);
         for prior in temps {
             self.write_prior(prior);
         }
+        // The getter's body is deferred once the arguments are written: their lambdas come first in the class.
         if let Some(p) = pending {
             self.defer(p);
         }
         let owner = self.this_name.clone();
         self.invoke_desc(Invoke::Static, &owner, self.is_interface, &lifted.name, &lifted.desc, lifted.arity(), &lifted.ret);
         lifted.ret.clone()
+    }
+
+    /// What the getter of the default `i` of the local def `s` takes and binds: its default's own captures
+    /// (`free::Analysis::of_default`), then the parameters a member's getter of the same shape takes (`Gen::default_getter_shape`: those of the clauses before
+    /// the default's, in the class file's order); it returns what that getter returns, a by-name parameter's value
+    /// (`Desugar.addDefaultGetters`).
+    pub(super) fn local_default_shape(&mut self, s: SymId, i: usize) -> (Rc<LiftedShape>, Rc<LiftedBody>) {
+        if let Some(found) = self.lifted_default_shapes.get(&(s, i)) {
+            return found.clone();
+        }
+        let cx = self.cx;
+        let free = Rc::new(self.an.of_default(cx, s, i));
+        let free = self.copy_free(s, free);
+        let (def, _) = self.local_fun_shape(s);
+        let shape = self.default_getter_shape(s, i);
+        let params: Vec<ErasedType> = def.params[..shape.before].to_vec();
+        let made = self.lifted_shape(&free, params, shape.ret, Some(s), None);
+        self.lifted_default_shapes.insert((s, i), made.clone());
+        made
+    }
+
+    /// The getter of the default `i` of the local def `s`, named by its unit and placed by the walk, and its body to
+    /// queue where the getter is first called (none where it was made before).
+    pub(super) fn local_default_method(&mut self, s: SymId, i: usize) -> (Rc<Lifted>, Option<Pending>) {
+        if let Some(l) = self.lifted_defaults.get(&(s, i)) {
+            return (l.clone(), None);
+        }
+        let f = self.cx.fun_of_sym[s.idx()];
+        let (shape, body) = self.local_default_shape(s, i);
+        let name = self.local_default_name(s, i);
+        let place = self.lifted_place(Placed::Default(s, i));
+        let l = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone(), place));
+        self.lifted_defaults.insert((s, i), l.clone());
+        (l.clone(), Some(Pending { lifted: l, body: PendingBody::Default(FunId(f), i) }))
     }
 
     // ---- blocks ----

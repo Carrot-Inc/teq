@@ -609,7 +609,7 @@ i2508.scala	pass	interp:pass
 i25089.scala	pass	interp:pass	
 i25291	pass	interp:pass	
 i2567.scala	pass	interp:pass	
-i2738.scala	fail	interp:fail	output: line 1: the .check has 'Test$qux$2$', the program printed 'bar$2'
+i2738.scala	fail	interp:fail	output: line 1: the .check has 'Test$qux$2$', the program printed 'bar$1'
 i2760	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.NullPointerException: Cannot invoke "Fork.value()" because "<local2>" is null
 i2780	fail	interp:fail	run: exit 1: Exception in thread "main" java.lang.IllegalAccessError: class Foo$Inner tried to access protected method 'java.lang.String bla.Base.foo()' (Foo$Inner and bla.Base are in unnamed module of loader 'app')
 i2795.scala	pass	interp:pass	
@@ -624,8 +624,8 @@ i2964c.scala	fail	interp:fail	output: line 1: the .check has 'class Foo$Inner$1'
 i2964d.scala	fail	interp:fail	output: line 1: the .check has 'class Foo$Inner$2$', the program printed 'class Inner$3k0dl5_180'
 i2964e.scala	fail	interp:fail	output: line 1: the .check has 'class foo.bar.Foo$$anon$1', the program printed 'class foo.bar.Foo$$anon$11p2z7y_164'
 i3000b.scala	fail	interp:fail	output: line 1: the .check has 'Foo$$anon$1', the program printed 'Foo$$anon$oqzmt3_105'
-i3006.scala	fail	interp:fail	output: line 4: the .check has 'f$4', the program printed 'f$1'
-i3006b.scala	fail	interp:fail	output: line 3: the .check has 'bar$3', the program printed 'bar$1'
+i3006.scala	pass	interp:fail	
+i3006b.scala	pass	interp:fail	
 i3018.scala	pass	interp:pass	
 i3189.scala	pass	interp:pass	
 i3200c.scala	pass	interp:pass	

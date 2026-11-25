@@ -43,7 +43,7 @@ pub fn method_access(f: MethodFlags) -> u16 {
 /// A method of the class by its flags, its name and its signature as a class file spells it.
 pub fn method_def(flags: MethodFlags, name: &str, desc: &str) -> MethodDef {
     let (params, ret) = parse_method_desc(desc);
-    MethodDef { name: Rc::from(name), params, ret, desc: desc.to_string(), flags }
+    MethodDef { name: Rc::from(name), params, ret, desc: desc.to_string(), flags, place: None }
 }
 
 /// A method of the class as `method_def` makes it, from the types of the frame its code is begun
@@ -53,7 +53,7 @@ pub fn begun_method_def(flags: MethodFlags, name: &str, desc: &str, frame: &[(Op
     if !spells_method_desc(desc, frame.iter().map(|p| &p.1), ret) {
         return method_def(flags, name, desc);
     }
-    MethodDef { name: Rc::from(name), params: frame.iter().map(|p| p.1.clone()).collect(), ret: ret.clone(), desc: desc.to_string(), flags }
+    MethodDef { name: Rc::from(name), params: frame.iter().map(|p| p.1.clone()).collect(), ret: ret.clone(), desc: desc.to_string(), flags, place: None }
 }
 
 impl<'a> Gen<'a> {
@@ -106,9 +106,11 @@ impl<'a> Gen<'a> {
     /// The class file of the class being written, which is the plan's class: its name, its flags
     /// and its superclass, the plan's interfaces among its own in their order, and the plan's
     /// fields and methods and no other, each one's flags and descriptor as its facts and its
-    /// erased types give them.
+    /// erased types give them, the methods in the plan's order (`ClassDef::order_lifted`).
     pub fn finish_writer(&mut self) -> Vec<u8> {
-        let cw = std::mem::replace(&mut self.cw, ClassWriter::new(0, "x", OBJECT, &[]));
+        let mut cw = std::mem::replace(&mut self.cw, ClassWriter::new(0, "x", OBJECT, &[]));
+        self.plan.order_lifted();
+        cw.order_methods(self.plan.methods.iter().map(|m| (&*m.name, m.desc.as_str())));
         let class = &self.plan;
         if !cw.is_class(class_access(class.flags), &class.name, &class.superclass) || !cw.holds_interfaces(class.interfaces.iter().map(|i| &**i)) {
             panic!("the plan of {} is not its class file's: {:?} {} {:?}", class.name, class.flags, class.superclass, class.interfaces);

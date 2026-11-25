@@ -793,6 +793,20 @@ pub struct TFun {
     pub lifted: bool,
 }
 
+impl TFun {
+    /// The defaults of the function's own parameters, each with its parameter's index among them,
+    /// as `TExpr::Default` counts it: the proxies leading `params` and `defaults` (`captures`)
+    /// take no part in it.
+    pub fn own_defaults(&self) -> impl Iterator<Item = (usize, TExprId)> + '_ {
+        self.defaults[self.captures as usize..].iter().enumerate().filter_map(|(i, &d)| d.map(|d| (i, d)))
+    }
+
+    /// The default of the function's own parameter `i`, counted as `own_defaults` counts it.
+    pub fn own_default(&self, i: usize) -> Option<TExprId> {
+        self.defaults.get(self.captures as usize + i).copied().flatten()
+    }
+}
+
 /// The call of a parent constructor as the typer hands it over: `TClass::parent_prelude` and
 /// `TClass::parent_args`.
 #[derive(Clone, Copy)]

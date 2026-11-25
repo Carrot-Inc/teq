@@ -8,10 +8,12 @@
 mod callable;
 pub mod classfile;
 mod classes;
+mod dependencies;
 mod free;
 mod gen;
 mod intrinsic;
 mod lazy;
+mod lifted;
 mod lower;
 mod template;
 pub mod kept;
@@ -174,6 +176,10 @@ pub struct Cx<'a> {
     owned_lazies: std::sync::OnceLock<FxMap<(Option<ClassId>, u32), Vec<SymId>>>,
     /// Per source file, the numbers of its lazy names (`Gen::file_lazy_names`).
     pub lazy_names: Vec<std::sync::OnceLock<lazy::LazyNames>>,
+    /// Per source file, the names of its lifted methods (`Gen::file_lifted_names`).
+    pub lifted_names: Vec<std::sync::OnceLock<lifted::LiftedNames>>,
+    /// Per source file, the program's classes its unit holds (`unit_classes`).
+    unit_classes: std::sync::OnceLock<Vec<Vec<ClassId>>>,
     /// The given objects of a package or of objects (`given x: T with { ... }`), by their class
     /// and by their given: scalac's module classes `Owner$x$`, which every read reaches through
     /// `MODULE$` (`static_given_objects`).
@@ -272,6 +278,8 @@ impl<'a> Cx<'a> {
             lazy_locals: std::sync::OnceLock::new(),
             owned_lazies: std::sync::OnceLock::new(),
             lazy_names: (0..input.sources.len()).map(|_| std::sync::OnceLock::new()).collect(),
+            lifted_names: (0..input.sources.len()).map(|_| std::sync::OnceLock::new()).collect(),
+            unit_classes: std::sync::OnceLock::new(),
             given_object_classes: FxMap::default(),
             given_objects: FxMap::default(),
             given_class_classes: FxMap::default(),
@@ -773,6 +781,23 @@ impl<'a> Cx<'a> {
 
     /// The local lazy vals of the reached code of the class `home` (with `None`, of the top level of the file
     /// `file`), by their place: the class's file holds their accessors and initialisers (`Gen::owned_lazy_methods`).
+    /// The classes of the program that the unit of the file `file` holds (`ClassInfo::module_file`), in their order
+    /// of ids: what the walks of a unit's names start from (`Gen::unit_classes`).
+    pub fn unit_classes(&self, file: crate::source::FileId) -> &[ClassId] {
+        let all = self.unit_classes.get_or_init(|| {
+            let mut out: Vec<Vec<ClassId>> = vec![Vec::new(); self.input.sources.len()];
+            for (i, info) in self.input.syms.classes.iter().enumerate() {
+                if self.tclass_of[i] != u32::MAX {
+                    if let Some(v) = out.get_mut(info.module_file().0 as usize) {
+                        v.push(ClassId(i as u32));
+                    }
+                }
+            }
+            out
+        });
+        all.get(file.0 as usize).map_or(&[], |v| v.as_slice())
+    }
+
     pub fn owned_lazies(&self, home: Option<ClassId>, file: crate::source::FileId) -> &[SymId] {
         let all = self.owned_lazies.get_or_init(|| {
             let syms = self.input.syms;

@@ -162,6 +162,7 @@ lazy_serialize	compile
 lazy_thread_unsafe_given	timeout
 lazy_thread_unsafe_given_sites	timeout
 library_quote_pattern_enclosing_given	compile
+local_right_assoc_lazy_operand	output
 local_trait_default_clause	unsupported
 local_trait_default_escape_prior	unsupported
 local_trait_default_inline_capture	unsupported

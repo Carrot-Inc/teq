@@ -323,6 +323,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   = if x > 0 then return "p" else "n"`) no longer gives a class the verifier rejects (`VerifyError: Inconsistent
   stackmap frames`).
 
+<details>
+<summary>Conformance with scalac and the JDK</summary>
+
+- On the JVM closures, local defs and local lazy vals are named as scalac names them (`f$$anonfun$1`, `g$1`), so a
+  stack trace shows scalac's names, and a lambda in a `finally` is one method.
+- On the JVM a local right-associative operator's operands are bound as scalac binds them: `1 +:: 2` of a local
+  `extension (x: Int) def +::(y: Int)` passes 1 as `x`, where it passed it as `y`.
+
+</details>
+
 ## 0.1.11 (2026-11-20)
 
 - A module built for the JVM by an earlier teq must be built again: the descriptors of members over `X | Null` are

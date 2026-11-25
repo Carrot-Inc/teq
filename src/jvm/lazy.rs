@@ -4,6 +4,7 @@
 
 use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedBody, LiftedShape, LirId, MethodFlags, MethodRef, Relation, Visibility};
 use super::gen::*;
+use super::lifted::Placed;
 use super::names::*;
 use crate::ast::{mods, ListRef};
 use crate::symbols::*;
@@ -123,8 +124,8 @@ impl<'a> Gen<'a> {
     /// x$lzy.value() else x$lzyINIT()` (LazyVals.scala 192-194), or its initialiser, `def x$lzyINITN(): T =
     /// x$lzy.synchronized { if x$lzy.initialized() then x$lzy.value() else x$lzy.initialize(rhs) }` (181-190), as
     /// its owner declares them (`lazy_owner`) and every reader calls them: static, of the shape `lazy_shape`
-    /// gives; named `x$lzyN$1` and `x$lzyINITM$1` by the file's numbers (§8), dotty's LazyLocalInitName freshened
-    /// once by LambdaLift.
+    /// gives; named as dotty's LambdaLift names the accessor `x` and the initialiser `x$lzyINITM` it lifts
+    /// (`lifted::LiftWalk`).
     pub(super) fn lazy_method(&mut self, s: SymId, init: bool) -> Rc<Lifted> {
         let cached = if init { self.lifted_lazy_inits.get(&s) } else { self.lifted.get(&s) };
         if let Some(l) = cached {
@@ -133,10 +134,9 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let (shape, body) = self.lazy_shape(s);
         let placed = cx.local_home(s).is_some();
-        let (n, m) = self.lazy_local_numbers(s);
-        let base = encode(cx.input.interner.get(cx.input.syms.sym(s).name));
-        let name = if init { format!("{}$lzyINIT{}$1", base, m) } else { format!("{}$lzy{}$1", base, n) };
-        let lifted = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, None));
+        let name = if init { self.lazy_init_name(s) } else { self.def_name(s) };
+        let place = self.lifted_place(if init { Placed::LazyInit(s) } else { Placed::Def(s) });
+        let lifted = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, None, place));
         if init {
             self.lifted_lazy_inits.insert(s, lifted.clone());
         } else {
@@ -177,9 +177,9 @@ impl<'a> Gen<'a> {
         self.lir.ty(call).clone()
     }
 
-    /// The body of the accessor of `s`, its holder in `slot` (`PendingBody::LazyAccessor`): `if
+    /// The tree of the accessor of `s`, its holder in `slot` (`PendingBody::LazyAccessor`): `if
     /// x$lzy.initialized() then x$lzy.value() else x$lzyINIT()`, each returned.
-    pub fn lazy_accessor_body(&mut self, s: SymId, slot: u16) {
+    pub fn lazy_accessor_tree(&mut self, s: SymId, slot: u16) -> LirId {
         let (class, value) = self.lazy_holder_class(s);
         let holder = ErasedType::L(class.clone());
         self.m.locals.insert(s, Local { slot, ty: holder.clone(), cell: false });
@@ -189,7 +189,7 @@ impl<'a> Gen<'a> {
             Rc::new(MethodRef { owner: class.clone(), owner_is_interface: false, name: name.to_string(), params: Vec::new(), ret, desc, kind: Invoke::Virtual })
         };
         let (initialized, read) = (method("initialized", ErasedType::Z), method("value", value.clone()));
-        self.body(|g| {
+        self.lowering(|g| {
             let tested = g.lir.push(Kind::Local(s), holder.clone());
             let cond = g.lir.call(&initialized, tested, &[]);
             let held = g.lir.push(Kind::Local(s), holder.clone());
@@ -199,13 +199,13 @@ impl<'a> Gen<'a> {
             let computed = g.lower_lazy_call(s, true);
             let otherwise = Some(g.lir.ret(computed));
             g.lir.push(Kind::If { cond, then, otherwise }, ErasedType::V)
-        });
+        })
     }
 
-    /// The body of the initialiser of `s`, its holder in `slot`, the right-hand side `init`
+    /// The tree of the initialiser of `s`, its holder in `slot`, the right-hand side `init`
     /// (`PendingBody::LazyInit`): `x$lzy.synchronized { if x$lzy.initialized() then x$lzy.value()
     /// else x$lzy.initialize(rhs) }`, returned.
-    pub fn lazy_init_body(&mut self, s: SymId, init: TExprId, slot: u16) {
+    pub fn lazy_init_tree(&mut self, s: SymId, init: TExprId, slot: u16) -> LirId {
         let (class, value) = self.lazy_holder_class(s);
         let holder = ErasedType::L(class.clone());
         self.m.locals.insert(s, Local { slot, ty: holder.clone(), cell: false });
@@ -215,7 +215,7 @@ impl<'a> Gen<'a> {
             Rc::new(MethodRef { owner: class.clone(), owner_is_interface: false, name: name.to_string(), params, ret, desc, kind: Invoke::Virtual })
         };
         let (initialized, read, initialize) = (method("initialized", Vec::new(), ErasedType::Z), method("value", Vec::new(), value.clone()), method("initialize", vec![value.clone()], value.clone()));
-        self.body(|g| {
+        self.lowering(|g| {
             let lock = g.lir.push(Kind::Local(s), holder.clone());
             let tested = g.lir.push(Kind::Local(s), holder.clone());
             let cond = g.lir.call(&initialized, tested, &[]);
@@ -230,7 +230,7 @@ impl<'a> Gen<'a> {
             let body = g.lir.push(Kind::If { cond, then, otherwise }, ret.clone());
             let synchronized = g.push_protected(Kind::Synchronized { lock, body, returns: false }, ret.clone());
             g.lir.ret(synchronized)
-        });
+        })
     }
 }
 
@@ -570,16 +570,65 @@ pub struct LazyNames {
 /// The walk of a file in the order dotty's `LazyVals` meets its lazy definitions (`Gen::walk_lazy_names`).
 #[derive(Default)]
 struct NameWalk {
+    unit: UnitWalk,
     counts: crate::intern::FxMap<(String, NameCount), u32>,
     out: LazyNames,
-    walked: crate::intern::FxMap<ClassId, ()>,
+}
+
+/// What the walks of a unit's code share (`UnitVisitor`): the classes walked, the file's local classes by place, the
+/// named local classes an inline expansion made, and where the definition being walked starts.
+#[derive(Default)]
+pub(super) struct UnitWalk {
+    pub(super) walked: crate::intern::FxMap<ClassId, ()>,
     /// The file's local classes by the start of their spans.
     locals: Vec<(u32, ClassId)>,
     /// The named local classes an inline expansion in the file made, whose spans are their template's: each walked
     /// where the walk first meets its construction.
     expanded: crate::intern::FxMap<ClassId, ()>,
     /// The start of the definition being walked: its own local classes are the ones after it.
-    scope: u32,
+    pub(super) scope: u32,
+}
+
+/// A walk of a unit's code in the order a phase of dotty's meets its definitions: the lazy names' (`NameWalk`,
+/// `LazyVals` numbering a definition after the trees inside it) and the lifted methods' (`lifted::LiftWalk`,
+/// `LambdaLift` naming a definition before them). The code's traversal is one (`Gen::walk_expr`); a template's is each
+/// walk's own (`class`), the two orders of a template being the one difference.
+pub(super) trait UnitVisitor<'a> {
+    /// Whether an anonymous class is walked at its creation alone, before its arguments, where
+    /// `{ class $anon ..; new $anon(..) }` holds it; else after them, or at its place where a statement after it
+    /// comes first.
+    const ANON_FIRST: bool;
+    fn unit(&mut self) -> &mut UnitWalk;
+    /// The template of the class `c`, in this walk's order.
+    fn class(&mut self, g: &mut Gen<'a>, c: ClassId);
+    /// The creation of the anonymous class `c` with `args`, its captures then its superclass's arguments: whether
+    /// this walk took it whole.
+    fn anonymous(&mut self, _g: &mut Gen<'a>, _c: ClassId, _args: ListRef) -> bool {
+        false
+    }
+    /// A lambda over `params` whose body is `body`: whether the body is walked.
+    fn lambda(&mut self, _g: &mut Gen<'a>, _params: ListRef, _body: TExprId) -> bool {
+        true
+    }
+    fn lambda_end(&mut self) {}
+    /// A local def: whether it is walked.
+    fn local_fun(&mut self, _g: &mut Gen<'a>, _f: FunId) -> bool {
+        true
+    }
+    fn local_fun_end(&mut self) {}
+    /// The getter of the default of the def `f`'s own parameter `i` (`TFun::own_defaults`), a local def's where
+    /// `local`.
+    fn default_getter(&mut self, _g: &mut Gen<'a>, _f: FunId, _i: usize, _local: bool) {}
+    fn default_getter_end(&mut self) {}
+    /// The right-hand side of the local val `sym` (of a pattern definition, `None`): whether it is walked.
+    fn val(&mut self, _g: &mut Gen<'a>, _sym: Option<SymId>) -> bool {
+        true
+    }
+    fn val_end(&mut self, _g: &mut Gen<'a>, _sym: Option<SymId>) {}
+    /// Each expression the walk meets, before what it holds.
+    fn expr(&mut self, _g: &mut Gen<'a>, _e: TExprId) {}
+    /// Each pattern the walk meets, before the expressions it holds.
+    fn pattern(&mut self, _g: &mut Gen<'a>, _p: TPatId) {}
 }
 
 /// A kind of lazy name, each counted apart per name: `x$lzyN`, `x$lzyINITN`, `xbitmap$N`.
@@ -591,7 +640,7 @@ enum NameCount {
 }
 
 /// `StdNames.str.sanitize` (StdNames.scala 44-45): `<` and `>` replaced by `$`.
-fn sanitize(raw: &str) -> String {
+pub(super) fn sanitize(raw: &str) -> String {
     raw.replace(['<', '>'], "$")
 }
 
@@ -628,14 +677,38 @@ impl NameWalk {
     }
 }
 
+impl<'a> UnitVisitor<'a> for NameWalk {
+    const ANON_FIRST: bool = false;
+
+    fn unit(&mut self) -> &mut UnitWalk {
+        &mut self.unit
+    }
+
+    fn class(&mut self, g: &mut Gen<'a>, c: ClassId) {
+        g.walk_class_names(self, c);
+    }
+
+    fn val_end(&mut self, g: &mut Gen<'a>, sym: Option<SymId>) {
+        if let Some(s) = sym.filter(|&s| g.is_lazy_local(s)) {
+            self.local(s, g.cx.input.interner.get(g.cx.input.syms.sym(s).name));
+        }
+    }
+}
+
 impl<'a> Gen<'a> {
     /// The lazy names of the file `file`, walked once whichever class asks first.
-    fn file_lazy_names(&mut self, file: crate::source::FileId) -> &'a LazyNames {
+    pub(super) fn file_lazy_names(&mut self, file: crate::source::FileId) -> &'a LazyNames {
         let cx = self.cx;
         match cx.lazy_names.get(file.0 as usize) {
             Some(cell) => cell.get_or_init(|| self.walk_lazy_names(file)),
             None => &EMPTY_NAMES,
         }
+    }
+
+    /// The numbers of a lazy member's container and initialiser (a `@threadUnsafe` one's flag), by the file's walk: of
+    /// the class `owner`'s member whose getter is `getter` (the file's module's for `None`).
+    pub(super) fn lazy_member_numbers_in(&mut self, file: crate::source::FileId, owner: Option<ClassId>, getter: &str) -> Option<(u32, u32)> {
+        self.file_lazy_names(file).members.get(&(owner, getter.to_string())).copied()
     }
 
     /// The names of a lazy member's container and initialiser in the class being written, `x$lzyN` and
@@ -658,7 +731,7 @@ impl<'a> Gen<'a> {
             Some(c) => self.cx.input.syms.class(c).module_file(),
             None => self.line_file,
         };
-        let Some(numbers) = self.file_lazy_names(file).members.get(&(owner, getter.to_string())).copied() else {
+        let Some(numbers) = self.lazy_member_numbers_in(file, owner, getter) else {
             self.unsupported(&format!("internal error: the lazy member {} has no number in its unit", getter));
             return (0, 0);
         };
@@ -675,34 +748,21 @@ impl<'a> Gen<'a> {
     /// The numbers of the local lazy val `s`'s holder and initialiser, `x$lzyN` and `x$lzyINITM`, by the walk of
     /// the file of the code declaring it (`Cx::local_file`): an inline method's expansion is numbered in the unit
     /// that holds it, as dotty freshens it there, each expansion its own.
-    pub(super) fn lazy_local_numbers(&mut self, s: SymId) -> (u32, u32) {
+    pub(super) fn lazy_local_numbers(&mut self, s: SymId) -> Option<(u32, u32)> {
         let file = self.cx.local_file(s).unwrap_or(self.cx.input.syms.sym(s).file);
-        let Some(numbers) = self.file_lazy_names(file).locals.get(&s).copied() else {
-            let name = self.cx.input.interner.get(self.cx.input.syms.sym(s).name);
-            self.unsupported(&format!("internal error: the local lazy val {} has no number in its unit", name));
-            return (0, 0);
-        };
-        numbers
+        self.file_lazy_names(file).locals.get(&s).copied()
     }
 
-    /// The walk (§8): per package clause the classes, traits and objects that stand at the top level in their
-    /// order, each class followed by its made companion, then the file's package object
-    /// (`Desugar.packageDef` 1948-1968); in a template the parents' arguments, then the statements in order
-    /// (MegaPhase.scala 371-377), a definition after the trees inside it, a method's default getters after it
-    /// (`addDefaultGetters`), an object's module val before its class, a class's made companion after it
-    /// (`Desugar.classDef` 1144); then the class's forwarders of its traits' lazy members, after the whole body
-    /// (`Mixin.transformTemplate` 274-299).
-    fn walk_lazy_names(&mut self, file: crate::source::FileId) -> LazyNames {
+    /// The classes of the file `file` that stand at the top level, by place, a made companion left out, and its
+    /// opaque types' companions; its local classes and the named local classes its inline expansions made noted in
+    /// `w` (`walk_lazy_names`, `walk_lifted_names`).
+    pub(super) fn unit_classes(&mut self, file: crate::source::FileId, w: &mut UnitWalk) -> (Vec<(u32, ClassId)>, Vec<ClassId>) {
         let cx = self.cx;
         let syms = cx.input.syms;
-        let mut w = NameWalk::default();
         let mut tops: Vec<(u32, ClassId)> = Vec::new();
         let opaque = cx.opaque_companions.get(&file.0).cloned().unwrap_or_default();
-        for (i, info) in syms.classes.iter().enumerate() {
-            let c = ClassId(i as u32);
-            if info.module_file() != file || cx.tclass_of[i] == u32::MAX {
-                continue;
-            }
+        for &c in cx.unit_classes(file) {
+            let info = syms.class(c);
             let made = info.made_at.is_some() || info.placed_at.is_some();
             match info.owner {
                 Owner::Package(_) if !opaque.contains(&c) && !made => tops.push((info.span.start, c)),
@@ -721,33 +781,75 @@ impl<'a> Gen<'a> {
         }
         tops.sort();
         w.locals.sort();
-        for (_, c) in tops {
-            self.walk_class_names(&mut w, c);
-        }
-        // The package object: the file's vals and defs in their order, its opaque types' companions.
+        (tops, opaque)
+    }
+
+    /// The package object of the file `file`: its vals, defs and opaque types' companions by place (kinds 0, 1, 2
+    /// with a symbol's, a function's and a class's id), and the vals' initialisers.
+    pub(super) fn unit_package_items(&mut self, file: crate::source::FileId, opaque: &[ClassId]) -> (Vec<(u32, u8, u32)>, crate::intern::FxMap<SymId, TExprId>) {
+        let cx = self.cx;
+        let syms = cx.input.syms;
         let mut items: Vec<(u32, u8, u32)> = Vec::new();
         let group = cx.file_group[file.0 as usize];
         if group != u32::MAX {
-            for &(s, e) in cx.layout.file_groups[group as usize].1.iter() {
+            for &(s, _) in cx.layout.file_groups[group as usize].1.iter() {
                 items.push((syms.sym(s).span.start, 0, s.0));
-                let _ = e;
             }
         }
         for &f in &cx.file_funs[file.0 as usize] {
             items.push((syms.sym(cx.input.prog.funs[f.idx()].sym).span.start, 1, f.0));
         }
-        for &k in &opaque {
+        for &k in opaque {
             items.push((syms.class(k).span.start, 2, k.0));
         }
         items.sort();
-        let vals: crate::intern::FxMap<SymId, TExprId> = if group == u32::MAX { Default::default() } else { cx.layout.file_groups[group as usize].1.iter().copied().collect() };
+        let vals = if group == u32::MAX { Default::default() } else { cx.layout.file_groups[group as usize].1.iter().copied().collect() };
+        (items, vals)
+    }
+
+    /// The unit's classes the walk did not meet (a quote's, an expansion's that nothing constructs), after the rest
+    /// by their binary names: every definition the unit writes has its numbers, the same on every run.
+    /// A class a dropped typing made, and whatever is nested in one however deep (`Symbols::in_dropped_local`:
+    /// an object of a dropped local class is owned by it and carries no mark of its own), comes last of all:
+    /// it has the binary name of the class the kept typing made at its place, which takes the numbers as
+    /// where nothing was typed and dropped.
+    pub(super) fn unit_rest(&mut self, file: crate::source::FileId, w: &UnitWalk, opaque: &[ClassId]) -> Vec<ClassId> {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let mut rest: Vec<(bool, Rc<str>, ClassId)> = Vec::new();
+        for &c in cx.unit_classes(file) {
+            if !w.walked.contains_key(&c) && !opaque.contains(&c) {
+                rest.push((syms.in_dropped_local(c), self.class_name(c), c));
+            }
+        }
+        rest.sort();
+        rest.into_iter().map(|(_, _, c)| c).collect()
+    }
+
+    /// The walk (§8): per package clause the classes, traits and objects that stand at the top level in their
+    /// order, each class followed by its made companion, then the file's package object
+    /// (`Desugar.packageDef` 1948-1968); in a template the parents' arguments, then the statements in order
+    /// (MegaPhase.scala 371-377), a definition after the trees inside it, a method's default getters after it
+    /// (`addDefaultGetters`), an object's module val before its class, a class's made companion after it
+    /// (`Desugar.classDef` 1144); then the class's forwarders of its traits' lazy members, after the whole body
+    /// (`Mixin.transformTemplate` 274-299).
+    fn walk_lazy_names(&mut self, file: crate::source::FileId) -> LazyNames {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let mut w = NameWalk::default();
+        let (tops, opaque) = self.unit_classes(file, &mut w.unit);
+        for (_, c) in tops {
+            self.walk_class_names(&mut w, c);
+        }
+        // The package object: the file's vals and defs in their order, its opaque types' companions.
+        let (items, vals) = self.unit_package_items(file, &opaque);
         for (_, kind, id) in items {
             match kind {
                 0 => {
                     let s = SymId(id);
                     if let Some(&e) = vals.get(&s) {
-                        w.scope = syms.sym(s).span.start;
-                        self.walk_expr_names(&mut w, e);
+                        w.unit.scope = syms.sym(s).span.start;
+                        self.walk_expr(&mut w, e);
                     }
                     let info = syms.sym(s);
                     let lazy = info.mods & mods::LAZY != 0 || (info.kind == SymKind::Given && !self.is_given_def(s));
@@ -756,32 +858,18 @@ impl<'a> Gen<'a> {
                         w.member(None, &name, cx.input.interner.get(info.name), self.is_thread_unsafe(s));
                     }
                 }
-                1 => self.walk_fun_names(&mut w, FunId(id)),
+                1 => self.walk_fun(&mut w, FunId(id), false),
                 _ => self.walk_class_names(&mut w, ClassId(id)),
             }
         }
-        // The unit's classes the walk did not meet (a quote's, an expansion's that nothing constructs), after the rest
-        // by their binary names: every definition the unit writes has its numbers, the same on every run.
-        // A class a dropped typing made, and whatever is nested in one however deep (`Symbols::in_dropped_local`:
-        // an object of a dropped local class is owned by it and carries no mark of its own), comes last of all:
-        // it has the binary name of the class the kept typing made at its place, which takes the numbers as
-        // where nothing was typed and dropped.
-        let mut rest: Vec<(bool, Rc<str>, ClassId)> = Vec::new();
-        for (i, info) in syms.classes.iter().enumerate() {
-            let c = ClassId(i as u32);
-            if info.module_file() == file && cx.tclass_of[i] != u32::MAX && !w.walked.contains_key(&c) && !opaque.contains(&c) {
-                rest.push((syms.in_dropped_local(c), self.class_name(c), c));
-            }
-        }
-        rest.sort();
-        for (_, _, c) in rest {
+        for c in self.unit_rest(file, &w.unit, &opaque) {
             self.walk_class_names(&mut w, c);
         }
         w.out
     }
 
     fn walk_class_names(&mut self, w: &mut NameWalk, c: ClassId) {
-        if w.walked.insert(c, ()).is_some() {
+        if w.unit.walked.insert(c, ()).is_some() {
             return;
         }
         let cx = self.cx;
@@ -795,13 +883,13 @@ impl<'a> Gen<'a> {
         let info = syms.class(c);
         let is_trait = info.kind == ClassKind::Trait;
         let holds = !is_trait;
-        let outer_scope = std::mem::replace(&mut w.scope, info.span.start);
+        let outer_scope = std::mem::replace(&mut w.unit.scope, info.span.start);
         // The superclass call: the temporaries of its named arguments in their written order, then the arguments
         // (dotty's `{ val b$1 = ..; val a$1 = ..; super(a$1, b$1) }`).
-        self.walk_stmts_names(w, tc.parent_prelude);
+        self.walk_stmts(w, tc.parent_prelude);
         if let Some(args) = tc.parent_args {
             for &a in prog.expr_list(args) {
-                self.walk_expr_names(w, a);
+                self.walk_expr(w, a);
             }
         }
         // The body's members by their place: fields and statements, methods, member classes.
@@ -820,18 +908,7 @@ impl<'a> Gen<'a> {
         for (i, &f) in tc.ctors.iter().enumerate() {
             items.push((syms.sym(prog.funs[f.idx()].sym).span.start, 3, i));
         }
-        let mut nested: Vec<ClassId> = info.nested.values().copied().collect();
-        // An object nested in an object reached statically is no field and no entry of `nested` (a class's): its
-        // module val and class stand at its place in the template all the same (MegaPhase meets its ValDef there).
-        let fields: Vec<SymId> = tc.init.iter().filter_map(|i| if let TInit::Field(s, _) = *i { Some(s) } else { None }).collect();
-        for s in cx.members_in_order(c) {
-            if let SymKind::Object(k) = syms.sym(s).kind {
-                if syms.sym(s).owner == Owner::Class(c) && !fields.contains(&s) && !nested.contains(&k) && cx.tclass_of.get(k.idx()).is_some_and(|&i| i != u32::MAX) {
-                    nested.push(k);
-                }
-            }
-        }
-        nested.sort();
+        let nested = self.nested_classes(tc);
         for (i, &k) in nested.iter().enumerate() {
             items.push((syms.class(k).span.start, 2, i));
         }
@@ -841,7 +918,7 @@ impl<'a> Gen<'a> {
             match kind {
                 0 => match tc.init[i] {
                     TInit::Field(s, e) => {
-                        self.walk_expr_names(w, e);
+                        self.walk_expr(w, e);
                         if fields_lazy.contains_key(&s) {
                             let name = self.field_name(s);
                             w.member(Some(c), &name, cx.input.interner.get(syms.sym(s).name), self.is_thread_unsafe(s));
@@ -850,17 +927,17 @@ impl<'a> Gen<'a> {
                             self.walk_class_names(w, k);
                         }
                     }
-                    TInit::Stmt(e) => self.walk_expr_names(w, e),
+                    TInit::Stmt(e) => self.walk_expr(w, e),
                     // A trait's parameters: the temporaries of its named arguments, then the arguments.
                     TInit::Parent(_, call) => {
-                        self.walk_stmts_names(w, call.prelude);
+                        self.walk_stmts(w, call.prelude);
                         for &a in prog.expr_list(call.args) {
-                            self.walk_expr_names(w, a);
+                            self.walk_expr(w, a);
                         }
                     }
                 },
-                1 => self.walk_fun_names(w, tc.methods[i]),
-                3 => self.walk_fun_names(w, tc.ctors[i]),
+                1 => self.walk_fun(w, tc.methods[i], false),
+                3 => self.walk_fun(w, tc.ctors[i], false),
                 _ => {
                     let k = nested[i];
                     self.walk_class_names(w, k);
@@ -875,7 +952,7 @@ impl<'a> Gen<'a> {
             }
         }
         for &d in tc.ctor_defaults.iter().flatten() {
-            self.walk_expr_names(w, d);
+            self.walk_expr(w, d);
         }
         // Its local classes the walk has not met yet, at their places.
         self.walk_local_classes_before(w, info.span.end);
@@ -884,96 +961,147 @@ impl<'a> Gen<'a> {
                 w.member(Some(c), &name, &raw, thread_unsafe);
             }
         }
-        w.scope = outer_scope;
+        w.unit.scope = outer_scope;
     }
 
-    fn walk_fun_names(&mut self, w: &mut NameWalk, f: FunId) {
+    /// The member classes of the class of `tc`: its nested classes, and the objects nested in an object reached
+    /// statically, which are no field and no entry of `nested` (a class's), whose module val and class stand at
+    /// their place in the template all the same (MegaPhase meets its ValDef there). In their order of ids.
+    pub(super) fn nested_classes(&self, tc: &TClass) -> Vec<ClassId> {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let c = tc.id;
+        let mut nested: Vec<ClassId> = syms.class(c).nested.values().copied().collect();
+        let fields: Vec<SymId> = tc.init.iter().filter_map(|i| if let TInit::Field(s, _) = *i { Some(s) } else { None }).collect();
+        for s in cx.members_in_order(c) {
+            if let SymKind::Object(k) = syms.sym(s).kind {
+                if syms.sym(s).owner == Owner::Class(c) && !fields.contains(&s) && !nested.contains(&k) && cx.tclass_of.get(k.idx()).is_some_and(|&i| i != u32::MAX) {
+                    nested.push(k);
+                }
+            }
+        }
+        nested.sort();
+        nested
+    }
+
+    /// The def `f`'s body, then its default getters (`addDefaultGetters`), a by-name parameter's the value it returns,
+    /// then its local classes the walk has not met; a local def's where `local`.
+    pub(super) fn walk_fun<V: UnitVisitor<'a>>(&mut self, v: &mut V, f: FunId, local: bool) {
         let prog = self.cx.input.prog;
         let fun = &prog.funs[f.idx()];
-        let span = self.cx.input.syms.sym(fun.sym).span;
-        let outer_scope = std::mem::replace(&mut w.scope, span.start);
-        if let Some(b) = fun.body {
-            self.walk_expr_names(w, b);
+        if local && !v.local_fun(self, f) {
+            return;
         }
-        for &d in fun.defaults.iter().flatten() {
-            self.walk_expr_names(w, d);
+        let span = self.cx.input.syms.sym(fun.sym).span;
+        let outer_scope = std::mem::replace(&mut v.unit().scope, span.start);
+        if let Some(b) = fun.body {
+            self.walk_expr(v, b);
+        }
+        if local {
+            v.local_fun_end();
+        }
+        for (i, d) in fun.own_defaults() {
+            v.default_getter(self, f, i, local);
+            // The getter of a by-name parameter's default returns the value: the typer's thunk is no lambda.
+            let d = match prog.expr(d) {
+                TExpr::Lambda(ps, body) if ps.len == 0 && self.local_param_by_name(fun.sym, i) => body,
+                _ => d,
+            };
+            self.walk_expr(v, d);
+            v.default_getter_end();
         }
         // Its local classes the walk has not met yet (one never constructed, after the last statement).
         let end = fun.body.and_then(|b| self.expr_span(b)).map_or(span.end, |sp| sp.end.max(span.end));
-        self.walk_local_classes_before(w, end);
-        w.scope = outer_scope;
+        self.walk_local_classes_before(v, end);
+        v.unit().scope = outer_scope;
     }
 
-    fn expr_span(&self, e: TExprId) -> Option<crate::source::Span> {
+    pub(super) fn expr_span(&self, e: TExprId) -> Option<crate::source::Span> {
         self.cx.input.prog.expr_spans.get(e.0).map(|(_, sp)| sp)
     }
 
     /// The local classes of the definition being walked declared before `at` and not walked yet, each walked at
     /// its declaration in their order, constructed or not (MegaPhase meets the local `TypeDef` there).
-    fn walk_local_classes_before(&mut self, w: &mut NameWalk, at: u32) {
-        let due: Vec<ClassId> = w.locals.iter().filter(|&&(p, k)| p >= w.scope && p < at && !w.walked.contains_key(&k)).map(|&(_, k)| k).collect();
+    pub(super) fn walk_local_classes_before<V: UnitVisitor<'a>>(&mut self, v: &mut V, at: u32) {
+        let syms = self.cx.input.syms;
+        let w = v.unit();
+        let due: Vec<ClassId> = w
+            .locals
+            .iter()
+            .filter(|&&(p, k)| p >= w.scope && p < at && !w.walked.contains_key(&k) && !(V::ANON_FIRST && syms.class(k).kind == ClassKind::Anon))
+            .map(|&(_, k)| k)
+            .collect();
         for k in due {
-            self.walk_class_names(w, k);
+            v.class(self, k);
         }
     }
 
     /// The statements `stmts` in their order, each after the local classes declared before it.
-    fn walk_stmts_names(&mut self, w: &mut NameWalk, stmts: ListRef) {
+    pub(super) fn walk_stmts<V: UnitVisitor<'a>>(&mut self, v: &mut V, stmts: ListRef) {
+        for s in self.cx.input.prog.stmts[stmts.range()].to_vec() {
+            self.walk_stmt(v, s);
+        }
+    }
+
+    pub(super) fn walk_stmt<V: UnitVisitor<'a>>(&mut self, v: &mut V, s: TStmt) {
         let cx = self.cx;
         let prog = cx.input.prog;
         let syms = cx.input.syms;
-        for s in prog.stmts[stmts.range()].to_vec() {
-            match s {
-                TStmt::Expr(x) if prog.is_removed(x) => {}
-                TStmt::Expr(x) => {
-                    if let Some(sp) = self.expr_span(x) {
-                        self.walk_local_classes_before(w, sp.start);
-                    }
-                    self.walk_expr_names(w, x);
+        match s {
+            TStmt::Expr(x) if prog.is_removed(x) => {}
+            TStmt::Expr(x) => {
+                if let Some(sp) = self.expr_span(x) {
+                    self.walk_local_classes_before(v, sp.start);
                 }
-                TStmt::Val(sym, init) => {
-                    self.walk_local_classes_before(w, syms.sym(sym).span.start);
-                    self.walk_expr_names(w, init);
-                    if self.is_lazy_local(sym) {
-                        w.local(sym, cx.input.interner.get(syms.sym(sym).name));
-                    }
+                self.walk_expr(v, x);
+            }
+            TStmt::Val(sym, init) => {
+                self.walk_local_classes_before(v, syms.sym(sym).span.start);
+                if v.val(self, Some(sym)) {
+                    self.walk_expr(v, init);
+                    v.val_end(self, Some(sym));
                 }
-                TStmt::Fun(f) => {
-                    self.walk_local_classes_before(w, syms.sym(prog.funs[f.idx()].sym).span.start);
-                    self.walk_fun_names(w, f);
+            }
+            TStmt::Fun(f) => {
+                self.walk_local_classes_before(v, syms.sym(prog.funs[f.idx()].sym).span.start);
+                self.walk_fun(v, f, true);
+            }
+            TStmt::Pat(p, init, _) => {
+                if let Some(sp) = self.expr_span(init) {
+                    self.walk_local_classes_before(v, sp.start);
                 }
-                TStmt::Pat(p, init, _) => {
-                    if let Some(sp) = self.expr_span(init) {
-                        self.walk_local_classes_before(w, sp.start);
-                    }
-                    self.walk_expr_names(w, init);
-                    self.walk_pat_names(w, p);
+                if v.val(self, None) {
+                    self.walk_expr(v, init);
+                    v.val_end(self, None);
                 }
+                self.walk_pat(v, p);
             }
         }
     }
 
     /// The expressions a pattern holds (`pat_exprs`), in its order: a case's pattern is met before its guard and
     /// its body, a pattern definition's after its right-hand side.
-    fn walk_pat_names(&mut self, w: &mut NameWalk, p: TPatId) {
+    fn walk_pat<V: UnitVisitor<'a>>(&mut self, v: &mut V, p: TPatId) {
+        v.pattern(self, p);
         let mut held = Vec::new();
         super::pat_exprs(self.cx.input.prog, p, &mut held);
         for e in held {
-            self.walk_expr_names(w, e);
+            self.walk_expr(v, e);
         }
     }
 
-    fn walk_expr_names(&mut self, w: &mut NameWalk, e: TExprId) {
+    pub(super) fn walk_expr<V: UnitVisitor<'a>>(&mut self, v: &mut V, e: TExprId) {
         let cx = self.cx;
         let prog = cx.input.prog;
         let syms = cx.input.syms;
+        v.expr(self, e);
         match prog.expr(e) {
             TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _)
-            | TExpr::Spread(r) | TExpr::JsSelect(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) => self.walk_expr_names(w, r),
+            | TExpr::Spread(r) | TExpr::JsSelect(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) => self.walk_expr(v, r),
             TExpr::CallStatic(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args)
             | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => {
                 for &a in prog.expr_list(args) {
-                    self.walk_expr_names(w, a);
+                    self.walk_expr(v, a);
                 }
             }
             // A `New` is its type tree alone: a named local class is met at its declaration
@@ -982,76 +1110,88 @@ impl<'a> Gen<'a> {
             // class, whose `TypeDef` the expansion's block holds where no span of the unit tells, before its first
             // construction.
             TExpr::New(c, args) => {
-                if w.expanded.contains_key(&c) {
-                    self.walk_class_names(w, c);
+                if v.unit().expanded.contains_key(&c) {
+                    v.class(self, c);
+                }
+                let anon = syms.class(c).owner == Owner::Local && syms.class(c).kind == ClassKind::Anon;
+                if anon && v.anonymous(self, c, args) {
+                    return;
+                }
+                if anon && V::ANON_FIRST {
+                    v.class(self, c);
                 }
                 for &a in prog.expr_list(args) {
-                    self.walk_expr_names(w, a);
+                    self.walk_expr(v, a);
                 }
-                if syms.class(c).owner == Owner::Local && syms.class(c).kind == ClassKind::Anon {
-                    self.walk_class_names(w, c);
+                if anon && !V::ANON_FIRST {
+                    v.class(self, c);
                 }
             }
             TExpr::NewVia(ctor, args) => {
                 if let Owner::Class(c) = syms.sym(ctor).owner {
-                    if w.expanded.contains_key(&c) {
-                        self.walk_class_names(w, c);
+                    if v.unit().expanded.contains_key(&c) {
+                        v.class(self, c);
                     }
                 }
                 for &a in prog.expr_list(args) {
-                    self.walk_expr_names(w, a);
+                    self.walk_expr(v, a);
                 }
             }
             TExpr::CallMethod(r, _, args) | TExpr::CallClosure(r, args) => {
-                self.walk_expr_names(w, r);
+                self.walk_expr(v, r);
                 for &a in prog.expr_list(args) {
-                    self.walk_expr_names(w, a);
+                    self.walk_expr(v, a);
                 }
             }
-            TExpr::Lambda(_, body) => self.walk_expr_names(w, body),
+            TExpr::Lambda(params, body) => {
+                if v.lambda(self, params, body) {
+                    self.walk_expr(v, body);
+                    v.lambda_end();
+                }
+            }
             TExpr::If(c, t, els) => {
-                self.walk_expr_names(w, c);
-                self.walk_expr_names(w, t);
+                self.walk_expr(v, c);
+                self.walk_expr(v, t);
                 if let Some(x) = els {
-                    self.walk_expr_names(w, x);
+                    self.walk_expr(v, x);
                 }
             }
             TExpr::While(a, b) | TExpr::Assign(a, b) | TExpr::Prim(_, a, b) => {
-                self.walk_expr_names(w, a);
-                self.walk_expr_names(w, b);
+                self.walk_expr(v, a);
+                self.walk_expr(v, b);
             }
             TExpr::Block(stmts, res) => {
-                self.walk_stmts_names(w, stmts);
+                self.walk_stmts(v, stmts);
                 if let Some(sp) = self.expr_span(res) {
-                    self.walk_local_classes_before(w, sp.start);
+                    self.walk_local_classes_before(v, sp.start);
                 }
-                self.walk_expr_names(w, res);
+                self.walk_expr(v, res);
                 if let Some(sp) = self.expr_span(e) {
-                    self.walk_local_classes_before(w, sp.end);
+                    self.walk_local_classes_before(v, sp.end);
                 }
             }
             TExpr::Match(scrut, cases) => {
-                self.walk_expr_names(w, scrut);
+                self.walk_expr(v, scrut);
                 for c in prog.cases[cases.range()].to_vec() {
-                    self.walk_pat_names(w, c.pat);
+                    self.walk_pat(v, c.pat);
                     if let Some(g) = c.guard {
-                        self.walk_expr_names(w, g);
+                        self.walk_expr(v, g);
                     }
-                    self.walk_expr_names(w, c.body);
+                    self.walk_expr(v, c.body);
                 }
             }
             TExpr::Try(i) => {
                 let t = prog.tries[i as usize].clone();
-                self.walk_expr_names(w, t.body);
+                self.walk_expr(v, t.body);
                 for c in prog.cases[t.cases.range()].to_vec() {
-                    self.walk_pat_names(w, c.pat);
+                    self.walk_pat(v, c.pat);
                     if let Some(g) = c.guard {
-                        self.walk_expr_names(w, g);
+                        self.walk_expr(v, g);
                     }
-                    self.walk_expr_names(w, c.body);
+                    self.walk_expr(v, c.body);
                 }
                 if let Some(f) = t.finalizer {
-                    self.walk_expr_names(w, f);
+                    self.walk_expr(v, f);
                 }
             }
             _ => {}

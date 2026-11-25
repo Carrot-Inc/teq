@@ -143,6 +143,7 @@ lazy_thread_unsafe_reentrant_renamed	< renamed = 2 after 2 run(s)
 lazy_thread_unsafe_reentrant_toplevel	< x = 2 after 2 run(s)
 lazy_thread_unsafe_reentrant_trait	< in a class: x = 2 after 2 run(s)
 library_quote_pattern_enclosing_given	< false
+local_right_assoc_lazy_operand	< x=1 y=5 c=7 Z,L
 local_trait_default_clause	< 21
 local_trait_default_escape_prior	< 22
 local_trait_default_inline_capture	< 12

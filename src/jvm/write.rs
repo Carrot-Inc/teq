@@ -1,10 +1,10 @@
 //! Bytecode from the lowered IR (`crate::lir`): each node's code in the order the generator
 //! wrote it from the typed IR, so that the class files are the same byte for byte.
 
-use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LabelId, LiftedFrom, LirId, List, Relation, TempId, Unlowered};
+use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LabelId, LiftedFrom, LirId, List, Relation, TempId};
 use super::classfile::{op, Label, VT};
 use super::classes::Declared;
-use super::gen::{Gen, Lifted, Local, Pending, PendingBody};
+use super::gen::{Gen, Local};
 use super::names::*;
 use std::rc::Rc;
 
@@ -163,10 +163,6 @@ impl<'a> Gen<'a> {
                 let slot = self.m.locals[&sym].slot;
                 let held = self.lir.ty(value).clone();
                 self.store(slot, &held);
-            }
-            Kind::LocalFun(sym) => {
-                self.m.unlowered.push(Unlowered::LocalDefDeclaration);
-                self.lifted_fun(sym);
             }
             Kind::Binary { op, left, right } => {
                 self.write(left);
@@ -435,26 +431,28 @@ impl<'a> Gen<'a> {
                 self.write(value);
                 self.write_adaptation(how, &from, &ty);
             }
-            // The lifted method takes its number, and its body its place among the class's
-            // methods, where the closure is written.
+            // The lifted method is named by its unit and its body takes its place among the class's
+            // methods where the class's code first writes the closure (`Gen::lambda_method`).
             Kind::Closure { captures, method, lifted, body } => {
-                let name = self.fresh_name("$anonfun");
-                let lifted = Rc::new(Lifted::new(name, lifted, body.captures.clone(), body.home, body.module.clone()));
                 self.write_arguments(captures, None);
-                let (params, code) = body.code.clone().expect("a closure's body");
-                self.defer(Pending { lifted: lifted.clone(), body: PendingBody::Lambda(params, code) });
+                let lifted = self.lambda_method(&lifted, &body);
                 self.lambda_call_site(&lifted, &ty, &method);
             }
             Kind::LiftedCall { def, from, lifted, captures, args, order } => {
-                let named = match from {
-                    LiftedFrom::Def => self.lifted_fun(def),
-                    LiftedFrom::LazyAccessor | LiftedFrom::LazyInitialiser => self.lazy_method(def, from == LiftedFrom::LazyInitialiser),
+                let (named, pending) = match from {
+                    LiftedFrom::Def => (self.lifted_fun(def), None),
+                    LiftedFrom::Default(i) => self.local_default_method(def, i as usize),
+                    LiftedFrom::LazyAccessor | LiftedFrom::LazyInitialiser => (self.lazy_method(def, from == LiftedFrom::LazyInitialiser), None),
                 };
                 debug_assert!(Rc::ptr_eq(&named.shape, &lifted), "the method named is the one the call was lowered against");
                 self.write_arguments(captures, None);
                 self.write_arguments(args, order.as_deref());
+                // A default getter's body is queued once its arguments are written, their lambdas first in the class.
+                if let Some(p) = pending {
+                    self.defer(p);
+                }
                 let (owner, interface) = match from {
-                    LiftedFrom::Def => (self.this_name.clone(), self.is_interface),
+                    LiftedFrom::Def | LiftedFrom::Default(_) => (self.this_name.clone(), self.is_interface),
                     LiftedFrom::LazyAccessor | LiftedFrom::LazyInitialiser => self.lazy_owner(def),
                 };
                 self.invoke_desc(Invoke::Static, &owner, interface, &named.name, &named.desc, named.arity(), &named.ret);
@@ -723,7 +721,8 @@ impl<'a> Gen<'a> {
     /// dropped, dead as the jump leaves them, and stand under the dead code again.
     fn write_self_tail_call(&mut self, receiver: Option<LirId>, args: List) {
         let tail = self.m.tail.as_ref().expect("a self tail call is lowered where the def loops");
-        let (params, head) = (tail.params.clone(), tail.head);
+        let params = tail.params.clone();
+        let head = self.m.tail_head.expect("the start of a def that loops is bound before its code");
         let dropped = self.drop_stack();
         // The receiver, then the arguments, each into a temporary in the source's order, as
         // dotty's TailRec assigns them (TailRec.scala 350-372); then `this` and the parameters.
