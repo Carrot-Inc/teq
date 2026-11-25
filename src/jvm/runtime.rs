@@ -14,11 +14,18 @@ use std::rc::Rc;
 
 pub const LAUNCHER: &str = "TeqMain";
 
+/// The definitions of `std/jvm.scala` that generated code may call in any program, which every
+/// build enters (`frontend::STD_CORE`): one the build lacks is reported once, where `Helpers` is
+/// made (`emit`), and no use asks for it again.
+pub const REQUIRED: [&str; 1] = ["equal"];
+
 /// The definitions of package `scala.runtime` that generated code calls.
 #[derive(Default)]
 pub struct Helpers {
     pub defs: FxMap<String, SymId>,
     pub classes: FxMap<String, ClassId>,
+    /// The names of `REQUIRED` the build lacks.
+    pub missing: Vec<&'static str>,
 }
 
 impl Helpers {
@@ -29,7 +36,10 @@ impl Helpers {
         let sub = |p: PkgId, name: &str| {
             syms.members(p).find(|(n, e)| e.pkg.is_some() && interner.get(*n) == name).and_then(|(_, e)| e.pkg)
         };
-        let Some(runtime) = sub(ROOT_PKG, "scala").and_then(|s| sub(s, "runtime")) else { return out };
+        let Some(runtime) = sub(ROOT_PKG, "scala").and_then(|s| sub(s, "runtime")) else {
+            out.missing = REQUIRED.to_vec();
+            return out;
+        };
         for (name, entry) in syms.members(runtime) {
             if let Some(s) = entry.term {
                 out.defs.insert(interner.get(name).to_string(), s);
@@ -38,7 +48,13 @@ impl Helpers {
                 out.classes.insert(interner.get(name).to_string(), c);
             }
         }
+        out.missing = REQUIRED.into_iter().filter(|n| !out.defs.contains_key(*n)).collect();
         out
+    }
+
+    /// The definition `name` of `REQUIRED`: the emission runs only where the build has every one.
+    pub fn required(&self, name: &'static str) -> SymId {
+        self.defs[name]
     }
 }
 

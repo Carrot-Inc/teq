@@ -263,34 +263,13 @@ pub enum Unlowered {
     /// captures, or a local trait's member call, after an earlier part of the method was left to
     /// the old generator: what it captures is asked in the order the code is written.
     AfterEscape,
-    /// `field = v` of a Java instance field with no receiver written.
-    AssignJavaFieldNoReceiver,
-    /// An assignment to any other target (reported).
-    AssignOtherTarget,
-    /// `a == b` in a build whose runtime has no universal equality helper.
-    EqualityWithoutHelper,
-    /// `this` or `super` where the method has no instance (reported).
-    NoInstance,
-    /// An `inline val` with no constant type (reported).
-    InlineValNoConstant,
-    /// `a.O`: an object selected on a value of its owner, the value evaluated first.
-    ObjectThroughOwner,
-    /// A string interpolator of the library (`s"..."`, `f"..."`) where the build's runtime has
-    /// no definition of it.
-    InterpolatorWithoutRuntime,
     /// A right-associative member of a local trait that takes what the trait captures.
     LocalTraitMemberRightAssociative,
     /// A member of a local trait that takes what the trait captures, called on `super`, or with
     /// a value for a capture that is no read of a local.
     LocalTraitMemberUnplain,
-    /// A method's default whose getter is called on a receiver: `obj.f()`, `super.f()`.
-    DefaultOnReceiver,
     /// A local def's default argument.
     DefaultOfLocalDef,
-    /// A constructor's default whose getter takes what only the method being written holds.
-    DefaultCtorHeldHere,
-    /// Varargs in a build whose library has no `ArraySeq` (reported).
-    VarargsWithoutArraySeq,
     /// A `@jvm` template written from its text, or the typer's own text that is no one call.
     TemplateText,
     /// A local `def`'s declaration, where its lifted method is named and queued (`Kind::LocalFun`).
@@ -576,6 +555,29 @@ pub enum Refusal {
     DefaultOfConstructorOfNoClass,
     /// A new instance through a secondary constructor whose owner is no class.
     SecondaryConstructorOfNoClass,
+    /// A default of a method of a library's value class whose companion's class file has no
+    /// getter for it (`m$default$N$extension`), which scalac writes for every one.
+    ValueClassDefaultWithoutGetter,
+    /// A constructor's default whose getter takes a local the method being written does not hold:
+    /// a local class's local companion, a capture of the class (a secondary constructor's default
+    /// created away from the defining body; scalac passes the companion's holder along, which
+    /// the typed tree does not name yet).
+    LocalNotInScope(Rc<str>),
+    /// A constructor's default of a local class that captures a value no local holds.
+    DefaultCaptureOfThisKind,
+    /// A constructor's default of an inner class whose enclosing instance the method being
+    /// written does not hold.
+    InstanceNotInScope(Rc<str>),
+    /// Varargs in a build whose library has no `ArraySeq` teq reads (a Scala 2 scala-library alone
+    /// on the class path).
+    VarargsWithoutArraySeq,
+    /// An assignment to a target that is no local, field or member.
+    AssignmentTarget,
+    /// A Java instance's field assigned with no receiver, which the typer does not make: an
+    /// internal error.
+    JavaFieldWithoutReceiver(Rc<str>),
+    /// A read of an `inline val` with no constant type, which `InlineVals` refuses first.
+    InlineValWithoutConstant(Rc<str>),
 }
 
 impl Refusal {
@@ -593,6 +595,14 @@ impl Refusal {
             Refusal::ByNameDefaultWithoutSignature => "the default of a by-name parameter of a class file without its Scala signature".to_string(),
             Refusal::DefaultOfConstructorOfNoClass => "the default of a constructor that is not in a class".to_string(),
             Refusal::SecondaryConstructorOfNoClass => "a secondary constructor that is not in a class".to_string(),
+            Refusal::ValueClassDefaultWithoutGetter => "a default argument of a value class's extension method without its getter".to_string(),
+            Refusal::LocalNotInScope(name) => format!("the local {} is not in scope of the generated method", name),
+            Refusal::DefaultCaptureOfThisKind => "a default argument of a local class that captures this kind of value".to_string(),
+            Refusal::InstanceNotInScope(name) => format!("the instance of {} where the generated method has none", name),
+            Refusal::VarargsWithoutArraySeq => "varargs without ArraySeq".to_string(),
+            Refusal::AssignmentTarget => "assignment to this kind of target".to_string(),
+            Refusal::JavaFieldWithoutReceiver(name) => format!("internal error: the Java field {} assigned with no receiver", name),
+            Refusal::InlineValWithoutConstant(name) => format!("internal error: the inline val {} has no constant type (InlineVals refuses it)", name),
         }
     }
 }

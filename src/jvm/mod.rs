@@ -1014,6 +1014,10 @@ const SPARSE_UNITS: usize = 64;
 pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Option<&mut kept::Kept>) -> Output {
     let mut lap = crate::measure::Lap::begin(crate::measure::Pass::Emit);
     let mut cx = Cx::new(input, &mut lap);
+    if !cx.helpers.missing.is_empty() {
+        let errors = cx.helpers.missing.iter().map(|name| format!("the runtime helper {} is missing", name)).collect();
+        return Output { classes: Vec::new(), main_class: None, errors, refused: Vec::new(), main_classes: Vec::new(), inits: Vec::new(), kept: kept::Use::default(), names: Vec::new(), twice: Vec::new() };
+    }
     cx.read_classpath(classpath);
     lap.done("class path read", cx.class_files.len());
     let held_by_classpath = |name: &str| classpath.class_named(name).is_some();

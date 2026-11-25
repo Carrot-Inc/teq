@@ -1593,7 +1593,7 @@ impl<'a> Gen<'a> {
     /// an instance, else as a read with no receiver.
     fn lower_enum_value_read(&mut self, v: SymId, instance: bool) -> LirId {
         if !instance {
-            return self.lower_static(v).expect("an enum's value, which every route lowers");
+            return self.lower_static(v);
         }
         let t = self.sym_type(v);
         let name = self.field_name(v);

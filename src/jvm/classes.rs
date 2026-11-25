@@ -708,13 +708,6 @@ impl<'a> Gen<'a> {
         self.lower_adapt(value, &pushed, ty)
     }
 
-    /// The value of the constant type `l` written (`lower_literal`), and its type.
-    pub(super) fn literal_value(&mut self, l: LitId) -> ErasedType {
-        let value = self.lowering(|g| g.lower_literal(l));
-        self.write(value);
-        self.lir.ty(value).clone()
-    }
-
     /// `BCodeBodyBuilder.genConstant` (570-617) of the constant type `l`: its value, of its JVM
     /// type, every tag the types hold (a `null` and `()` are no constant types here).
     pub(super) fn lower_literal(&mut self, l: LitId) -> LirId {

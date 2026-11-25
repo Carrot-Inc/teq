@@ -78,8 +78,7 @@ pub enum FieldRoute {
     Accessor,
 }
 
-/// The way a read of `s`, a member with no receiver written, is generated: one decision
-/// (`Gen::static_route`), read by the lowering and by `Gen::load_static`.
+/// The way a read of `s`, a member with no receiver written, is lowered (`Gen::static_route`).
 pub enum StaticRoute {
     /// A given object: its instance at the given's declared type.
     GivenObject,
@@ -263,15 +262,18 @@ pub(super) enum DefaultRoute {
     /// class the call names where that is the receiver's (`Gen::qualifier_site`), with whether it
     /// is an interface, and the type the default is left as.
     Method { receiver: TExprId, receiver_type: ErasedType, getter: MethodRef, at: Option<(Rc<str>, bool)>, args: Vec<GetterArgument>, want: ErasedType },
+    /// The getter of a default of a value class's method, called as `Gen::lower_extension_call`
+    /// calls the method (dotty's `ExtensionMethods.extensionMethod`, `VCInlineMethods`): the
+    /// companion's `m$default$N$extension` over the receiver's underlying value, at the type it
+    /// is read as, and the arguments before the default, and the type the default is left as.
+    Extension { receiver: TExprId, underlying: ErasedType, getter: MethodRef, args: Vec<GetterArgument>, want: ErasedType },
     /// The route where an operand of the getter is no path (`Gen::default_operands_are_paths`): a
     /// method's receiver, then the arguments before the default, each at its type, are evaluated in
     /// order into temporaries before the getter is called over them, so that one evaluated for its
     /// effect is evaluated once and in its place (a constructor's receiver is evaluated where the
     /// route has it, after the arguments).
     Held(Vec<(TExprId, ErasedType)>, Box<DefaultRoute>),
-    /// Not lowered yet, and why: the getter called on a value class's receiver
-    /// (`Gen::method_default`); a local def's getter is lifted (`Gen::local_default`); a getter
-    /// takes what the method being written alone holds (`Gen::ctor_default_lowers`).
+    /// Not lowered yet, and why: a local def's getter is lifted (`Gen::local_default`).
     Unlowered(Unlowered),
     /// A default refused where it stands (`Kind::Refused`).
     Refused(crate::lir::Refusal),
@@ -286,9 +288,9 @@ pub enum CallRoute {
     Js,
     /// A value class's method, called as scalac calls it (`Gen::lower_extension_call`).
     Extension(ClassId, ExtensionRoute),
-    /// An interpolator of scala-library that has no bytecode: the runtime's helper, and the
-    /// runtime's definition of its name where the build holds one.
-    Interpolator(SymId, Option<SymId>),
+    /// An interpolator of scala-library that has no bytecode: the runtime's helper that stands for
+    /// it (`jvm::interpolators`).
+    Interpolator(SymId),
     /// An object selected through its owner: its instance, not a call.
     Object(ClassId),
     /// A static method of a Java class.
@@ -3812,10 +3814,6 @@ impl<'a> Gen<'a> {
         t
     }
 
-    pub fn statement(&mut self, e: TExprId) {
-        self.expr(e, &ErasedType::V);
-    }
-
     /// Emits the code of one node and returns what it leaves on the stack.
     fn node(&mut self, e: TExprId) -> ErasedType {
         let prog = self.cx.input.prog;
@@ -3826,9 +3824,8 @@ impl<'a> Gen<'a> {
             }
             TExpr::Local(s) if !self.is_lazy_local(s) => unreachable!("lowered (`Gen::lower_local`)"),
             TExpr::Local(s) => self.load_local(s),
-            TExpr::This | TExpr::Super(_) if self.this_value().is_some() => unreachable!("`this` is lowered (`Gen::lower_node`)"),
-            TExpr::This | TExpr::Super(_) => self.load_this(),
-            TExpr::Static(s) => self.load_static(s),
+            TExpr::This | TExpr::Super(_) => unreachable!("lowered (`Gen::lower_instance`)"),
+            TExpr::Static(_) => unreachable!("lowered (`Gen::lower_static`)"),
             TExpr::Field(r, s) => self.field_read(r, s),
             TExpr::CallStatic(s, args) => self.call_static(s, args),
             TExpr::CallMethod(r, s, args) => self.call_method(r, s, args),
@@ -3842,11 +3839,7 @@ impl<'a> Gen<'a> {
                 self.write(closure);
                 self.lir.ty(closure).clone()
             }
-            TExpr::Assign(target, value) => {
-                self.assign(target, value);
-                ErasedType::V
-            }
-            TExpr::Prim(op @ (PrimOp::Eq | PrimOp::Ne), a, b) if !self.cx.helpers.defs.contains_key("equal") => self.equal_without_helper(op, a, b),
+            TExpr::Assign(..) => unreachable!("lowered (`Gen::lower_assign`)"),
             TExpr::Prim(..) | TExpr::Unary(..) | TExpr::While(..) | TExpr::TypeTest(..) => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::StrConcat(items) => self.str_concat(items),
             TExpr::Js(template, args) => self.intrinsic(e, template, args),
@@ -3856,13 +3849,7 @@ impl<'a> Gen<'a> {
                 self.expr(e, &t);
                 t
             }
-            TExpr::SeqLit(_) => match self.cx.input.array_seq {
-                Some(_) => unreachable!("lowered (`Gen::lower_seq_literal`)"),
-                None => {
-                    self.unsupported("varargs without ArraySeq");
-                    ErasedType::V
-                }
-            },
+            TExpr::SeqLit(_) => unreachable!("lowered or refused (`Gen::lower_seq_literal`)"),
             TExpr::ArrayLit(_) | TExpr::Index(..) => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::Spread(_) => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::Return(_) => unreachable!("written where the type wanted is known (`Gen::return_`)"),
@@ -4395,23 +4382,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn store_local(&mut self, s: SymId, value: TExprId) {
-        match self.held_in(s) {
-            Some(HeldIn::Local(_)) => unreachable!("lowered (`Gen::lower_assign`)"),
-            Some(HeldIn::Field(..)) if self.is_cell(s) => unreachable!("lowered (`Gen::lower_assign`)"),
-            _ if self.is_cell(s) => {
-                // A capture in code with no instance: the report of its load.
-                let declared = self.sym_type(s);
-                self.load_capture(s);
-                let object = ErasedType::object();
-                self.expr(value, &declared);
-                self.adapt(&declared, &object);
-                self.putfield(OBJECT_REF, "elem", &object);
-            }
-            _ => self.unsupported("assignment to a local that is not in scope"),
-        }
-    }
-
     /// Declares a local with the value on the stack (of the local's declared type).
     pub fn declare_local(&mut self, s: SymId, ty: ErasedType, cell: bool) {
         if cell {
@@ -4526,13 +4496,6 @@ impl<'a> Gen<'a> {
         class
     }
 
-    pub fn load_module(&mut self, c: ClassId) -> ErasedType {
-        match self.module_name(c) {
-            Some(name) => self.get_module(&name),
-            None => ErasedType::V,
-        }
-    }
-
     /// The class of the object `c`'s instance; None for an object without a body that only its
     /// exports are reached through, which is not emitted, and for a Java class's statics, which
     /// have no object.
@@ -4584,28 +4547,6 @@ impl<'a> Gen<'a> {
         StaticRoute::Accessor
     }
 
-    fn load_static(&mut self, s: SymId) -> ErasedType {
-        let cx = self.cx;
-        let info = cx.input.syms.sym(s);
-        match self.static_route(s) {
-            StaticRoute::InlineVal => match self.inline_val_constant(s).flatten() {
-                Some(l) => self.literal_value(l),
-                None => {
-                    let name = cx.input.interner.get(info.name);
-                    self.unsupported(&format!("internal error: the inline val {} has no constant type (InlineVals refuses it)", name));
-                    self.sym_type(s)
-                }
-            },
-            StaticRoute::GivenObject | StaticRoute::JavaField | StaticRoute::EnumField(..) | StaticRoute::EnumValue(_) | StaticRoute::Field | StaticRoute::Accessor => {
-                unreachable!("lowered (`Gen::lower_static`)")
-            }
-        }
-    }
-
-    fn receiver(&mut self, r: TExprId, s: SymId) {
-        self.site_receiver(r, s, &None);
-    }
-
     /// The receiver of a reference to `s` evaluated where the reference points.
     fn site_receiver(&mut self, r: TExprId, s: SymId, site: &Option<Site>) {
         let t = self.receiver_type(s, site);
@@ -4632,7 +4573,7 @@ impl<'a> Gen<'a> {
     /// `Typer.typedBlock` types it, the recorded type's for a conditional, a cast and the rest) where that derives from the owner and the JVM lets this class name it
     /// (`isJvmAccessible`: a Java class that is not public, from its own package alone); else the
     /// cast's target, the owner (`None`: the declaring class, the receiver cast to it as
-    /// `receiver` casts it) or, where the owner is not accessible, the qualifier's type before
+    /// `site_receiver` casts it) or, where the owner is not accessible, the qualifier's type before
     /// erasure (`originalQual`, scala3#8661). Where that is not accessible either, or is the
     /// erased type itself, the reference cannot be written: refused as dotty refuses it
     /// (Erasure.scala 746-758), `member` naming what is referenced. An array, a primitive or a
@@ -4858,11 +4799,7 @@ impl<'a> Gen<'a> {
     fn field_read(&mut self, r: TExprId, s: SymId) -> ErasedType {
         match self.field_route(r, s) {
             FieldRoute::Js => unreachable!("refused by the lowering (`Gen::lower_refused`)"),
-            FieldRoute::Object(c) => {
-                self.statement(r);
-                self.load_module(c)
-            }
-            FieldRoute::Java | FieldRoute::GivenObject { .. } | FieldRoute::Underlying(_) | FieldRoute::Early | FieldRoute::Own | FieldRoute::PrivateParam(_) | FieldRoute::Accessor => {
+            FieldRoute::Java | FieldRoute::Object(_) | FieldRoute::GivenObject { .. } | FieldRoute::Underlying(_) | FieldRoute::Early | FieldRoute::Own | FieldRoute::PrivateParam(_) | FieldRoute::Accessor => {
                 unreachable!("lowered (`Gen::lower_field_read`)")
             }
         }
@@ -4914,31 +4851,11 @@ impl<'a> Gen<'a> {
         Some(c)
     }
 
-    fn assign(&mut self, target: TExprId, value: TExprId) {
-        let cx = self.cx;
-        if let TExpr::Static(s) = cx.input.prog.expr(target) {
-            if let Some((cf, JMember::Field(i))) = cx.input.java_member(s) {
-                return self.java_field_write(&cf.name, &cf.fields[i as usize], value);
-            }
-        }
-        match cx.input.prog.expr(target) {
-            TExpr::Local(s) => self.store_local(s, value),
-            TExpr::Field(..) | TExpr::Static(_) => unreachable!("lowered (`Gen::lower_assign`)"),
-            _ => self.unsupported("assignment to this kind of target"),
-        }
-    }
-
     /// The setter of the member `m` refers to: `m_$eq`, which takes a value of the member's type.
     pub(super) fn setter_ref(&self, m: &MethodRef) -> MethodRef {
         let params = vec![m.ret.clone()];
         let desc = method_desc(&params, &ErasedType::V);
         MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name: format!("{}_$eq", m.name), params, ret: ErasedType::V, desc, kind: m.kind }
-    }
-
-    fn java_field_write(&mut self, owner: &str, f: &crate::classfile::Field, value: TExprId) {
-        let t = parse_type(&f.descriptor).0;
-        self.expr(value, &t);
-        self.putfield(owner, &f.name, &t);
     }
 
     // ---- calls ----
@@ -4967,7 +4884,7 @@ impl<'a> Gen<'a> {
     /// the default's; a jar class's as its class files declare it; else the class's static one.
     fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, recv: Option<TExprId>, i: usize, temps: &[Prior], types: &[ErasedType]) {
         let route = self.ctor_default_route(c, via, recv.is_some(), i, temps.len(), types);
-        if temps.is_empty() && self.ctor_default_lowers(c, &route, recv).is_ok() {
+        if temps.is_empty() && self.ctor_default_refusal(c, &route, recv).is_none() {
             let node = self.lowering(|g| g.lower_ctor_default(c, route, recv, &[], &types[i]));
             self.write(node);
             return;
@@ -5159,17 +5076,35 @@ impl<'a> Gen<'a> {
         Some(MethodRef { owner, owner_is_interface: false, name: name.to_string(), params, ret, desc, kind })
     }
 
-    /// Whether the lowering has a node for everything the getter of a constructor's default is
-    /// called on and takes, where no argument precedes the default: not for a lazy local or
-    /// one the scope does not hold.
-    pub(super) fn ctor_default_lowers(&mut self, c: ClassId, route: &CtorDefault, recv: Option<TExprId>) -> Result<(), Unlowered> {
-        let lowers = match *route {
-            CtorDefault::InPlace(_) | CtorDefault::Companion(_) | CtorDefault::Jar(_) | CtorDefault::Static(_) => true,
-            CtorDefault::LocalCompanion(v, _) => recv.is_some() || self.held_in(v).is_some(),
-            CtorDefault::InnerCompanion(..) => recv.is_some() || self.class_captured(c).first().is_some_and(|&s| self.held_in(s).is_some()),
-            CtorDefault::Captured(..) => self.class_captures_after(c, recv.is_some() as usize).into_iter().all(|s| self.is_capturable(s) && self.held_in(s).is_some()),
-        };
-        if lowers { Ok(()) } else { Err(Unlowered::DefaultCtorHeldHere) }
+    /// Why the getter of a constructor's default, where no argument precedes it, takes what the
+    /// method being written does not hold, as the old generator's loads of it report it
+    /// (`Gen::load_capture`, `Gen::load_class_captures_after`): a local companion or a capture
+    /// out of scope, a capture of a kind no local holds, an inner class's enclosing instance; None
+    /// where the lowering has a node for all of it.
+    pub(super) fn ctor_default_refusal(&mut self, c: ClassId, route: &CtorDefault, recv: Option<TExprId>) -> Option<crate::lir::Refusal> {
+        let name = |g: &Self, s: SymId| -> Rc<str> { Rc::from(g.cx.input.interner.get(g.cx.input.syms.sym(s).name)) };
+        match *route {
+            CtorDefault::InPlace(_) | CtorDefault::Companion(_) | CtorDefault::Jar(_) | CtorDefault::Static(_) => None,
+            CtorDefault::LocalCompanion(v, _) => (recv.is_none() && self.held_in(v).is_none()).then(|| crate::lir::Refusal::LocalNotInScope(name(self, v))),
+            CtorDefault::InnerCompanion(..) if recv.is_some() => None,
+            CtorDefault::InnerCompanion(..) => match self.class_captured(c).first().copied() {
+                Some(s) => self.held_in(s).is_none().then(|| crate::lir::Refusal::LocalNotInScope(name(self, s))),
+                None => {
+                    let outer = match self.cx.input.syms.class(c).owner {
+                        Owner::Class(o) => o,
+                        _ => c,
+                    };
+                    Some(crate::lir::Refusal::InstanceNotInScope(Rc::from(self.cx.input.interner.get(self.cx.input.syms.class(outer).name))))
+                }
+            },
+            CtorDefault::Captured(..) => self.class_captures_after(c, recv.is_some() as usize).into_iter().find_map(|s| {
+                if !self.is_capturable(s) {
+                    Some(crate::lir::Refusal::DefaultCaptureOfThisKind)
+                } else {
+                    self.held_in(s).is_none().then(|| crate::lir::Refusal::LocalNotInScope(name(self, s)))
+                }
+            }),
+        }
     }
 
     pub(super) fn static_call_route(&mut self, s: SymId, args: ListRef) -> StaticCallRoute {
@@ -5209,10 +5144,10 @@ impl<'a> Gen<'a> {
 
     /// A default getter's application (`TExpr::Default`), as scalac's caller makes it: the
     /// receiver and the arguments of the clauses before the parameter's evaluated into locals in
-    /// that order, then the getter the call's method has called: on the receiver or the file's
-    /// object (`m$default$N`), a local def's lifted getter, a constructor's (`ctor_default`), a
-    /// value class's method's `m$default$N$extension`. What it leaves is the parameter's type, a
-    /// by-name parameter's value, which the typer's thunk around it passes.
+    /// that order, then the getter the call's method has called: a local def's lifted getter, the
+    /// one default the lowering leaves to the old generator (every other is lowered or refused
+    /// where it is written). What it leaves is the parameter's type, a by-name parameter's value,
+    /// which the typer's thunk around it passes.
     fn default_arg(&mut self, of: DefaultOf, at: u32, args: ListRef) -> ErasedType {
         let cx = self.cx;
         let items = cx.input.prog.expr_list(args).to_vec();
@@ -5222,20 +5157,8 @@ impl<'a> Gen<'a> {
             return self.lowered_where_written(|g| g.lower_default(of, at, args));
         }
         match of {
-            DefaultOf::Ctor(c) => {
-                let types = self.ctor_param_types(c);
-                let temps = self.default_priors(&priors, &types);
-                self.ctor_default(c, None, recv, index, &temps, &types);
-                types.get(index).cloned().unwrap_or_else(ErasedType::object)
-            }
-            DefaultOf::Method(s) if cx.input.syms.sym(s).name == crate::names::INIT => {
-                let Owner::Class(c) = cx.input.syms.sym(s).owner else { unreachable!("refused by the route (`Gen::default_route`)") };
-                let types = self.param_types(s);
-                let temps = self.default_priors(&priors, &types);
-                self.ctor_default(c, Some(s), recv, index, &temps, &types);
-                types.get(index).cloned().unwrap_or_else(ErasedType::object)
-            }
-            DefaultOf::Method(s) => self.method_default(s, index, recv, &priors),
+            DefaultOf::Method(s) if cx.input.syms.sym(s).name != crate::names::INIT => self.method_default(s, index, recv, &priors),
+            _ => unreachable!("a constructor's default is lowered or refused (`Gen::default_route`)"),
         }
     }
 
@@ -5261,8 +5184,8 @@ impl<'a> Gen<'a> {
         };
         let priors = self.written_priors(&items[recv.is_some() as usize..], &types);
         let route = self.ctor_default_route(c, via, recv.is_some(), index, priors.len(), &types);
-        if let Err(why) = self.ctor_default_lowers(c, &route, recv) {
-            return DefaultRoute::Unlowered(why);
+        if let Some(refusal) = self.ctor_default_refusal(c, &route, recv) {
+            return DefaultRoute::Refused(refusal);
         }
         // Each argument at the type the route's getter takes it: a companion's getter and a jar's
         // adapt it to their parameters (`Gen::getter_call`, `CtorDefault::Jar`), a captured class's
@@ -5306,10 +5229,8 @@ impl<'a> Gen<'a> {
         if info.owner == Owner::Local && recv.is_none() {
             return DefaultRoute::Unlowered(Unlowered::DefaultOfLocalDef);
         }
-        if let (Some(_), Owner::Class(c)) = (recv, info.owner) {
-            if cx.input.syms.class(c).value_class && info.kind == SymKind::Def {
-                return DefaultRoute::Unlowered(Unlowered::DefaultOnReceiver);
-            }
+        if let Some(route) = recv.and_then(|r| self.value_class_default_route(r, s, i, priors)) {
+            return route;
         }
         let m = self.mref(s);
         let types = match self.jvm_param_order(s).filter(|o| o.len() == m.params.len()) {
@@ -5492,84 +5413,14 @@ impl<'a> Gen<'a> {
 
     /// The default `i` of method `s`'s parameters, `recv` its receiver where the call has one.
     fn method_default(&mut self, s: SymId, i: usize, recv: Option<TExprId>, priors: &[TExprId]) -> ErasedType {
-        let cx = self.cx;
-        let info = cx.input.syms.sym(s);
-        if recv.is_none() && info.owner == Owner::Local {
-            let lifted = self.lifted_fun(s);
-            let types = lifted.params.clone();
-            let temps = self.default_priors(priors, &types);
-            return self.local_default(s, i, &temps);
+        let info = self.cx.input.syms.sym(s);
+        if recv.is_some() || info.owner != Owner::Local {
+            unreachable!("lowered or refused (`Gen::method_default_route`)");
         }
-        if let Some(r) = recv {
-            if let Some(t) = self.value_class_default(r, s, i, priors) {
-                return t;
-            }
-        }
-        let m = self.mref(s);
-        let types = match self.jvm_param_order(s).filter(|o| o.len() == m.params.len()) {
-            Some(order) => self.signature_order(&order, &m.params),
-            None => m.params.clone(),
-        };
-        match recv {
-            Some(r) if matches!(cx.input.prog.expr(r), TExpr::Super(SuperTarget::Mixin(_))) => {
-                unreachable!("a trait's super default is lowered (`Gen::method_default_route`)")
-            }
-            Some(r) => {
-                // A getter selected on `super` is the superclass's or the class's, as
-                // `Applications.findDefaultGetter` selects it on the receiver: `invokespecial`.
-                let special = match cx.input.prog.expr(r) {
-                    TExpr::Super(target) => {
-                        let owner = match target {
-                            SuperTarget::Chain => self.this_class.and_then(|c| cx.input.syms.class(c).superclass),
-                            SuperTarget::Class(c) | SuperTarget::Mixin(c) => Some(c),
-                        };
-                        owner.map(|c| (Invoke::Special, self.class_name(c), cx.input.syms.class(c).kind == ClassKind::Trait))
-                    }
-                    // Another receiver's getter is named where the receiver points, as the
-                    // method is (`invoke_site`).
-                    _ if self.virtual_member(s, &m) => self.qualifier_site(r, &m.owner, Referenced::Sym(s)).map(|site| (site.kind(), site.owner, site.interface)),
-                    _ => None,
-                };
-                let owner_type = match &special {
-                    Some((Invoke::Special, ..)) | None => {
-                        self.receiver(r, s);
-                        ErasedType::L(m.owner.clone())
-                    }
-                    Some((_, owner, _)) => {
-                        let t = ErasedType::L(owner.clone());
-                        self.expr(r, &t);
-                        t
-                    }
-                };
-                let temps = if self.default_operands_are_paths(Some(r), priors) {
-                    self.default_priors(priors, &types)
-                } else {
-                    let slot = self.store_new(&owner_type);
-                    let temps = self.default_priors_held(priors, &types);
-                    self.load(slot, &owner_type);
-                    temps
-                };
-                self.default_getter_value(s, i, &temps, special)
-            }
-            None => unreachable!("a file member's default is lowered or refused (`Gen::method_default_route`)"),
-        }
-    }
-
-    /// The getter of default `i` of method `s` called on the receiver on the stack with the
-    /// arguments in `temps`, leaving the parameter's type, a by-name one's value; through
-    /// `site`'s instruction and owner where given, else the method's.
-    fn default_getter_value(&mut self, s: SymId, i: usize, temps: &[Prior], site: Option<(Invoke, Rc<str>, bool)>) -> ErasedType {
-        let m = self.mref(s);
-        let shape = self.default_getter_shape(s, i);
-        let want = self.default_getter_want(s, i, &shape);
-        let args = self.getter_args(s, shape.before, temps);
-        let before: Vec<ErasedType> = args.iter().map(|p| p.ty().clone()).collect();
-        let (name, desc) = self.default_getter_ref(s, i, &before);
-        match site {
-            Some((kind, owner, interface)) => self.getter_call(kind, &owner, interface, name, &desc, &args, &want, false),
-            None => self.getter_call(m.kind, &m.owner, m.owner_is_interface, name, &desc, &args, &want, false),
-        }
-        want
+        let lifted = self.lifted_fun(s);
+        let types = lifted.params.clone();
+        let temps = self.default_priors(priors, &types);
+        self.local_default(s, i, &temps)
     }
 
     /// The type the default `i` of method `s` is left as: the parameter's, a by-name one's value.
@@ -5584,69 +5435,51 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The default of a method a value class declares, as `Gen::lower_extension_call` calls the method: its
-    /// getter on the underlying value, the companion's `m$default$N$extension` where it holds
-    /// them, the class's `m$default$N` on the box otherwise; None for any other method.
-    fn value_class_default(&mut self, r: TExprId, s: SymId, i: usize, priors: &[TExprId]) -> Option<ErasedType> {
+    /// The route of a default of a method a value class declares, its getter on the receiver's
+    /// underlying value as `Gen::lower_extension_call` calls the method: the companion's
+    /// `m$default$N$extension` where this build writes it, a library companion's as its class file
+    /// declares it (refused where it has none); None for any other method, and for a value class
+    /// of the program whose companion this build does not write (its `m$default$N` on the box).
+    fn value_class_default_route(&mut self, r: TExprId, s: SymId, i: usize, priors: &[TExprId]) -> Option<DefaultRoute> {
         let cx = self.cx;
         let Owner::Class(c) = cx.input.syms.sym(s).owner else { return None };
         if !cx.input.syms.class(c).value_class || cx.input.syms.sym(s).kind != SymKind::Def {
             return None;
         }
-        let u = self.vc_underlying(c);
-        if cx.vc_on_companion(c) {
+        let underlying = self.vc_underlying(c);
+        let paths = self.default_operands_are_paths(Some(r), priors);
+        let (getter, types, want) = if cx.vc_on_companion(c) {
             let rest = self.erased_param_types(s);
-            let module: Rc<str> = Rc::from(cx.companion_name(c));
-            let module_type = ErasedType::L(module.clone());
-            let paths = self.default_operands_are_paths(Some(r), priors);
-            let receiver = if paths {
-                Prior::Written(r, u.clone())
-            } else {
-                self.expr(r, &u);
-                Prior::Held(self.store_new(&u), u.clone())
-            };
-            let temps = if paths { self.default_priors(priors, &rest) } else { self.default_priors_held(priors, &rest) };
             let shape = self.default_getter_shape(s, i);
-            let (before, gret) = (shape.before, shape.ret.clone());
-            let getter = format!("{}$default${}$extension", self.source_method_name(s), shape.index);
-            let mut gparams = vec![u.clone()];
-            gparams.extend(rest[..before].iter().cloned());
-            let mut gtemps = vec![receiver];
-            gtemps.extend(temps.iter().take(before).cloned());
-            let want = if shape.by_name { gret.clone() } else { rest[i].clone() };
-            self.getstatic(&module, "MODULE$", &module_type);
-            self.getter_call(Invoke::Virtual, &module, false, getter, &method_desc(&gparams, &gret), &gtemps, &want, false);
-            return Some(want);
-        }
-        let companion: &'a crate::classfile::ClassFile = cx.vc_companions.get(&c)?;
-        let base = encode(cx.input.interner.get(cx.input.syms.sym(s).name));
-        let getter = format!("{}$default${}$extension", base, i + 1);
-        let Some(gm) = companion.methods.iter().find(|m| m.name == getter) else {
-            self.unsupported("a default argument of a value class's extension method without its getter");
-            return Some(ErasedType::V);
-        };
-        let (gparams, gret) = parse_method_desc(&gm.descriptor);
-        let module = ErasedType::L(Rc::from(companion.name.as_str()));
-        let temps = if self.default_operands_are_paths(Some(r), priors) {
-            self.getstatic(&companion.name, "MODULE$", &module);
-            self.expr(r, &u);
-            self.adapt(&u, &gparams[0]);
-            self.default_priors(priors, &gparams[1..])
+            let mut params = vec![underlying.clone()];
+            params.extend(rest[..shape.before].iter().cloned());
+            let ret = shape.ret.clone();
+            let desc = method_desc(&params, &ret);
+            let name = format!("{}$default${}$extension", self.source_method_name(s), shape.index);
+            let want = if shape.by_name { ret.clone() } else { rest[i].clone() };
+            let getter = MethodRef { owner: Rc::from(cx.companion_name(c)), owner_is_interface: false, name, params, ret, desc, kind: Invoke::Virtual };
+            (getter, rest, want)
         } else {
-            self.expr(r, &u);
-            let recv = self.store_new(&u);
-            let temps = self.default_priors_held(priors, &gparams[1..]);
-            self.getstatic(&companion.name, "MODULE$", &module);
-            self.load(recv, &u);
-            self.adapt(&u, &gparams[0]);
-            temps
+            let companion = cx.vc_companions.get(&c)?;
+            let name = format!("{}$default${}$extension", encode(cx.input.interner.get(cx.input.syms.sym(s).name)), i + 1);
+            // The getter takes the underlying value first: one that takes nothing is no getter of it.
+            let Some((gm, (params, ret))) = companion.methods.iter().filter(|m| m.name == name).map(|m| (m, parse_method_desc(&m.descriptor))).find(|(_, (params, _))| !params.is_empty()) else {
+                return Some(DefaultRoute::Refused(crate::lir::Refusal::ValueClassDefaultWithoutGetter));
+            };
+            let types = params[1..].to_vec();
+            let getter = MethodRef { owner: Rc::from(companion.name.as_str()), owner_is_interface: false, name, params, ret: ret.clone(), desc: gm.descriptor.clone(), kind: Invoke::Virtual };
+            (getter, types, ret)
         };
-        for (prior, p) in temps.iter().zip(&gparams[1..]) {
-            self.write_prior(prior);
-            self.adapt(prior.ty(), p);
-        }
-        self.invoke_desc(Invoke::Virtual, &companion.name, false, &getter, &gm.descriptor, gparams.len(), &gret);
-        Some(gret)
+        let written = self.written_priors(priors, &types);
+        let args = written
+            .iter()
+            .zip(&getter.params[1..])
+            .map(|(p, param)| {
+                let Prior::Written(expr, ty) = p else { unreachable!("a method's priors are written") };
+                GetterArgument { expr: *expr, ty: ty.clone(), param: param.clone() }
+            })
+            .collect();
+        Some(DefaultRoute::Extension { receiver: r, underlying, getter, args, want }.held_unless_paths(paths, &written))
     }
 
     /// The name and descriptor of the getter of default `i` of method `s`: a jar's as its class
@@ -5801,8 +5634,7 @@ impl<'a> Gen<'a> {
             return CallRoute::Extension(c, route);
         }
         if let Some(&(_, helper)) = cx.input.reach.interpolators.iter().find(|&&(m, _)| m == s) {
-            let held = cx.helpers.defs.get(cx.input.interner.get(cx.input.syms.sym(helper).name)).copied();
-            return CallRoute::Interpolator(helper, held);
+            return CallRoute::Interpolator(helper);
         }
         if let SymKind::Object(c) = cx.input.syms.sym(s).kind {
             return CallRoute::Object(c);
@@ -5836,11 +5668,6 @@ impl<'a> Gen<'a> {
         match self.call_route(r, s, args) {
             CallRoute::Js => unreachable!("refused by the lowering (`Gen::lower_refused`)"),
             CallRoute::Extension(..) => unreachable!("lowered (`Gen::lower_extension_call`)"),
-            CallRoute::Interpolator(helper, None) => self.call_interpolator(r, s, helper, args),
-            CallRoute::Object(c) => {
-                self.statement(r);
-                self.load_module(c)
-            }
             // Lowered where it is written, the capture analysis asked in order, where the lowering
             // takes the call (`Gen::lower_proxied_call`, `Gen::lower_lifted_member_call`).
             CallRoute::Proxied(t) => {
@@ -5861,7 +5688,7 @@ impl<'a> Gen<'a> {
                 let m = self.mref(s);
                 self.call_lifted(r, s, &m, &proxies, args)
             }
-            CallRoute::Spread(_) | CallRoute::Interpolator(_, Some(_)) | CallRoute::JavaStatic | CallRoute::JdkStatic | CallRoute::Super | CallRoute::Plain => {
+            CallRoute::Object(_) | CallRoute::Spread(_) | CallRoute::Interpolator(_) | CallRoute::JavaStatic | CallRoute::JdkStatic | CallRoute::Super | CallRoute::Plain => {
                 unreachable!("lowered (`Gen::lower_call_method`)")
             }
         }
@@ -6004,17 +5831,6 @@ impl<'a> Gen<'a> {
         };
         let desc = method_desc(&params, &ret);
         MethodRef { owner, owner_is_interface: false, name, params, ret, desc, kind }
-    }
-
-    /// `context.s(args)` of scala-library, which has no bytecode, where the build holds no
-    /// runtime definition of its helper's name: refused (`Gen::helper_call`).
-    fn call_interpolator(&mut self, r: TExprId, s: SymId, helper: SymId, args: ListRef) -> ErasedType {
-        let m = self.mref(helper);
-        let params = m.params.clone();
-        self.expr(r, &params[0]);
-        self.arguments(Some(s), args, &params[1..]);
-        let name = self.cx.input.interner.get(self.cx.input.syms.sym(helper).name).to_string();
-        self.helper_call(&name, 2)
     }
 
     /// `new C(args)` through the secondary constructor `s`: scalac's own `<init>` overload.
@@ -7237,32 +7053,6 @@ impl<'a> Gen<'a> {
     }
 
     // ---- primitive operations ----
-
-    /// `a == b` and `a != b` of a build whose runtime lacks the helper: the refusal.
-    fn equal_without_helper(&mut self, op_: PrimOp, a: TExprId, b: TExprId) -> ErasedType {
-        let object = ErasedType::object();
-        self.expr(a, &object);
-        self.expr(b, &object);
-        self.helper_call("equal", 2);
-        if op_ == PrimOp::Ne {
-            self.iconst(1);
-            self.code.op(op::IXOR);
-            self.code.pop();
-        }
-        ErasedType::Z
-    }
-
-    /// Calls a definition of `std/jvm.scala`; the arguments are on the stack.
-    pub fn helper_call(&mut self, name: &str, n_args: usize) -> ErasedType {
-        let Some(&s) = self.cx.helpers.defs.get(name) else {
-            self.unsupported(&format!("the runtime helper {} is missing", name));
-            self.code.popn(n_args);
-            return ErasedType::V;
-        };
-        let m = self.mref(s);
-        self.invoke_helper(&m);
-        m.ret.clone()
-    }
 
     /// The runtime's helper `m` applied to its arguments, which are evaluated: its object goes
     /// under them.
