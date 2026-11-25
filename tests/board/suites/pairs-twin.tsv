@@ -3180,6 +3180,7 @@ cases/trait_class_parent_superclass	pass	-
 cases/trait_empty_parameters	cannot run	-	no leg builds
 cases/trait_evidence	pass	-	
 cases/trait_evidence_scope	pass	-	
+cases/trait_first_superclass_call_given_default	pass	-	
 cases/trait_generic_bridge_call	pass	-	
 cases/trait_init	pass	-	
 cases/trait_linearisation	pass	-	

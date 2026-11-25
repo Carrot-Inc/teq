@@ -3250,6 +3250,7 @@ trait_class_parent_superclass	pass	-
 trait_empty_parameters	fail	-	< empty
 trait_evidence	pass	-	
 trait_evidence_scope	pass	-	
+trait_first_superclass_call_given_default	pass	-	
 trait_generic_bridge_call	pass	-	
 trait_init	pass	-	
 trait_linearisation	pass	-	

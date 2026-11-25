@@ -261,7 +261,7 @@ localcompanion	pass	-
 localdispatch	pass	-	
 localenum	fail	-	known classes: the same as ledgerlocalclass: the copy of the upstream inline body's local enum, its companion and its cases, made at the downstream's site, carries the pseudo file's SourceFile (`a!lea
 localobject	pass	-	
-localsecondarydefault	fail	-	known js-run: the anonymous class over a trait over a class pickled with Object() first, read over teq's products (its superclass's call, its arguments and the default getter left out)
+localsecondarydefault	fail	-	known bundle: the products' anonymous class has its superclass's call first, as scalac's pickle holds it, its arguments passed at the creation; the whole build's has the trait first and makes the call
 localtrait	fail	-	known classes: the same as ledgerlocalclass: the copies of the upstream inline body's local trait and class, made at the downstream's site, carry the pseudo file's SourceFile and line numbers (`a!lta.
 macroclausekinds	fail	-	macroclausekinds build
 macroderive	fail	-	known classes: the same as macroquote: the quote's copies made at the downstream's site carry the pseudo file's SourceFile and line numbers (`a!idlib.Macros`)
@@ -437,7 +437,7 @@ targetname	pass	-
 toplevelprefix	pass	-	
 tostringreturn	pass	-	
 traitapi	pass	-	
-traitclassparent	fail	-	known check: the JVM build's pickles of the downstream's `Failed` and `Hushed` name the class their trait's class parent gives them (`Exception`, `Throwable`), the Scala.js check build's over scala-li
+traitclassparent	fail	-	known scalac-run: teq's products pickle a trait whose class parent comes through another trait (`trait Quiet extends NoStackTrace`) with `Object` first, where dotty's `Namer.ensureFirstIsClass` puts t
 traitfieldkinds	pass	-	
 traitfields	pass	-	
 traitgivendef	pass	-	

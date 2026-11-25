@@ -4680,7 +4680,16 @@ impl<'w, 'a> P<'w, 'a> {
                 self.class_typeref(c);
             }
             TExpr::Module(o) => self.module_termref(o),
-            TExpr::Local(s) => self.local_ref(s),
+            // The local that stands for an enclosing class's `this` (`$this`, a constructor's `$outer`): in a type,
+            // that class's `THIS`, as scalac writes the prefix (`C.this` written as the term `local_ref` gives is no
+            // type, and scalac's reader takes it for none).
+            TExpr::Local(s) => match self.outer_this_class(s) {
+                Some(c) => {
+                    self.buf.byte(THIS);
+                    self.class_typeref(c);
+                }
+                None => self.local_ref(s),
+            },
             TExpr::Field(r, f) => {
                 self.buf.byte(TERMREF);
                 let n = self.term_name(f);
@@ -4688,6 +4697,31 @@ impl<'w, 'a> P<'w, 'a> {
                 self.path_type(r);
             }
             _ => self.fail("a path of no singleton type".to_string()),
+        }
+    }
+
+    /// The enclosing class a local stands for the `this` of, as `local_ref` writes it `C.this`: a `$this` local, or
+    /// a constructor's `$outer` parameter.
+    fn outer_this_class(&mut self, s: SymId) -> Option<ClassId> {
+        // What `local_ref` writes as the program binds it before it asks the name: a retained or bound parameter, a
+        // case's binder, a class's constructor parameter (a parameter the program names `$outer` is its own).
+        if self.retained_params.contains(&s)
+            || self.case_binders.iter().any(|&(q, _)| q == s)
+            || self.params.iter().any(|&(q, _)| q == s)
+            || matches!(self.w.syms.sym(s).owner, Owner::Class(_))
+        {
+            return None;
+        }
+        let name = self.w.interner.get(self.w.syms.sym(s).name).to_string();
+        if !(name.starts_with("$this") || name == "$outer" && self.w.syms.sym(s).kind == SymKind::Param) {
+            return None;
+        }
+        let t = self.w.sig_of(s).ret;
+        let t = self.w.zonk(t);
+        match self.w.types.get(t) {
+            Type::This(c) => Some(c),
+            Type::Class(c, _) if name == "$outer" => Some(c),
+            _ => None,
         }
     }
 

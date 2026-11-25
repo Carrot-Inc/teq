@@ -2158,8 +2158,15 @@ impl<'w, 'a> P<'w, 'a> {
             }
         } else if !first_is_class {
             if calls {
-                let t = self.w.b.t_any_ref;
-                self.at_class_name(c, name_at, |p| p.parent_call(c, t));
+                // A first written parent that is a trait: the class's first parent is the traits' class, its
+                // superclass, as its constructor's call (dotty's `Namer.ensureFirstIsClass`, `Typer.ensureConstrCall`),
+                // `Object()` where the traits extend no other. A class with no typed call to state (one an inline
+                // body makes, which its expansion types again) keeps `Object()`.
+                let t = self
+                    .superclass_parent(c, info)
+                    .filter(|_| self.index.tclasses.contains_key(&c))
+                    .unwrap_or(self.w.b.t_any_ref);
+                self.superclass_call(c, t, name_at);
             } else if info.mods & mods::UNIVERSAL != 0 {
                 // A universal trait's first parent is `Any` (dotty's `Namer.ensureFirstIsClass`
                 // keeps it), which a reader takes for the trait's being no `AnyRef`.
@@ -2309,6 +2316,26 @@ impl<'w, 'a> P<'w, 'a> {
                 ast.tparam_clauses.iter().find(|s| s.start >= info.span.end).map(|s| s.end)
             }
         })
+    }
+
+    /// A trait-first class's first parent: its superclass `t`'s call where the writer states it in full, nothing of it
+    /// withheld; else `Object()`, as before, in a body too, so that a class's pickle changes only where scalac's whole
+    /// call is written (a reader takes `Object()` as the traits' route to the superclass, and no reader's contract
+    /// covers a parent's call with its arguments elided).
+    fn superclass_call(&mut self, c: ClassId, t: TypeId, name_at: Span) {
+        let object = self.w.b.t_any_ref;
+        if t != object {
+            let mark = self.body_begin();
+            let withheld = mark.withheld;
+            self.at_class_name(c, name_at, |p| p.parent_call(c, t));
+            if self.withheld.len() > withheld {
+                self.fail("a parent's call with a part withheld".to_string());
+            }
+            if self.body_end(mark).is_ok() {
+                return;
+            }
+        }
+        self.at_class_name(c, name_at, |p| p.parent_call(c, object));
     }
 
     /// A parent's constructor call, or, where its arguments cannot be stated, the call with
@@ -5222,6 +5249,17 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.buf.end_length(len);
         appended
+    }
+
+    /// The class `c`'s superclass other than Object, as `c`'s base type there (`C[Int]` through `T extends C[Int]`).
+    fn superclass_parent(&mut self, c: ClassId, info: &ClassInfo) -> Option<TypeId> {
+        let k = info.superclass?;
+        if self.w.types.class(k, &[]) == self.w.b.t_any_ref || scala_name(self.w, k) == "java.lang.Object" {
+            return None;
+        }
+        let own: Vec<TypeId> = self.w.syms.class(c).tparams.iter().map(|&p| self.w.types.param(p)).collect();
+        let this = self.w.types.class(c, &own);
+        self.w.base_type(this, k)
     }
 
     fn is_trait_type(&self, t: TypeId) -> bool {

@@ -59,7 +59,6 @@ I:js repr/js/Conversions:[["OBJECTCLASS",["UTF8","Conversions"]],"literal"] S-T:
 I:refining repr/refining/Refining:[["OBJECTCLASS",["UTF8","Refining"]],"Refined"] S-T:refining object:repr.refining.Refining.Refined
 I:refining repr/refining/Refining:[["OBJECTCLASS",["UTF8","Refining"]],"direct"] S-T:refining object:repr.refining.Refining.direct
 I:refining repr/refining/Refining:[["OBJECTCLASS",["UTF8","Refining"]],"refined"] S-T:refining object:repr.refining.Refining.refined
-I:refining repr/refining/myAnnot:["myAnnot"] S-T:refining class:repr.refining.myAnnot:owner
 # The body pair: the method's result type tree, `Int`, scalac's written type tree and teq's
 # inferred one, observed in the S-T record of `Product.f`.
 I:api repr/Product:[["OBJECTCLASS",["UTF8","Product"]],"f"] S-T:api object:repr.Product.f
