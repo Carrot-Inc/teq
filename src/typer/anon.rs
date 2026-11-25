@@ -1150,6 +1150,11 @@ impl<'a> Worker<'a> {
                 None => DefaultOf::Ctor(c),
             };
             self.retarget_defaults(args, of, of, |w| w.prior_copy(outer));
+            // A product's body names a secondary constructor's getter as its class's (`<init>$default$N` on the
+            // companion, `member_default_getter`), and it takes that instance too.
+            if via.is_some() {
+                self.retarget_defaults(args, DefaultOf::Ctor(c), DefaultOf::Ctor(c), |w| w.prior_copy(outer));
+            }
             let mut items = vec![outer];
             // What the class takes of its lifted owner's captures, passed here where the owner
             // is done; inside the owner they are given once it is (`capture_through_nested`).

@@ -261,6 +261,7 @@ localcompanion	pass	-
 localdispatch	pass	-	
 localenum	fail	-	known classes: the same as ledgerlocalclass: the copy of the upstream inline body's local enum, its companion and its cases, made at the downstream's site, carries the pseudo file's SourceFile (`a!lea
 localobject	pass	-	
+localsecondarydefault	fail	-	known js-run: the anonymous class over a trait over a class pickled with Object() first, read over teq's products (its superclass's call, its arguments and the default getter left out)
 localtrait	fail	-	known classes: the same as ledgerlocalclass: the copies of the upstream inline body's local trait and class, made at the downstream's site, carry the pseudo file's SourceFile and line numbers (`a!lta.
 macroclausekinds	fail	-	macroclausekinds build
 macroderive	fail	-	known classes: the same as macroquote: the quote's copies made at the downstream's site carry the pseudo file's SourceFile and line numbers (`a!idlib.Macros`)

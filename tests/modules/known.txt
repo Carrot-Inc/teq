@@ -85,3 +85,7 @@ expansionsingletonmember subset  the same as classes
 expansionsingletonmember bundle  the same as inlinesam bundle
 keptclassparentblock bundle  master's: the products' build leaves a class parent's unread constructor block out where the whole build calls it (utest's PPrinter.BlackWhite); the row of its own: a constructor call's hoisted arguments read back from a kept body (G2), which takes this line out
 valueclasssuperequals over-scalac-js  scalac pickles a value class's super call as its super accessor (`V.this.super$equals(V.this)`, PostTyper's), which the products' reader refuses ("not supported yet: value super$equals of V"); teq's own pickle is `super.equals(V.this)`
+localsecondarydefault js-run  the anonymous class over a trait over a class pickled with Object() first, read over teq's products (its superclass's call, its arguments and the default getter left out)
+localsecondarydefault interp-run  the anonymous class over a trait over a class pickled with Object() first, read over teq's products (its superclass's call, its arguments and the default getter left out)
+localsecondarydefault bundle  the anonymous class over a trait over a class pickled with Object() first, read over teq's products (its superclass's call, its arguments and the default getter left out)
+localsecondarydefault readtasty-a  scalac reads the same pickle: the anonymous class's Object() first parent called with the superclass's arguments
