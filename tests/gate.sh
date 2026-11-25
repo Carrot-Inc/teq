@@ -971,14 +971,17 @@ compare_half() {
 # given another process since is never one) is ended with its children, so that no two jobs share out/compare: the
 # old one would append to the new one's status, take its measure file and, at its end, remove its pid file.
 earlier_job='p=$(cat out/compare/pid 2> /dev/null); if [ -n "$p" ] && ps -o args= -p "$p" 2> /dev/null | grep -q "out/compare/gate-compare\.sh"; then pkill -TERM -P "$p" 2> /dev/null; kill -TERM "$p" 2> /dev/null; echo "an earlier gate'"'"'s job ended: pid $p"; fi'
-# machine_start: what a machine prints at its start, `pressure <the first line of /proc/pressure/cpu>` (its host's: the
-# file is the system's) and `memory <MemAvailable in kB>`; start_line <file>: the two as a line of the gate's log.
-machine_start='echo "pressure $(head -1 /proc/pressure/cpu 2> /dev/null)"; echo "memory $(sed -n "s/^MemAvailable: *\([0-9]*\) kB$/\1/p" /proc/meminfo 2> /dev/null)"'
+# machine_start: what a machine prints at its start, `pressure <file> <its first line>`, the machine's own CPU pressure
+# where it has one (its cgroup's, /sys/fs/cgroup/cpu.pressure in a container), else the system's (/proc/pressure/cpu,
+# a container's host's), `pressure ` alone where neither gives a line (GATE_PRESSURE, set, a stand-in's planted
+# reading), and `memory <MemAvailable in kB>`; start_line <file>: the two as a line of the gate's log, the file read
+# named, and an unread pressure said so (--record keeps a named kind's floor there).
+machine_start='p=; for f in /sys/fs/cgroup/cpu.pressure /proc/pressure/cpu; do l=$(head -1 "$f" 2> /dev/null); [ -z "$l" ] || { p="$f $l"; break; }; done; echo "pressure ${GATE_PRESSURE-$p}"; echo "memory $(sed -n "s/^MemAvailable: *\([0-9]*\) kB$/\1/p" /proc/meminfo 2> /dev/null)"'
 start_line() {
   local p m
   p=$(sed -n 's/^pressure //p' "$1" | tail -1)
   m=$(sed -n 's/^memory \([0-9][0-9]*\)$/\1/p' "$1" | tail -1)
-  echo "cpu pressure ${p:-unread}; $([ -n "$m" ] && echo "$((m / 1024)) MB free" || echo "free memory unread")"
+  echo "cpu pressure $([ -n "$p" ] && echo "${p#* } (${p%% *})" || echo "unread (no pressure file gave a line)"); $([ -n "$m" ] && echo "$((m / 1024)) MB free" || echo "free memory unread")"
 }
 # compare_on <handle> <lines>: that machine prepared for the lines and measuring those the comparison deals it, its
 # logs under $out/compare-<machine>/.
@@ -1444,6 +1447,8 @@ if [ $n -gt 0 ]; then
     echo "${c:-8}" >> "$tmp/cpus"
     echo "${k:--}" >> "$tmp/kinds"
     echo "${hosts[$i]} ${k:-${c:-8}}" >> "$tmp/host-cpus"
+    # its start's CPU pressure, some avg60, for --record's floor (nothing where unread)
+    echo "${hosts[$i]} $(sed -n 's/^pressure [^ ]* .*avg60=\([0-9.]*\).*/\1/p' "$tmp/sync.$i" | tail -1)" >> "$tmp/host-pressure"
     # the machine at its start, a line of the gate's log
     echo "$(clock) ${hosts[$i]} (${k:+$k, }${c:-8} CPUs): $(start_line "$tmp/sync.$i")"
   done
@@ -1727,23 +1732,38 @@ done
 # holds, as the project lines' records are: the driver's own tree is a snapshot under a branch's driver, removed
 # after the run.
 if [ $record = 1 ] && [ $recordable = 1 ]; then
-  python3 - "$results" "$wt/tests/gate-times.txt" "$(cut -d' ' -f1 "$tmp/want") $compare $(for p in $projects; do project_lines_of "$p"; done)" "$compare" "$tmp/host-cpus" <<'PY'
+  python3 - "$results" "$wt/tests/gate-times.txt" "$(cut -d' ' -f1 "$tmp/want") $compare $(for p in $projects; do project_lines_of "$p"; done)" "$compare" "$tmp/host-cpus" "$tmp/host-pressure" <<'PY'
 import os, re, sys
 recorded, timing = set(sys.argv[3].split()), set(sys.argv[4].split())
 # a line measured on a machine of other than eight CPUs is that kind's row, `<line>@<n>`, and on a machine whose look
-# named a kind, `<line>@<kind>`: there the row kept is the larger of the run and nine tenths of the row it replaces
-# (that kind's host is shared, its load swings), so that its shard does not end last on a busy day
+# named a kind, `<line>@<kind>`: there the row is its run, as the pool's are, but where that machine's host was busy at
+# its start, its CPU pressure (some avg60) over FLOOR_PRESSURE or unread: there the row kept is the larger of the run
+# and nine tenths of the row it replaces, so that a busy day's seconds do not set a shard to end last; the gate says
+# each row so kept. FLOOR_PRESSURE 40 is over every guest's start in the four gates of 25 Nov that preceded it
+# (0.97 to 25.44 on their host's file, the pool's 0.00).
+FLOOR_PRESSURE = 40.0
 kinds = dict(l.split() for l in open(sys.argv[5]) if l.strip()) if os.path.exists(sys.argv[5]) else {}
-measured = {}
+pressure = {}
+for l in open(sys.argv[6]) if os.path.exists(sys.argv[6]) else []:
+    host, _, value = l.strip().partition(" ")
+    if host:
+        pressure[host] = float(value) if re.fullmatch(r"[0-9]+(\.[0-9]+)?", value) else None
+measured, where_of = {}, {}
 for l in open(sys.argv[1]):
     name, where, secs, code, _ = l.rstrip("\n").split("\t", 4)
     if name in recorded and where not in ("-", "local") and (code == "0" or (code == "3" and name in timing)):
-        measured[name if kinds.get(where, "8") == "8" else f"{name}@{kinds[where]}"] = secs
+        row = name if kinds.get(where, "8") == "8" else f"{name}@{kinds[where]}"
+        measured[row], where_of[row] = secs, where
 previous = {l.split()[0]: l.split()[1] for l in open(sys.argv[2]).read().splitlines() if l.strip() and not l.startswith("#")}
 for name, secs in list(measured.items()):
     kind = name.rpartition("@")[2] if "@" in name else ""
     if kind and not kind.isdigit() and name in previous and int(previous[name]) > 0:
-        measured[name] = str(max(int(secs), round(int(previous[name]) * 0.9)))
+        read = pressure.get(where_of[name])
+        if read is None or read > FLOOR_PRESSURE:
+            kept = max(int(secs), round(int(previous[name]) * 0.9))
+            measured[name] = str(kept)
+            said = "unread" if read is None else f"{read:g}, over {FLOOR_PRESSURE:g}"
+            print(f"gate: {name} kept at {kept}, its floor of nine tenths of {previous[name]} against its run of {secs}: {where_of[name]}'s start pressure {said}")
 pieces = {m.group(1): m.group(2) for m in (re.fullmatch(r"(.+)\.\d+/(\d+)(?:@[A-Za-z0-9_-]+)?", name) for name in measured) if m}
 def stale(name):
     m = re.fullmatch(r"(.+)\.\d+/(\d+)(?:@[A-Za-z0-9_-]+)?", name)

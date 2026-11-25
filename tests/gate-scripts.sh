@@ -1215,21 +1215,41 @@ need_driver
 # against 100), then fold (50 against 60); m2 takes planted (50 against 75). Each defect turns the deal by itself:
 # parser charged the speed's 50 instead of its row sends fold to m2 (80 against 60), and so does fold charged 120 or
 # its row of eight (140 or 80 against 60); a guest builder deals alike and is the head's line; --record writes m1's
-# parser as the kind's row, the larger of the run and nine tenths of the row it replaces, 18.
+# parser as the kind's row: m1's start read a CPU pressure over 40 (planted, GATE_PRESSURE, the file it names said on
+# its start line), so the larger of the run and nine tenths of the row it replaces, 18, the gate saying so. Again from
+# the same rows: a start under 40 records the run itself, and an unread one keeps the floor and says so.
 base=$(git -C "$landing" rev-parse HEAD)
 # the cell's rows alone for its lines: the tree's own rows of them, of either kind, go first
 sed -i -E '/^(parser|fold|planted|head-wait|speed)(@guest)? /d' "$landing/tests/gate-times.txt"
 printf '%s\n' "parser 100" "parser@guest 20" "fold 60" "planted 50" "head-wait 0" "head-wait@guest 0" "speed@guest 200" >> "$landing/tests/gate-times.txt"
 git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "rows of a named kind"
-GATE_ENV_m1="export GATE_KIND=guest" gate "$work/driver-named.log" "$(printf 'm1 free\nm2 free')" --only parser,fold,planted --record
+rows=$(git -C "$landing" rev-parse HEAD)
+over="/sys/fs/cgroup/cpu.pressure some avg10=50.00 avg60=55.00 avg300=50.00 total=1"
+GATE_ENV_m1="export GATE_KIND=guest GATE_PRESSURE='$over'" gate "$work/driver-named.log" "$(printf 'm1 free\nm2 free')" --only parser,fold,planted --record
 code=$?
 log=$work/driver-named.log
 check "driver: a machine naming a kind is dealt by that kind's rows and never builds the head while another can, its line recorded as the kind's row" "$log" eval '[ $code = 0 ] &&
   row parser m1 "$log" | grep -q " ok " && row fold m1 "$log" | grep -q " ok " &&
   grep -q "m2: the head" "$log" && ! grep -q "m1: the head" "$log" && r=$(row parser m1 "$log" | awk "{print \$3}") &&
-  grep -q -x "parser@guest $((r > 18 ? r : 18))" "$landing/tests/gate-times.txt" && grep -q -x "parser 100" "$landing/tests/gate-times.txt"'
+  grep -q -x "parser@guest $((r > 18 ? r : 18))" "$landing/tests/gate-times.txt" && grep -q -x "parser 100" "$landing/tests/gate-times.txt" &&
+  grep -q "m1 (guest, 8 CPUs): cpu pressure some avg10=50.00 avg60=55.00 avg300=50.00 total=1 (/sys/fs/cgroup/cpu.pressure); " "$log" &&
+  grep -q -x "gate: parser@guest kept at $((r > 18 ? r : 18)), its floor of nine tenths of 20 against its run of $r: m1.s start pressure 55, over 40" "$log"'
 check "driver: a named kind without a line's row is charged its row of eight over the kind's speed, never 120" "$log" eval '[ $code = 0 ] &&
   row fold m1 "$log" | grep -q " ok " && row planted m2 "$log" | grep -q " ok "'
+git -C "$landing" reset -q --hard "$rows"
+GATE_ENV_m1="export GATE_KIND=guest GATE_PRESSURE='/sys/fs/cgroup/cpu.pressure some avg10=8.00 avg60=10.00 avg300=9.00 total=1'" gate "$work/driver-under.log" "$(printf 'm1 free\nm2 free')" --only parser --record
+code=$?
+log=$work/driver-under.log
+check "driver: a named kind's machine whose start read a CPU pressure under 40 records its run, no floor kept" "$log" eval '[ $code = 0 ] &&
+  r=$(row parser m1 "$log" | awk "{print \$3}") && [ -n "$r" ] && grep -q -x "parser@guest $r" "$landing/tests/gate-times.txt" && ! grep -q "kept at" "$log"'
+git -C "$landing" reset -q --hard "$rows"
+GATE_ENV_m1="export GATE_KIND=guest GATE_PRESSURE=" gate "$work/driver-unread.log" "$(printf 'm1 free\nm2 free')" --only parser --record
+code=$?
+log=$work/driver-unread.log
+check "driver: a named kind's machine whose start pressure cannot be read keeps the floor, its start line and the record saying so" "$log" eval '[ $code = 0 ] &&
+  r=$(row parser m1 "$log" | awk "{print \$3}") && grep -q -x "parser@guest $((r > 18 ? r : 18))" "$landing/tests/gate-times.txt" &&
+  grep -q "m1 (guest, 8 CPUs): cpu pressure unread (no pressure file gave a line); " "$log" &&
+  grep -q -x "gate: parser@guest kept at $((r > 18 ? r : 18)), its floor of nine tenths of 20 against its run of $r: m1.s start pressure unread" "$log"'
 git -C "$landing" reset -q --hard "$base"
 # A run over named programs alone (tests/support/cases.sh's TEQ_CASES, TEQ_ERRORS) is never a gate's line: a dealt
 # line on a machine whose environment sets one reads red with the filter named, and so does a local line under a

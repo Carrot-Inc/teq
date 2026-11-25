@@ -10,7 +10,8 @@
 # shard's kind, the row of eight where its kind has none; --record writes each kind's own row). A row a kind never
 # measured is estimated from the other kind's by its family's ratio and said so in a comment line above it.
 # A machine whose look names a kind (GATE_KIND in its own login environment, a machine of another host) has its own
-# rows, `<line>@<kind>`, which --record writes as the larger of the run and nine tenths of the row it replaces; a line
+# rows, `<line>@<kind>`, which --record writes as its run, or, where that machine's start read a CPU pressure over 40
+# or none (its host busy), as the larger of the run and nine tenths of the row it replaces; a line
 # with no such row is charged its row of eight over the kind's `speed@<kind>` (percent of an eight-CPU machine's
 # speed), and the kind's shards start from `head-wait@<kind>`. `<line>@<kind> -1` keeps the line off that kind, which
 # the gate prints; no gate measures it there while the row stands, so the row is taken out by hand once what kept the
