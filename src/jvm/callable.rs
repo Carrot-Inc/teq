@@ -277,6 +277,18 @@ impl<'a> Cx<'a> {
             && self.emits(c)
     }
 
+    /// The local module the default getters of secondary constructor `s` are read on where its class keeps them on a
+    /// local companion (`ctor_defaults_on_local_companion`): a default of a secondary constructor is given no
+    /// receiver, so the route reads the companion's val itself (`Gen::lower_ctor_default`).
+    pub fn local_companion_of_secondary(&self, s: SymId) -> Option<SymId> {
+        let info = self.input.syms.sym(s);
+        let Owner::Class(c) = info.owner else { return None };
+        if info.name != crate::names::INIT || !self.ctor_defaults_on_local_companion(c) {
+            return None;
+        }
+        self.input.syms.class(c).companion.and_then(|m| self.input.syms.class(m).local_module)
+    }
+
     /// A plain class or a trait without a companion object whose companion module class the
     /// backend writes for the getters of its constructor's defaults, as scalac makes one
     /// (`Plain$`).
@@ -838,7 +850,7 @@ impl<'a> Gen<'a> {
             for (j, p) in cl.params.iter().enumerate() {
                 let i = start + j;
                 let Some(d) = defaults.get(i).copied().flatten() else { continue };
-                let ret = if p.by_name { self.erase(p.ty) } else { self.sym_type(params[i]) };
+                let ret = self.default_getter_ret(p.by_name.then_some(p.ty), |g| g.sym_type(params[i]));
                 self.begin_method(MethodFlags::PUBLIC, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&before_types, &ret), false, &before, ret.clone(), &[d]);
                 self.body(|g| {
                     let held = outer_of(g);
@@ -1264,7 +1276,7 @@ impl<'a> Gen<'a> {
             for i in start..(start + size).min(params.len()) {
                 let Some(d) = defaults.get(i).copied().flatten() else { continue };
                 let by_name = cl.params[i - start].by_name;
-                let ret = if by_name { self.erase(cl.params[i - start].ty) } else { self.sym_type(params[i]) };
+                let ret = self.default_getter_ret(by_name.then_some(cl.params[i - start].ty), |g| g.sym_type(params[i]));
                 self.begin_method(MethodFlags::PUBLIC, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&before_types, &ret), false, &before, ret.clone(), &[d]);
                 self.body(|g| {
                     let value = g.lower_default_value(d, by_name, &ret);

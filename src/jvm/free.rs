@@ -248,7 +248,13 @@ impl Collector<'_, '_> {
                         let free = self.an.of_default(self.cx, s, (at & !DEFAULT_RECEIVER) as usize);
                         self.merge(&free);
                     }
-                    // A local class's getter is its companion's, the receiver among the arguments.
+                    // A local class's getter is its companion's, the receiver among the arguments; a secondary
+                    // constructor's default has none, and its getter is read on the companion's val.
+                    DefaultOf::Method(s) => {
+                        if let Some(v) = self.cx.local_companion_of_secondary(s).filter(|_| at & DEFAULT_RECEIVER == 0) {
+                            self.local(v);
+                        }
+                    }
                     DefaultOf::Ctor(c) if self.cx.ctor_defaults_on_local_companion(c) => {}
                     DefaultOf::Ctor(c) => {
                         let idx = self.cx.tclass_of.get(c.idx()).copied().unwrap_or(u32::MAX);
@@ -267,7 +273,6 @@ impl Collector<'_, '_> {
                             }
                         }
                     }
-                    _ => {}
                 }
                 self.list(args);
             }
@@ -514,7 +519,12 @@ impl CellWalk<'_, '_> {
             // a local def's getter is the def's.
             TExpr::Default(of, at, args) => {
                 match of {
-                    DefaultOf::Method(s) => self.reference(s),
+                    DefaultOf::Method(s) => {
+                        self.reference(s);
+                        if let Some(v) = self.cx.local_companion_of_secondary(s).filter(|_| at & DEFAULT_RECEIVER == 0) {
+                            self.reference(v);
+                        }
+                    }
                     DefaultOf::Ctor(c) if self.cx.ctor_defaults_on_local_companion(c) => {}
                     DefaultOf::Ctor(c) => {
                         let idx = self.cx.tclass_of.get(c.idx()).copied().unwrap_or(u32::MAX);

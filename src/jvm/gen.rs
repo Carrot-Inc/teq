@@ -229,6 +229,21 @@ pub(super) enum CtorDefault {
     Static(MethodRef),
 }
 
+impl CtorDefault {
+    /// The getter the route calls; none for a class of the JDK's default written in place.
+    fn getter(&self) -> Option<&MethodRef> {
+        match self {
+            CtorDefault::InPlace(_) => None,
+            CtorDefault::LocalCompanion(_, getter)
+            | CtorDefault::InnerCompanion(_, getter)
+            | CtorDefault::Captured(_, getter)
+            | CtorDefault::Companion(getter)
+            | CtorDefault::Jar(getter)
+            | CtorDefault::Static(getter) => Some(getter),
+        }
+    }
+}
+
 /// An argument of a default's getter: the expression, the type it is written at (its
 /// parameter's in the method's signature), and the type the getter's parameter takes.
 pub(super) struct GetterArgument {
@@ -4871,8 +4886,9 @@ impl<'a> Gen<'a> {
             let mut params = self.anon_ctor_params(c);
             let captures = params.len();
             params.extend(before);
-            let desc = method_desc(&params, &types[i]);
-            let getter = MethodRef { owner, owner_is_interface: false, name: format!("$lessinit$greater$default${}", n + i + 1), params, ret: types[i].clone(), desc, kind: Invoke::Static };
+            let ret = self.default_getter_ret(self.ctor_clause_shape(c, via, i).1, |_| types[i].clone());
+            let desc = method_desc(&params, &ret);
+            let getter = MethodRef { owner, owner_is_interface: false, name: format!("$lessinit$greater$default${}", n + i + 1), params, ret, desc, kind: Invoke::Static };
             return CtorDefault::Captured(captures, getter);
         }
         let name = format!("$lessinit$greater$default${}", i + 1);
@@ -4886,24 +4902,40 @@ impl<'a> Gen<'a> {
             return CtorDefault::Jar(getter);
         }
         let params: Vec<ErasedType> = before.collect();
-        let desc = method_desc(&params, &types[i]);
-        CtorDefault::Static(MethodRef { owner, owner_is_interface: self.cx.is_interface(c), name, params, ret: types[i].clone(), desc, kind: Invoke::Static })
+        let ret = self.default_getter_ret(self.ctor_clause_shape(c, via, i).1, |_| types[i].clone());
+        let desc = method_desc(&params, &ret);
+        CtorDefault::Static(MethodRef { owner, owner_is_interface: self.cx.is_interface(c), name, params, ret, desc, kind: Invoke::Static })
+    }
+
+    /// The type a default's getter returns where the typer gives it no type of its own: for a by-name parameter the
+    /// value, the erasure of the parameter's result type (`by_name`), as scalac's getter returns it and the caller's
+    /// thunk around the getter's call returns it; for any other the parameter's type (`param`). One rule for the
+    /// getters of a method (`Gen::default_getter_shape`) and of a constructor (`Gen::ctor_default_route`, the getters
+    /// `Gen::ctor_default_getters` and the companions' writers write), and for the type a constructor's default is
+    /// left as (`Gen::default_route`).
+    pub(super) fn default_getter_ret(&mut self, by_name: Option<TypeId>, param: impl FnOnce(&mut Self) -> ErasedType) -> ErasedType {
+        match by_name {
+            Some(t) => self.erase(t),
+            None => param(self),
+        }
+    }
+
+    /// Where the clause of the declared parameter `i` of `c`'s primary constructor, or of its secondary constructor
+    /// `via`, starts, and its result type where the parameter is by-name (`clause_shape`).
+    pub(super) fn ctor_clause_shape(&self, c: ClassId, via: Option<SymId>, i: usize) -> (usize, Option<TypeId>) {
+        let cx = self.cx;
+        match via {
+            Some(s) => cx.input.syms.sym(s).sig.as_ref().map_or((i, None), |sig| clause_shape(&sig.clauses, i)),
+            None => clause_shape(&cx.input.syms.class(c).ctor, i),
+        }
     }
 
     /// The getter of default `i` on the companion `module` of `c`, as scalac's companion has
     /// it: it takes the parameters of the clauses before the default's and returns the
     /// parameter's type, a by-name parameter's value.
     fn companion_getter(&mut self, module: Rc<str>, c: ClassId, via: Option<SymId>, i: usize, types: &[ErasedType]) -> MethodRef {
-        let cx = self.cx;
-        let clauses: Vec<ClauseSig> = match via {
-            Some(s) => cx.input.syms.sym(s).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone()),
-            None => cx.input.syms.class(c).ctor.clone(),
-        };
-        let (before, by_name) = clause_shape(&clauses, i);
-        let ret = match by_name {
-            Some(t) => self.erase(t),
-            None => types[i].clone(),
-        };
+        let (before, by_name) = self.ctor_clause_shape(c, via, i);
+        let ret = self.default_getter_ret(by_name, |_| types[i].clone());
         let params = types[..before].to_vec();
         let desc = method_desc(&params, &ret);
         MethodRef { owner: module, owner_is_interface: false, name: format!("$lessinit$greater$default${}", i + 1), params, ret, desc, kind: Invoke::Virtual }
@@ -5066,7 +5098,12 @@ impl<'a> Gen<'a> {
                 GetterArgument { expr, ty: ty.clone(), param: ty }
             }).collect(),
         };
-        DefaultRoute::Ctor(c, recv, route, args, types[index].clone()).held_unless_paths(self.default_operands_are_paths(None, &items[recv.is_some() as usize..]), &priors)
+        // A by-name parameter's default is left as its getter returns it (`Gen::default_getter_ret`).
+        let want = match route.getter() {
+            Some(getter) if self.ctor_clause_shape(c, via, index).1.is_some() => getter.ret.clone(),
+            _ => types[index].clone(),
+        };
+        DefaultRoute::Ctor(c, recv, route, args, want).held_unless_paths(self.default_operands_are_paths(None, &items[recv.is_some() as usize..]), &priors)
     }
 
     /// The class whose constructor the default `of` is of; None for a method's default and for a
@@ -5366,8 +5403,7 @@ impl<'a> Gen<'a> {
         let own = self.cx.input.getters.and_then(|t| crate::typer::getters::getter_type(t, self.cx.input.syms, crate::tir::DefaultOf::Method(s), i)).filter(|&t| !self.cx.input.types.same(t, p.ty));
         let ret = match own {
             Some(t) => self.erase(t),
-            None if p.by_name => self.erase(p.ty),
-            None => m.params[before + k].clone(),
+            None => self.default_getter_ret(p.by_name.then_some(p.ty), |_| m.params[before + k].clone()),
         };
         GetterShape { index: before + k + 1, before, ret, by_name: p.by_name }
     }

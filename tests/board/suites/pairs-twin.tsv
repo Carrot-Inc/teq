@@ -590,6 +590,7 @@ cases/conversions	pass	-
 cases/copy_collision	pass	-	
 cases/creator_through_prefix	pass	-	
 cases/cross_features	pass	-	
+cases/ctor_byname_default	pass	-	
 cases/ctor_code_class_bodies	pass	-	
 cases/ctor_code_class_copies	pass	-	
 cases/ctor_parameter_storage	pass	-	

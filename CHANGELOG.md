@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- On the JVM a constructor's by-name parameter left to its default (`class X(f: => String = "d")`, then `new X()`)
+  reads the default's value, as scalac, where reading it threw `ClassCastException` ("String cannot be cast to
+  Function0"); a local class's secondary constructor with one builds, where it was refused.
 - On the JVM a pattern definition or a case whose value can never match its class pattern (`val (a, b) = { f(); 1 }:
   @unchecked`, an `Int` field under a nested case class's pattern) throws the value's `MatchError` after its right side
   ran, or the match takes the next case, as under scalac, where the build aborted ("no entry found for key") or refused

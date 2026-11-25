@@ -2501,11 +2501,12 @@ impl<'a> Gen<'a> {
             // parameter's where nothing refers to the class's type parameters.
             let declared_ty = clauses.iter().flat_map(|c| c.params.iter()).nth(i - captures).map(|p| p.ty);
             let own = of.and_then(|of| self.cx.input.getters.and_then(|t| crate::typer::getters::getter_type(t, self.cx.input.syms, of, i - captures))).filter(|&t| Some(t) != declared_ty);
+            let by_name_ty = super::gen::clause_shape(clauses, i - captures).1;
             let ret = match own {
                 Some(t) => self.erase(t),
-                None => self.sym_type(params[i]),
+                None => self.default_getter_ret(by_name_ty, |g| g.sym_type(params[i])),
             };
-            let by_name = super::gen::clause_shape(clauses, i - captures).1.is_some();
+            let by_name = by_name_ty.is_some();
             let types: Vec<ErasedType> = before.iter().map(|p| p.1.clone()).collect();
             self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&types, &ret), false, &before, ret.clone(), &[d]);
             self.bind_extras(&extras, extras_slot);
