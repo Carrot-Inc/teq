@@ -36,16 +36,27 @@ writes a new test into that list as passing, at its place, for the script that b
 The exit status is 0 when the run is the list's, 1 when not, 2 for a command it cannot read.
 """
 import os
+import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DIR = os.path.join(REPO, "tests", "pending")
 
 
+# A stack's overflow, said with the count the program printed after it, the frames it reached, which the machine's
+# stack sets (node's own stack, which its version moves: 7373 on node 25, 7840 on node 22; a JVM's -Xss). A note
+# keeps the words and drops that bare count at its end, so that no machine's number is written into a list; any
+# other text after them (where a macro's overflow was called) stays.
+MACHINE_TAILS = [re.compile(r"(Maximum call stack size exceeded) \d+$"), re.compile(r"(java\.lang\.StackOverflowError) \d+$")]
+
+
 def clean(note):
     """A note as a list keeps it: one line, no control character (a program's output may hold any byte, and a
-    list is read and compared as text)."""
-    return " ".join("".join(c if c >= " " and c != "\x7f" else " " for c in str(note)).split())
+    list is read and compared as text), and no machine's number after a stack's overflow (MACHINE_TAILS)."""
+    text = " ".join("".join(c if c >= " " and c != "\x7f" else " " for c in str(note)).split())
+    for rx in MACHINE_TAILS:
+        text = rx.sub(r"\1", text)
+    return text
 
 
 def path(suite):

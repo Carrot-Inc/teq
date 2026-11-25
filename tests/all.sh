@@ -41,6 +41,7 @@ for name in "$@"; do
     if [[ "$pieced" != *" ${BASH_REMATCH[1]} "* ]]; then
       status=1
       summary+=("FAIL  $name: ${BASH_REMATCH[1]} runs whole, in no pieces")
+      refused=1
       continue
     fi
     piece[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}/${BASH_REMATCH[3]}
@@ -48,6 +49,11 @@ for name in "$@"; do
   fi
   only+="$name "
 done
+# names given and every one refused: no suite runs (an empty `only` would run them all)
+if [ "${refused:-0}" = 1 ] && [ "$only" = "  " ]; then
+  printf '%s\n' "${summary[@]}"
+  exit 1
+fi
 seen=()
 suite() {
   local name=$1

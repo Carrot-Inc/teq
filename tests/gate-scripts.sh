@@ -2449,6 +2449,23 @@ printf 'pass unrowed\n' > "$oc/fo.txt"
 pend fo fo.txt --fails-only --passed=1
 code=$?
 check "outcomes: a suite under --fails-only, which keeps no row of a pass, is not held to its board list" "$oc/pending.log" eval '[ $code = 0 ] && ! grep -q "no row in" "$oc/pending.log"'
+# A stack's overflow keeps its words in a list's note, not the count of frames the program printed after them, which
+# the machine's stack sets (tests/support/pending.py's MACHINE_TAILS); a line of an expectation keeps its digits.
+printf 'fail deep\tJavaScriptException:RangeError: Maximum call stack size exceeded 7373\nfail deeper\tException in thread "main" java.lang.StackOverflowError 4711\nfail kept\t< 100001\nfail macro\texception in macro: java.lang.StackOverflowError (called by rewrite in object M)\n' > "$oc/deep.txt"
+pend deep deep.txt --add
+check "outcomes: a stack's overflow is noted without the machine's count after it; an expectation's digits and a macro's caller stay" "$oc/pending.log" eval '
+  grep -q -x "$(printf "deep\tJavaScriptException:RangeError: Maximum call stack size exceeded")" "$oc/r/tests/pending/deep.txt" &&
+  grep -q -x "$(printf "deeper\tException in thread \"main\" java.lang.StackOverflowError")" "$oc/r/tests/pending/deep.txt" &&
+  grep -q -x "$(printf "kept\t< 100001")" "$oc/r/tests/pending/deep.txt" &&
+  grep -q -x "$(printf "macro\texception in macro: java.lang.StackOverflowError (called by rewrite in object M)")" "$oc/r/tests/pending/deep.txt" &&
+  grep -q -x "$(printf "deep\tfail\t-\tJavaScriptException:RangeError: Maximum call stack size exceeded")" "$oc/r/tests/board/suites/deep.tsv"'
+# tests/all.sh given only names it refuses (a piece of a suite it runs whole) runs no suite and fails: an empty
+# selection is every suite, which a refused name must not leave behind.
+mkdir -p "$oc/allsh/tests" && cp tests/all.sh tests/gate.sh "$oc/allsh/tests/"
+(cd "$oc/allsh" && timeout 60 bash tests/all.sh cases.1/2) > "$oc/allsh.log" 2>&1
+code=$?
+check "outcomes: all.sh given only a name it refuses runs no suite and fails, the name said" "$oc/allsh.log" eval '[ $code = 1 ] &&
+  [ "$(cat "$oc/allsh.log")" = "FAIL  cases.1/2: cases runs whole, in no pieces" ] && [ ! -s "$oc/allsh/out/all/times.txt" ]'
 # a project's test the oracle's run ignored: not run, no pass
 printf '{}\n' > "$oc/r/bench/probe/pin.json"
 printf '{"cases_count":2,"modules":{"probe.js":{"cases":{"Success":["p.Ran.a"],"Ignored":["p.Unrun.b"]}}}}\n' > "$oc/r/bench/probe/tests.json"
