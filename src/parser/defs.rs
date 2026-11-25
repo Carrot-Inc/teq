@@ -1331,17 +1331,6 @@ impl<'a> Parser<'a> {
             && (self.pos == self.body_at || matches!(self.toks[self.pos - 1].kind, Tok::KwExtends | Tok::KwWith | Tok::Comma))
     }
 
-    /// A template's statements, a language import among them enabling its feature until their
-    /// end, as dotty restores `languageImportContext` after `templateStatSeq`; its case classes get
-    /// the companions `Desugar` gives them (`add_derived_givens`), a class's or a trait's an object
-    /// of each instance.
-    pub(super) fn parse_template_body(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
-        let saved = self.syntax.postfix_ops;
-        let body = self.parse_template_body_scoped(is_enum);
-        self.syntax.postfix_ops = saved;
-        body
-    }
-
     /// Whether the parser stands at the placeholder of a script's statements in its wrapper class's body.
     fn at_script_body(&self) -> bool {
         self.script_end != usize::MAX && self.at(Tok::Ident) && self.tok().name == self.script_body
@@ -1366,9 +1355,7 @@ impl<'a> Parser<'a> {
         self.pos = resume;
     }
 
-    fn parse_template_body_scoped(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
-        let mut body = Vec::new();
-        let patdefs_mark = self.pattern_vals;
+    pub(super) fn parse_template_body(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
         // The body's `{` where it is written in braces: the lexer hands a brace over as an `Indent` of its own span,
         // after a `ColonEol` of the same span where a token that can end a statement stands before it; a colon's body
         // opens with a layout `Indent`, of no extent.
@@ -1381,12 +1368,23 @@ impl<'a> Parser<'a> {
             }
             self.self_start = None;
             self.body_brace = None;
-            return (body, ListRef::EMPTY, None, names::EMPTY);
+            return (Vec::new(), ListRef::EMPTY, None, names::EMPTY);
         } else {
             self.bump();
             self.bump()
         };
-        let brace = (opening.span.end > opening.span.start).then_some(opening.span.start);
+        self.template_stats(is_enum, opening.span, RecoverySite::TemplateBody)
+    }
+
+    /// A template's statements after the `Indent` opening them (`opening`, a brace's where it has extent), a language
+    /// import among them enabling its feature until their end, as dotty restores `languageImportContext` after
+    /// `templateStatSeq`; its case classes get the companions `Desugar` gives them (`add_derived_givens`), a class's
+    /// or a trait's an object of each instance.
+    fn template_stats(&mut self, is_enum: bool, opening: Span, site: RecoverySite) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
+        let saved = self.syntax.postfix_ops;
+        let mut body = Vec::new();
+        let patdefs_mark = self.pattern_vals;
+        let brace = (opening.end > opening.start).then_some(opening.start);
         let exports_mark = self.export_scratch.len();
         let derives_mark = self.pending_derives.len();
         let cases_mark = self.pending_cases.len();
@@ -1396,7 +1394,7 @@ impl<'a> Parser<'a> {
         let (alias_indent, self_type, alias) = self.parse_self_alias();
         let self_start = (self_type.is_some() || alias != names::EMPTY).then_some(self_at);
         let language = self.language_open.len();
-        self.statements(RecoverySite::TemplateBody, |p| {
+        self.statements(site, |p| {
             let at_enum_case =
                 |p: &Self| p.at(Tok::KwCase) && !matches!(p.kind_at(1), Tok::KwClass | Tok::KwObject);
             if is_enum && at_enum_case(p) {
@@ -1443,6 +1441,7 @@ impl<'a> Parser<'a> {
         // Set last, past the bodies nested in this one.
         self.self_start = self_start;
         self.body_brace = brace;
+        self.syntax.postfix_ops = saved;
         (body, self.export_list(exports_mark), self_type, alias)
     }
 
@@ -2254,29 +2253,15 @@ impl<'a> Parser<'a> {
         matches!(self.kind(), Tok::Newline | Tok::Semi | Tok::Outdent | Tok::RBrace | Tok::Eof)
     }
 
-    /// A given's body after its `with`, the region the lexer opens for its braces or its lines: its statements and its
-    /// self alias.
+    /// A given's body after its `with`, the region the lexer opens for its braces or its lines: the given's class's
+    /// template, read as any template is (dotty's `withTemplate` reads it by `templateBody`), with its self alias.
     fn parse_given_with_body(&mut self) -> Option<(Vec<Stmt>, ListRef, Name)> {
-        if !self.eat(Tok::Indent) {
+        if !self.at(Tok::Indent) {
             return None;
         }
-        self.skip_separators();
-        let (alias_indent, _, named) = self.parse_self_alias();
-        let mut body = Vec::new();
-        // The body is the given's class's template: its export clauses are the class's (dotty's `templateBody`).
-        let exports_mark = self.export_scratch.len();
-        self.statements(RecoverySite::GivenBody, |p| {
-            if p.at(Tok::KwExport) {
-                p.parse_export();
-            } else {
-                p.parse_block_stmt(&mut body);
-            }
-        });
-        self.end_region();
-        if alias_indent {
-            self.eat(Tok::Outdent);
-        }
-        Some((body, self.export_list(exports_mark), named))
+        let opening = self.bump().span;
+        let (body, exports, _, named) = self.template_stats(false, opening, RecoverySite::GivenBody);
+        Some((body, exports, named))
     }
 
     /// The token past the group (`(..)`, `[..]`, a brace's) that opens `n` tokens ahead, its brackets matched: the
