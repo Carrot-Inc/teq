@@ -57,34 +57,37 @@ lsp sourcesFailures 20
 lsp sourcesHeld 1
 lsp sourcesBackoff 12
 lsp sourcesPaths 9
-# tests/gate-scripts.sh's are each unit's seconds in one whole run on eight CPUs (855 s), the time from the check
-# before its first to its last; its driver's runs over stand-in machines are most of them.
-gate-scripts early 20
-gate-scripts pieces-lists 29
-gate-scripts pieces-stamps 55
+# tests/gate-scripts.sh's are each unit's seconds in one run of its three pieces on one machine of sixteen CPUs
+# (1289 s), the time from its body's start to the next unit's (the suite's own `each unit's seconds` line); driver-kind's
+# and outcomes' from a later such run, once the record's floor, the named programs' filter and the deleted tests'
+# entries had added their cells to them;
+# its driver's runs over stand-in machines are most of them. A unit of no seconds weighs 1.
+gate-scripts early 25
+gate-scripts pieces-lists 27
+gate-scripts pieces-stamps 71
 gate-scripts pieces-merge 1
 gate-scripts records 8
 gate-scripts setup 1
-gate-scripts pieces-mutants 8
-gate-scripts driver-ship 36
-gate-scripts driver-unheld 12
-gate-scripts driver-record 34
-gate-scripts driver-wait 35
-gate-scripts driver-cpus 35
-gate-scripts driver-steps 70
-gate-scripts driver-kind 42
-gate-scripts driver-off 55
-gate-scripts driver-guest-compare 43
-gate-scripts driver-holders 26
-gate-scripts driver-held-later 36
-gate-scripts driver-unnamed 13
-gate-scripts driver-without 34
-gate-scripts driver-two-holders 21
-gate-scripts driver-record-step 22
-gate-scripts driver-compare 90
-gate-scripts driver-pieces 44
+gate-scripts pieces-mutants 6
+gate-scripts driver-ship 35
+gate-scripts driver-unheld 9
+gate-scripts driver-record 79
+gate-scripts driver-wait 39
+gate-scripts driver-cpus 31
+gate-scripts driver-steps 62
+gate-scripts driver-kind 330
+gate-scripts driver-off 47
+gate-scripts driver-guest-compare 83
+gate-scripts driver-holders 27
+gate-scripts driver-held-later 43
+gate-scripts driver-unnamed 9
+gate-scripts driver-without 31
+gate-scripts driver-two-holders 27
+gate-scripts driver-record-step 27
+gate-scripts driver-compare 139
+gate-scripts driver-pieces 30
 gate-scripts board 2
-gate-scripts board-cap 72
-gate-scripts outcomes 8
-gate-scripts tools 5
-gate-scripts tail 1
+gate-scripts board-cap 71
+gate-scripts outcomes 22
+gate-scripts tools 4
+gate-scripts tail 3

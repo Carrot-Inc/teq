@@ -164,20 +164,19 @@ gate-coverage 0
 gate-coverage@16 0
 gate-scripts 854
 gate-scripts@16 537
-# estimated: gate-scripts' three pieces, the whole's 854 s on eight CPUs and 711 s on sixteen (the gate's last run of
-# it whole) dealt by the pieces' weights (tests/support/piece-weights.txt: 286, 285 and 287 of 858), each piece's own
-# setups (its tools' check, the landing, the stand-ins) not counted; on the kind guest, the row of eight over its speed
-gate-scripts.1/3 285
-gate-scripts.1/3@16 237
-# measured: on a guest in the latest of the gates of 25 Nov that preceded these rows (an earlier one's 410 s held
-# cells since left out of the tree)
-gate-scripts.1/3@guest 314
-gate-scripts.2/3 598
-gate-scripts.2/3@16 236
-gate-scripts.2/3@guest 587
-gate-scripts.3/3 286
-gate-scripts.3/3@16 277
-gate-scripts.3/3@guest 308
+# measured: gate-scripts' three pieces, one row a kind for all three, since tests/support/piece-weights.txt deals them
+# equal by their units' seconds (328, 328 and 327): each kind's piece in the latest gate of 25 Nov that preceded these
+# rows, 576 s on eight CPUs, 311 on sixteen, 289 on a guest. Its driver's units run their stand-in machines at once,
+# so a piece on eight CPUs takes about twice its time on sixteen or on a guest
+gate-scripts.1/3 576
+gate-scripts.1/3@16 311
+gate-scripts.1/3@guest 289
+gate-scripts.2/3 576
+gate-scripts.2/3@16 311
+gate-scripts.2/3@guest 289
+gate-scripts.3/3 576
+gate-scripts.3/3@16 311
+gate-scripts.3/3@guest 289
 lila-export 26
 lila-compile 13
 lila-test 161

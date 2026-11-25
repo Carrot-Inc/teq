@@ -171,9 +171,10 @@ check() {
 }
 # Each unit's seconds, from its body's start (piece_ran) to the next unit's or the last check's end, held at the end
 # to its bound (tests/support/pieces.py bounds: three times its weight in tests/support/piece-weights.txt, 180 s at
-# least), so that a unit grown by minutes is seen at its own gate, not as the gate's last shard. REPORT ONLY until its
-# failing follow-up: a unit over its bound is named on the summary's line with its seconds and its bound
-# (`note:units-over`), the run not failed by it, and the line says the bound reports only (`note:unit-bound`).
+# least), so that a unit grown by minutes fails at its own gate, not as the gate's last shard: a unit over its bound
+# fails the suite and is named on the summary's line with its seconds and its bound (`note:units-over`). The weights
+# are one machine's seconds on sixteen CPUs, and a machine of fewer multiplies the bound by 16 over its CPUs (a gate's
+# units ran up to 2.6 times their weights on eight, within half of six times).
 eval "piece_stamp() $(declare -f piece_ran | sed 1d)"
 unit_name=
 unit_started=0
@@ -655,9 +656,17 @@ check "pieces: a unit over its bound (three times its weight, 180 s at least) fa
   [ $code_in = 0 ] && [ "$(cat "$work/bounds-in.log")" = "units: 3 timed, each within its bound (3 times its weight, 180 s at least)" ] && [ $code_over = 1 ] &&
   [ "$(cat "$work/bounds-over.log")" = "$(printf "%s\n" "FAIL units: light ran 181 s, over its bound of 180 s (3 times its weight of 55 s in tests/support/piece-weights.txt, 180 s at least)" \
     "FAIL units: heavy ran 271 s, over its bound of 270 s (3 times its weight of 90 s in tests/support/piece-weights.txt, 180 s at least)")" ]'
-check "units: every unit of the suite's is timed and held to its bound, the last at the checks' end, the bound reporting only" /dev/null eval '
+# on a machine of eight CPUs every bound doubles: 330 and 540
+printf 'light 330\nheavy 541\n' > "$work/bounds-eight"
+PIECES_WEIGHTS=$work/bounds-weights python3 tests/support/pieces.py bounds gate-scripts "$work/bounds-eight" --cpus=8 > "$work/bounds-eight.log" 2>&1
+code_eight=$?
+check "pieces: a unit's bound on a machine of fewer CPUs than the weights' sixteen is that many times larger" "$work/bounds-eight.log" eval '[ $code_eight = 1 ] &&
+  [ "$(cat "$work/bounds-eight.log")" = "FAIL units: heavy ran 541 s, over its bound of 540 s (3 times its weight of 90 s in tests/support/piece-weights.txt, times 2 on this machine.s 8 CPUs, 180 s at least)" ] ||
+  grep -q -x "FAIL units: heavy ran 541 s, over its bound of 540 s (3 times its weight of 90 s in tests/support/piece-weights.txt, times 2 on this machine.s 8 CPUs, 180 s at least)" "$work/bounds-eight.log"'
+check "units: every unit of the suite's is timed and held to its bound, the last at the checks' end, a unit over it failing" /dev/null eval '
   [ "$(grep -c "^piece_ran [a-z-]*$" tests/gate-scripts.sh)" = "$(suite_units | wc -l)" ] && grep -q "^unit_close$" tests/gate-scripts.sh &&
-  grep -q "^pieces_end .* note:unit-bound=report_only_until_its_failing_follow-up \${over:+note:units-over=\$over}$" tests/gate-scripts.sh'
+  grep -q -x -F "check \"units: each unit within its bound (three times its weight, by the CPUs of its machine, 180 s at least)\" \"\$work/unit-bounds.log\" \\" tests/gate-scripts.sh &&
+  grep -q -x -F "pieces_end \$((fail > 0)) passed=\$pass failed=\$fail \${over:+note:units-over=\$over}" tests/gate-scripts.sh'
 
 fi
 # The project records (bench/reference/records.scala) through bench/reference/ratchet.scala's verbs, the code the
@@ -3109,11 +3118,11 @@ check "builtin-receiver-extensions: the table's templates and its judge's plante
 
 fi
 unit_close
-python3 tests/support/pieces.py bounds gate-scripts "$work/unit-seconds" > "$work/unit-bounds.log" 2>&1
+check "units: each unit within its bound (three times its weight, by the CPUs of its machine, 180 s at least)" "$work/unit-bounds.log" \
+  eval 'python3 tests/support/pieces.py bounds gate-scripts "$work/unit-seconds" --cpus="${GATE_CPUS:-$(nproc)}" > "$work/unit-bounds.log" 2>&1'
 over=$(sed -n 's/^FAIL units: \([^ ]*\) ran \([0-9]*\) s, over its bound of \([0-9]*\) s .*/\1_\2_s_of_\3/p' "$work/unit-bounds.log" | paste -sd, -)
 # each unit's seconds, on a pass too, so that a machine's log says where a piece's time went
 echo "gate-scripts: each unit's seconds: $(awk '{printf "%s%s %s", sep, $1, $2; sep = ", "}' "$work/unit-seconds")"
-[ -z "$over" ] || echo "gate-scripts: units over their bounds, REPORT ONLY until the bound's failing follow-up: $(tr '_' ' ' <<< "$over")"
 echo "gate-scripts: $pass passed, $fail failed"
-pieces_end $((fail > 0)) passed=$pass failed=$fail note:unit-bound=report_only_until_its_failing_follow-up ${over:+note:units-over=$over}
+pieces_end $((fail > 0)) passed=$pass failed=$fail ${over:+note:units-over=$over}
 [ $fail = 0 ]

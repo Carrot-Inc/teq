@@ -7,8 +7,10 @@
 #   pieces.py select <suite> <k> <n>       piece k's units, one a line, in the suite's order
 #   pieces.py merge <suite> <n> [--results <file>] <log>...
 #                                          the pieces' summaries merged into the suite's result (below)
-#   pieces.py bounds <suite> <seconds>     each unit a run timed (`<unit> <seconds>` a line) against its bound, three
-#                                          times its weight (below) and never under 180 s: a line `FAIL units: ...`
+#   pieces.py bounds <suite> <seconds> [--cpus=<n>]
+#                                          each unit a run timed (`<unit> <seconds>` a line) against its bound, three
+#                                          times its weight (below, seconds on sixteen CPUs) times 16 over the
+#                                          machine's CPUs where it has fewer, and never under 180 s: a line `FAIL units: ...`
 #                                          for each unit over it and exit 1, else one line and exit 0; for a suite whose
 #                                          units run one after another (tests/gate-scripts.sh), so that a unit grown by
 #                                          minutes fails at its own gate and not as the gate's last shard
@@ -61,8 +63,10 @@ def inventory():
     return units
 
 
-# a unit's bound (bounds): this many times its weight, never under BOUND_FLOOR seconds
-BOUND_TIMES, BOUND_FLOOR = 3, 180
+# a unit's bound (bounds): this many times its weight, the weights being seconds on WEIGHT_CPUS, times WEIGHT_CPUS
+# over a machine's CPUs where it has fewer (a gate's units ran up to 2.6 times their weights on eight), never under
+# BOUND_FLOOR seconds
+BOUND_TIMES, BOUND_FLOOR, WEIGHT_CPUS = 3, 180, 16
 
 
 def weights(suite):
@@ -227,21 +231,24 @@ def main(argv):
             results, rest = rest[1], rest[2:]
         code, seconds, line = merge(suite, n, rest, results)
         print(f"{code}\t{seconds}\t{line}")
-    elif len(argv) == 3 and argv[0] == "bounds":
+    elif len(argv) in (3, 4) and argv[0] == "bounds" and (len(argv) == 3 or re.fullmatch(r"--cpus=[1-9][0-9]*", argv[3])):
         suite, path = argv[1], argv[2]
+        cpus = int(argv[3].split("=")[1]) if len(argv) == 4 else WEIGHT_CPUS
+        factor = max(1.0, WEIGHT_CPUS / cpus)
+        machine = f", times {factor:g} on this machine's {cpus} CPUs" if factor > 1 else ""
         table, default = weights(suite)
         timed = [(l.split()[0], int(l.split()[1])) for l in open(path, encoding="utf-8") if len(l.split()) == 2]
         over = []
         for unit, secs in timed:
             weight = table.get(unit, default)
-            bound = max(BOUND_FLOOR, round(BOUND_TIMES * weight))
+            bound = max(BOUND_FLOOR, round(BOUND_TIMES * weight * factor))
             if secs > bound:
                 over.append(f"FAIL units: {unit} ran {secs} s, over its bound of {bound} s ({BOUND_TIMES} times its weight of "
-                            f"{weight:g} s in tests/support/piece-weights.txt, {BOUND_FLOOR} s at least)")
-        print("\n".join(over) or f"units: {len(timed)} timed, each within its bound ({BOUND_TIMES} times its weight, {BOUND_FLOOR} s at least)")
+                            f"{weight:g} s in tests/support/piece-weights.txt{machine}, {BOUND_FLOOR} s at least)")
+        print("\n".join(over) or f"units: {len(timed)} timed, each within its bound ({BOUND_TIMES} times its weight{machine}, {BOUND_FLOOR} s at least)")
         sys.exit(1 if over else 0)
     else:
-        refuse("usage: pieces.py list <suite> <n> | select <suite> <k> <n> | merge <suite> <n> [--results <file>] <log>... | bounds <suite> <seconds>")
+        refuse("usage: pieces.py list <suite> <n> | select <suite> <k> <n> | merge <suite> <n> [--results <file>] <log>... | bounds <suite> <seconds> [--cpus=<n>]")
 
 
 if __name__ == "__main__":
