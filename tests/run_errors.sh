@@ -88,6 +88,8 @@ for src in $(case_sources tests/errors TEQ_ERRORS); do
   if [ -n "$JARS_MISSING" ]; then
     echo "skip $src: not in the coursier cache:$JARS_MISSING"
     printf 'skip %s\tnot in the coursier cache:%s\n' "$name" "$JARS_MISSING" >> "$records/results.txt"
+    # its whole diagnostics' test (below) is not run either
+    [ ! -f "${src%.scala}.check" ] || printf 'skip %s.check\tnot in the coursier cache:%s\n' "$name" "$JARS_MISSING" >> "$records/results.txt"
     continue
   fi
   if [ $code -ne "${rejected:-1}" ]; then

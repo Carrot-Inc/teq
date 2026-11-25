@@ -95,6 +95,10 @@ fail=0
 . tests/support/pending.sh
 pending_begin split "$so" "${pending_args[@]}"
 [ -z "$PIECE$CASES_FILTERED" ] || PENDING_PARTIAL=1
+# every program of the list's (tests/split's), for a piece or a run over TEQ_CASES to tell a deleted program's entry
+# from one it did not run
+split_programs | sed -n 's|^tests/split/||p' > "$so/inventory"
+PENDING_INVENTORY=$so/inventory
 # The program of tests/split whose checks are running, and each such program's first failure.
 own=
 declare -A own_seen own_failed own_skipped

@@ -8,7 +8,9 @@
 #   pending_known <test> <why>   a failure the runner holds to a list of its own checks (tests/modules/known.txt):
 #                             a failure on the board, held by that list and not by this one
 #   pending_end               after the tests: the run held to the list, its status (PENDING_PARTIAL=1 for one
-#                             piece of a suite: the board's list keeps the other pieces' rows)
+#                             piece of a suite: the board's list keeps the other pieces' rows; PENDING_INVENTORY, a
+#                             file of every test of the suite, a name a line, so that a piece drops a deleted test's
+#                             entry and keeps another piece's)
 PENDING_SUITE=
 PENDING_RESULTS=
 PENDING_FLAGS=
@@ -32,7 +34,7 @@ pending_pass() { printf 'pass %s\n' "$1" >> "$PENDING_RESULTS"; }
 pending_fail() { printf 'fail %s\t%s\n' "$1" "$(printf '%s' "$2" | tr '\t\n' '  ' | cut -c1-200)" >> "$PENDING_RESULTS"; }
 pending_skip() { printf 'skip %s\t%s\n' "$1" "$(printf '%s' "$2" | tr '\t\n' '  ' | cut -c1-200)" >> "$PENDING_RESULTS"; }
 pending_known() { printf 'known %s\t%s\n' "$1" "$(printf '%s' "$2" | tr '\t\n' '  ' | cut -c1-200)" >> "$PENDING_RESULTS"; }
-pending_end() { python3 tests/support/pending.py "$PENDING_SUITE" "$PENDING_RESULTS" ${PENDING_PARTIAL:+--partial} $PENDING_FLAGS; }
+pending_end() { python3 tests/support/pending.py "$PENDING_SUITE" "$PENDING_RESULTS" ${PENDING_PARTIAL:+--partial} ${PENDING_PARTIAL:+${PENDING_INVENTORY:+--inventory=$PENDING_INVENTORY}} $PENDING_FLAGS; }
 
 # For a suite of checks that names each failure on a line `FAIL <check>[: <why>]` and counts its passes without
 # naming them, the checks expected to fail are listed by name too (the text before the first `: `):

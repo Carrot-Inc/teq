@@ -1191,6 +1191,9 @@ mkdir -p "$out/results" "$out/fromtasty.d"
 . tests/support/pending.sh
 pending_begin modules "$out/results" "${pending_args[@]}"
 [ -z "$PIECE" ] && [ -n "$every_case" ] || PENDING_PARTIAL=1
+# every program of the list's, for a piece (or a run over named programs) to tell a deleted one's entry from another's
+for d in tests/modules/*/; do [ -d "$d" ] && basename "$d"; done > "$out/results/inventory"
+PENDING_INVENTORY=$out/results/inventory
 i=0
 for name in "${cases[@]}"; do
   echo "$i $name"

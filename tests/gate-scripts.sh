@@ -2576,6 +2576,47 @@ done
 check "outcomes: a suite of listed failures refuses an argument it does not take, naming it and the list's flags" "$oc/flags.log" eval '[ ! -s "$oc/flags.log" ] &&
   grep -q -x -F "pending_fails_args workers \"\" \"\$@\"" tests/workers.sh && grep -q -x -F "pending_fails_args split-watch \"\" \"\$@\"" tests/split-watch.sh &&
   grep -q -x -F "pending_fails_args tasty --update \"\$@\"" tests/tasty.sh'
+# A deleted test's entry (tests/support/pending.py): a whole run whose list or board list names a test it did not
+# judge fails, naming them; under --update they leave both lists, said. A piece given --inventory (every test of its
+# suite) does so for what is outside it and keeps another piece's (in the inventory, not judged here); a piece
+# without one keeps them all. tests/support/stale_entries.py finds the same without a run: its planted trees, and
+# this tree with none.
+printf 'gone\told failure\nlisted_fails\tits failure\n' > "$oc/r/tests/pending/st.txt"
+printf '# test\tverdict\tthe other ways\tthe first line of the difference\ngone\tfail\t-\told failure\nlisted_fails\tfail\t-\tits failure\nrow_gone\tpass\t-\t\nkept\tpass\t-\t\n' > "$oc/r/tests/board/suites/st.tsv"
+printf 'fail listed_fails\tits failure\npass kept\n' > "$oc/st-run.txt"
+pend st st-run.txt
+code1=$?
+cp "$oc/pending.log" "$oc/st-check.log"
+pend st st-run.txt --update
+code2=$?
+cp "$oc/pending.log" "$oc/st-update.log"
+check "outcomes: a whole run fails on a listed name or a board row it did not judge (a deleted test's entry); --update takes them out" "$oc/st-check.log" eval '[ $code1 = 1 ] &&
+  grep -q -F "st: 2 in tests/pending/st.txt or its board list, no test of this run (a deleted test" "$oc/st-check.log" && grep -q "): gone row_gone$" "$oc/st-check.log" &&
+  [ $code2 = 0 ] && grep -q -x "st: 2 left tests/pending/st.txt and its board list, no test of this run: gone row_gone" "$oc/st-update.log" &&
+  [ "$(cut -f1 "$oc/r/tests/pending/st.txt")" = "listed_fails" ] && [ "$(grep -v "^#" "$oc/r/tests/board/suites/st.tsv" | cut -f1 | tr "\n" " ")" = "kept listed_fails " ]'
+printf 'gone\told\nother_piece\tits failure\nlisted_fails\tits failure\n' > "$oc/r/tests/pending/sp.txt"
+printf '# test\tverdict\tthe other ways\tthe first line of the difference\ngone\tfail\t-\told\nother_piece\tfail\t-\tits failure\nrow_gone\tpass\t-\t\nother_pass\tpass\t-\t\nlisted_fails\tfail\t-\tits failure\n' > "$oc/r/tests/board/suites/sp.tsv"
+printf 'listed_fails\nother_piece\nother_pass\n' > "$oc/sp-inventory"
+printf 'fail listed_fails\tits failure\n' > "$oc/sp-run.txt"
+pend sp sp-run.txt --partial
+code0=$?
+pend sp sp-run.txt --partial --inventory=sp-inventory
+code1=$?
+cp "$oc/pending.log" "$oc/sp-check.log"
+pend sp sp-run.txt --partial --inventory=sp-inventory --update
+code2=$?
+cp "$oc/pending.log" "$oc/sp-update.log"
+check "outcomes: a piece drops a deleted test's entries by its suite's inventory, keeps another piece's, and keeps all without one" "$oc/sp-update.log" eval '[ $code0 = 0 ] && [ $code1 = 1 ] &&
+  grep -q -F "sp: 2 in tests/pending/sp.txt or its board list, no test of the suite" "$oc/sp-check.log" && grep -q "): gone row_gone$" "$oc/sp-check.log" &&
+  [ $code2 = 0 ] && grep -q -x "sp: 2 left tests/pending/sp.txt and its board list, no test of the suite.s inventory: gone row_gone" "$oc/sp-update.log" &&
+  [ "$(cut -f1 "$oc/r/tests/pending/sp.txt" | tr "\n" " ")" = "listed_fails other_piece " ] &&
+  [ "$(grep -v "^#" "$oc/r/tests/board/suites/sp.tsv" | cut -f1 | tr "\n" " ")" = "listed_fails other_pass other_piece " ]'
+python3 -I -B tests/support/stale_entries.py --self-test > "$oc/stale-self.log" 2>&1
+code1=$?
+timeout 120 python3 -I -B tests/support/stale_entries.py > "$oc/stale-tree.log" 2>&1
+code2=$?
+check "outcomes: stale_entries.py names a planted stale entry and no interop check; this tree has none" "$oc/stale-tree.log" eval '[ $code1 = 0 ] &&
+  grep -q -x "stale_entries self-test: ok" "$oc/stale-self.log" && [ $code2 = 0 ] && tail -1 "$oc/stale-tree.log" | grep -q -x "stale entries: none"'
 # A stack's overflow keeps its words in a list's note, not the count of frames the program printed after them, which
 # the machine's stack sets (tests/support/pending.py's MACHINE_TAILS); a line of an expectation keeps its digits.
 printf 'fail deep\tJavaScriptException:RangeError: Maximum call stack size exceeded 7373\nfail deeper\tException in thread "main" java.lang.StackOverflowError 4711\nfail kept\t< 100001\nfail macro\texception in macro: java.lang.StackOverflowError (called by rewrite in object M)\n' > "$oc/deep.txt"

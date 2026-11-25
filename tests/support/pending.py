@@ -8,7 +8,7 @@ test it names (judged, skipped or held to the suite's own lists) has no row ther
 --update recorded, listed or not (`unrecorded`; a suite under --fails-only keeps no row of a pass and is not held to
 it). Every runner calls this with what it ran and what failed:
 
-  python3 tests/support/pending.py <suite> <results> [--update] [--add]
+  python3 tests/support/pending.py <suite> <results> [--update] [--add] [--partial [--inventory=<file>]]
 
 <results> has a line per test of the run: `pass <name>`, `fail <name>` and, after a tab, the first line of the
 difference, `skip <name>` and, after a tab, why the run did not judge it (another system's, a jar not in the
@@ -24,6 +24,14 @@ a line names it passing (`pass <name>`, said_pass); one named neither failing, s
 the run fails on it and no --update takes it out (an aggregate count names no check, and an empty or cut results
 file is no evidence that anything ran); --passed=<n> is its count of the checks that passed, for the board. --partial is for one piece of a
 suite run in pieces: the board's list keeps the rows of the tests the piece did not run.
+
+A deleted test's entry: a name the list or the board's list holds that no test of the run is (a whole run, which
+judges every test of its suite, its skips included), or, for a piece given --inventory=<file> (every test of its
+suite, a name a line), no test of that inventory. Without --update or --add it fails the run, named, with the
+command that names it without a run (tests/support/stale_entries.py); under either it leaves both lists, said. A
+piece without an inventory cannot tell another piece's test from a deleted one, and keeps them; so does one given an
+inventory for a test that it holds and this piece did not judge. A suite under --fails-only is not read so: its
+unaccounted names are its own check.
 
 Under --update or --add a run that is then the list's also writes tests/board/suites/<suite>.tsv, the suite's
 row of the board (tests/board/board.py): test, verdict (pass, fail, cannot run for a skipped one), the first
@@ -89,6 +97,17 @@ def board_list(suite):
     return os.path.join(REPO, "tests", "board", "suites", suite + ".tsv")
 
 
+def board_rows(suite):
+    """The tests the suite's board list has a row for."""
+    out = set()
+    if os.path.exists(board_list(suite)):
+        with open(board_list(suite), encoding="utf-8") as fh:
+            for line in fh:
+                if line.strip() and not line.startswith("#"):
+                    out.add(line.split("\t")[0])
+    return out
+
+
 def passing(suite):
     """The tests the suite's board list says pass, in its order."""
     out = []
@@ -101,7 +120,7 @@ def passing(suite):
     return out
 
 
-def write_board_list(suite, ran, failing, skipped, passed=None, partial=False, known=None):
+def write_board_list(suite, ran, failing, skipped, passed=None, partial=False, known=None, keep=None):
     """The suite's list for the board: every test of the run with its verdict, a skipped one `cannot run` with why
     it did not run (another system's included: no earlier machine's line is kept), a `known` one `fail`.
     `passed`: for a suite that names its failures alone, how many checks it counted as passed, kept on a line
@@ -113,8 +132,8 @@ def write_board_list(suite, ran, failing, skipped, passed=None, partial=False, k
             for line in fh:
                 if not line.startswith("#") and line.strip():
                     old[line.split("\t")[0]] = line.rstrip("\n")
-    # a piece of a suite keeps the rows of the tests the other pieces run
-    rows = dict(old) if partial else {}
+    # a piece of a suite keeps the rows of the tests the other pieces run (those of its inventory, given one)
+    rows = {n: r for n, r in old.items() if keep is None or n in keep} if partial else {}
     for n in ran:
         note = clean(failing.get(n, ""))
         rows[n] = f"{n}\t{'fail' if n in failing else 'pass'}\t-\t{note}"
@@ -171,6 +190,26 @@ def hold(suite, ran, failing, update=False, add=False, out=sys.stdout, marks=0, 
     return not fixed and not new
 
 
+def drop_stale(suite, speaks, update=False, add=False, partial=False, out=sys.stdout):
+    """The names of the suite's pending list and board list that no test in `speaks` is (the tests a whole run judged,
+    or a piece's inventory): a deleted test's entry. Under --update or --add they leave both lists, said (the board
+    list's rows when it is written); without, they are printed. Whether the lists name none, or were cleared."""
+    listed_now = read(suite)
+    gone = sorted((set(listed_now) | board_rows(suite)) - set(speaks))
+    if not gone:
+        return True
+    what = "of the suite's inventory" if partial else "of this run"
+    shown = " ".join(gone[:40]) + (" ..." if len(gone) > 40 else "")
+    if update or add:
+        if set(gone) & set(listed_now):
+            write(suite, {n: v for n, v in listed_now.items() if n not in gone})
+        print(f"{suite}: {len(gone)} left tests/pending/{suite}.txt and its board list, no test {what}: {shown}", file=out)
+        return True
+    print(f"{suite}: {len(gone)} in tests/pending/{suite}.txt or its board list, no test {what} (a deleted test's entry; "
+          f"the suite's run with --update takes it out, `python3 tests/support/stale_entries.py {suite}` names it): {shown}", file=out)
+    return False
+
+
 def unrecorded(suite, names, out=sys.stdout):
     """The tests of a run with no row in the suite's board list (tests/board/suites/<suite>.tsv), printed with
     their names: a test the tree gained that no --update recorded, whether the pending list names it or not (only
@@ -205,7 +244,8 @@ def main(argv):
             fh.write("\n".join(head + [rows[n] for n in sorted(rows)]) + "\n")
         return 0
     passed = next((int(f.split("=", 1)[1]) for f in flags if f.startswith("--passed=")), None)
-    flags = [f for f in flags if not f.startswith("--passed=")]
+    inventory_file = next((f.split("=", 1)[1] for f in flags if f.startswith("--inventory=")), None)
+    flags = [f for f in flags if not f.startswith("--passed=") and not f.startswith("--inventory=")]
     if len(args) != 2 or any(f not in ("--update", "--add", "--fails-only", "--partial") for f in flags):
         print(__doc__, file=sys.stderr)
         return 2
@@ -245,14 +285,28 @@ def main(argv):
         # named neither failing, skipped nor passing is unaccounted, the run's failure, kept on the list
         unaccounted = sorted(set(read(suite)) - ran - set(skipped) - set(known))
     update, add = "--update" in flags, "--add" in flags
+    # A listed test or a board row that no test of the run (a whole run) or of the suite's inventory (a piece given
+    # --inventory) is: a deleted test's entry. Under --update or --add it leaves both lists, said; without, it fails
+    # the run, named. A piece without an inventory cannot tell, and keeps them. A test the inventory holds that this
+    # piece did not judge is another piece's: kept.
+    partial = "--partial" in flags
+    judged = ran | set(failing) | set(skipped) | set(known)
+    if partial and inventory_file is not None:
+        with open(inventory_file, encoding="utf-8") as fh:
+            speaks = {l.strip() for l in fh if l.strip() and not l.startswith("#")} | judged
+    else:
+        speaks = None if partial else judged
+    stale = "--fails-only" not in flags and speaks is not None and not drop_stale(suite, speaks, update, add, partial)
     held = hold(suite, ran, failing, update, add, known=known, skipped=len(skipped))
     if "--fails-only" not in flags and not (update or add):
         held = unrecorded(suite, ran | set(failing) | set(skipped) | set(known)) and held
     if unaccounted:
         print(f"{suite}: {len(unaccounted)} listed in tests/pending/{suite}.txt named neither failing, skipped nor passing (kept: no line names its check passing): {' '.join(unaccounted[:40])}{' ...' if len(unaccounted) > 40 else ''}")
         held = False
+    if stale:
+        held = False
     if held and (update or add):
-        write_board_list(suite, ran, failing, skipped, passed, "--partial" in flags, known)
+        write_board_list(suite, ran, failing, skipped, passed, partial, known, keep=speaks)
     return 0 if held else 1
 
 

@@ -108,13 +108,17 @@ def main(argv):
     bad, results, held = [], [], 0
     for n in names:
         want = expected.pop(n, None)
+        # every program gen.py makes has a line for each leg, a cell not held a skip (the run fails on it all the
+        # same), so no list's entry of a program that exists reads as a deleted test's
         if want is None:
             bad.append(f"{n}: no expected cell (record.py after a change of gen.py)")
+            results += [f"skip {n}/{l}\tno expected cell\n" for l in LEGS]
             continue
         for l in LEGS:
             kind, text = got[n][l]
             if kind == "timeout":
                 bad.append(f"{n} {l}: a command timed out ({text})")
+                results.append(f"skip {n}/{l}\ta command timed out ({text})\n")
                 continue
             held += 1
             if want == "REFUSED":

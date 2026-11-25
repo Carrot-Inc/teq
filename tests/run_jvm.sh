@@ -157,10 +157,15 @@ export -f run_one
 export TEQ VERSION out JDK_MAJOR
 
 case_sources tests/cases TEQ_CASES | xargs -P "$JOBS" -I{} bash -c 'run_one {}'
+# a case whose run_one ended before writing its result (killed, out of memory) fails, named
+case_sources tests/cases TEQ_CASES | while read -r src; do
+  name=$(basename "$src" .scala)
+  [ -f "$out/$name.result" ] || echo "noresult $name" > "$out/$name.result"
+done
 
 cat "$out"/*.result | sort > "$out/results.txt"
 status=0
-for kind in backend compile verify exception output timeout; do
+for kind in backend compile verify exception output timeout noresult; do
   names=$(grep "^$kind " "$out/results.txt" | cut -d' ' -f2 | tr '\n' ' ')
   [ -n "$names" ] && echo "$kind: $names"
 done

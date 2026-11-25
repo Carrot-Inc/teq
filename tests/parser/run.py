@@ -578,7 +578,9 @@ def main():
                 print("FAIL " + f)
         ran = {name for name, _ in fixtures()}
         update, add = "--update" in sys.argv, "--add" in sys.argv
-        held = pending.hold("parser-fixtures", ran, failing, update, add)
+        # a listed fixture or board row no fixture is: a deleted fixture's entry (pending.py's rule for a whole run)
+        fresh = pending.drop_stale("parser-fixtures", ran | set(failing), update, add)
+        held = pending.hold("parser-fixtures", ran, failing, update, add) and fresh
         if not (update or add):
             held = pending.unrecorded("parser-fixtures", ran) and held
         if held and (update or add):
