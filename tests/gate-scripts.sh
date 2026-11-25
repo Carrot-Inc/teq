@@ -1271,8 +1271,8 @@ check "driver: a dealt line on a machine whose environment sets TEQ_CASES reads 
 TEQ_ERRORS=y gate "$work/driver-filter-local.log" "$(printf 'm1 free')" --only tree-paths
 code=$?
 log=$work/driver-filter-local.log
-check "driver: a local line under a gate whose environment sets TEQ_ERRORS reads red, the filter named" "$log" eval '[ $code != 0 ] &&
-  row tree-paths local "$log" | grep -q "a filter of the programs is set in the gate.s environment (TEQ_ERRORS=y)"'
+check "driver: a local line under a gate whose environment sets TEQ_ERRORS reads red, the filter named, nothing built for it" "$log" eval '[ $code != 0 ] &&
+  row tree-paths local "$log" | grep -q "a filter of the programs is set in the gate.s environment (TEQ_ERRORS=y)" && ! row build local "$log"'
 fi
 if piece_has driver-off; then
 piece_ran driver-off
@@ -1354,11 +1354,17 @@ if piece_has driver-held-later; then
 piece_ran driver-held-later
 need_driver
 # A holder busy at the projects' first ask and free at a later one stays theirs: the shards, which find no free machine
-# at their first ask and ask again once both are free, take the other.
-( sleep 3; printf '%s\n' "m1 free" "h1 free holds=lila" > "$agent/pool" ) &
+# at their first ask and ask again once both are free, take the other. The pool turns free 3 s after gate() has
+# written it busy, never before: gate() first removes the earlier cells' mirrors, here planted slow (4 s), which a
+# flip timed from the cell's start would lose to.
+rm -f "$agent/pool"
+( for i in $(seq 1 300); do grep -q -x "h1 busy holds=lila" "$agent/pool" 2> /dev/null && break; sleep 0.2; done
+  sleep 3; printf '%s\n' "m1 free" "h1 free holds=lila" > "$agent/pool" ) &
 flip=$!
+rm() { sleep 4; command rm "$@"; }
 gate "$work/driver-p8.log" "$(printf 'm1 busy\nh1 busy holds=lila')" --only parser,fold,lila-export
 code=$?
+unset -f rm
 wait $flip
 log=$work/driver-p8.log
 check "driver: a holder busy at the first ask and free at a later one is left to its project, the shards taking the other" "$log" eval '[ $code = 1 ] &&

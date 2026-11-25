@@ -694,7 +694,17 @@ local_project() {
 # generated once before the two instruction lines read them. The binary of the head is built first when it is
 # missing or not the head's.
 local_half() {
-  local s code
+  local s code name filter
+  # a run over named programs alone (tests/support/cases.sh's TEQ_CASES, TEQ_ERRORS) is never a gate's line: every
+  # line of this half reads red at once, the filter named, and nothing is built for lines that cannot pass
+  if [ -n "${TEQ_CASES:-}${TEQ_ERRORS:-}" ]; then
+    filter="FAIL: a filter of the programs is set in the gate's environment (${TEQ_CASES:+TEQ_CASES=$TEQ_CASES }${TEQ_ERRORS:+TEQ_ERRORS=$TEQ_ERRORS}): a gate's line runs its suite whole"
+    for name in $local_lines $project_lines; do
+      [[ " $local_lines $here_lines " == *" $name "* ]] && selected $name && result $name local 0 1 "$filter" "$out/local.results"
+    done
+    now > "$out/local.ended"
+    return 1
+  fi
   if [ $local_build = 1 ]; then
     s=$(now)
     (cd "$wt" && timeout 1500 cargo build --release) > "$out/build-local.log" 2>&1
