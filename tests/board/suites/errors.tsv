@@ -1080,6 +1080,7 @@ trait_parent_plain_list_left_over	pass	-
 trait_parent_using_only_omitted	pass	-	
 trait_parent_using_only_reordered	pass	-	
 transparent_widened_ascription	pass	-	
+try_superclass_constructor_argument_jvm	pass	-	
 tuple1_as_binary_constructor	pass	-	
 tuple_index_bounds	pass	-	
 tuple_index_bounds_inlined	pass	-	

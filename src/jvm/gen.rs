@@ -469,6 +469,21 @@ impl Prior {
 pub struct Pending {
     pub lifted: Rc<Lifted>,
     pub body: PendingBody,
+    /// Where the body's `return`s leave the def around it by a throw (`MethodCx::return_target`).
+    pub return_target: ReturnTarget,
+}
+
+/// The def a closure's `return`s leave, at whose erased result they throw (`Gen::lower_non_local_return`).
+#[derive(Clone, Default)]
+pub enum ReturnTarget {
+    Def(ErasedType),
+    /// The closure stands in code no def holds (a parameter's default, a field's initialiser), where scalac refuses a
+    /// `return`: teq's typer refuses it, or the method reading the closure that makes no key (`Gen::load_lazy_key`,
+    /// `load_return_key`).
+    NoDef,
+    /// A closure the walk of the program's code did not meet (`Cx::return_def`).
+    #[default]
+    Unknown,
 }
 
 /// A def whose self calls in tail position are jumps to the start of its code, as the lowering decides it: the
@@ -502,6 +517,8 @@ pub struct MethodCx {
     pub closure: bool,
     /// The slot of that key: the def's, which it makes, or the closure's capture of it.
     pub return_key: Option<u16>,
+    /// In a closure, the def its `return`s leave.
+    pub return_target: ReturnTarget,
     /// In a value class's `m$extension`, `this` is the underlying value of this type.
     pub this_underlying: Option<ErasedType>,
     /// In a class's copy of a local lazy val's accessor or initialiser or of a local def that stands in a
@@ -607,6 +624,7 @@ impl Default for MethodCx {
             lambda: false,
             closure: false,
             return_key: None,
+            return_target: ReturnTarget::Unknown,
             this_underlying: None,
             this_module: None,
             this_home: None,
@@ -3697,8 +3715,7 @@ impl<'a> Gen<'a> {
             TExpr::If(..) => unreachable!("lowered (`Gen::lower_if`)"),
             TExpr::Match(..) => unreachable!("lowered (`Gen::lower_match`)"),
             TExpr::Block(..) => unreachable!("lowered (`Gen::lower_block`)"),
-            TExpr::Throw(..) | TExpr::Try(_) => unreachable!("lowered (`Gen::lower_expr`)"),
-            TExpr::Return(v) => self.return_(v, want),
+            TExpr::Throw(..) | TExpr::Try(_) | TExpr::Return(_) => unreachable!("lowered (`Gen::lower_expr`)"),
             _ => {
                 let t = self.node(e);
                 match self.fit(e, &t, want) {
@@ -3718,68 +3735,8 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// `return v` where a value of the type `want` is wanted: nothing is written after it, the dead
-    /// code that follows verified against a value of that type, as after a throw (dotty's `genLoadTo`
-    /// sends a `Return` to its destination and adapts nothing after it). Out of a closure it is the
-    /// throw dotty's `NonLocalReturns.nonLocalReturnThrow` writes, which the def's handler takes by
-    /// its key; a call of the def by itself that goes round its loop is the jump alone.
-    fn return_(&mut self, v: TExprId, want: &ErasedType) {
-        if let Some((receiver, args)) = self.jump_call(v) {
-            let jump = self.lowering(|g| {
-                let kind = g.lower_self_tail_call(receiver, args);
-                g.lir.push(kind, want.clone())
-            });
-            return self.write(jump);
-        }
-        if self.m.closure {
-            match self.m.return_key {
-                Some(key) => {
-                    let object = ErasedType::object();
-                    self.new_object(NON_LOCAL_RETURN);
-                    self.load(key, &object);
-                    self.expr(v, &object);
-                    self.invoke(Invoke::Special, NON_LOCAL_RETURN, false, "<init>", &[object.clone(), object], &ErasedType::V);
-                    self.code.op(op::ATHROW);
-                    self.code.pop();
-                    self.code.end_path();
-                }
-                None => self.unsupported("a non-local return of a def that makes no key"),
-            }
-        } else {
-            let ret = self.m.ret.clone();
-            match self.m.finalizers.last().copied() {
-                // Through the enclosing finalizer or monitor exit, as dotty's `genReturn` leaves
-                // (BCodeBodyBuilder.scala 649-661): the value kept in the early-return slot, the
-                // operands under it dropped, dead as the method leaves, the frame's cleanup taken; the
-                // operands dropped stand under the dead code again.
-                Some(frame) => {
-                    self.expr(v, &ret);
-                    match self.m.early_return {
-                        Some(slot) if ret != ErasedType::V => self.store(slot, &ret),
-                        None if ret != ErasedType::V => self.unsupported("internal error: a return through a finalizer before its slot"),
-                        _ => {}
-                    }
-                    let dropped = self.drop_stack();
-                    self.m.exits_taken.push(frame.cleanup);
-                    self.goto(frame.cleanup);
-                    for vt in dropped {
-                        self.code.push(vt);
-                    }
-                }
-                None => {
-                    self.expr(v, &ret);
-                    self.return_value(&ret);
-                }
-            }
-        }
-        if *want != ErasedType::V {
-            let vt = self.vt(want);
-            self.code.push(vt);
-        }
-    }
-
     /// Whether code written after `e` is not reached from it: a `return` out of the def's own
-    /// method, or a call of the def by itself that goes round its loop (`Gen::return_`), alone, as a
+    /// method, or a call of the def by itself that goes round its loop (`Gen::lower_return`), alone, as a
     /// block's result or in both branches of a conditional, as dotty's `genBlockTo` and
     /// `genLoadIfTo` send them to the destination (BCodeBodyBuilder.scala 1129-1138, 245-257).
     pub(super) fn leaves(&self, e: TExprId) -> bool {
@@ -3896,7 +3853,7 @@ impl<'a> Gen<'a> {
             TExpr::SeqLit(_) => unreachable!("lowered or refused (`Gen::lower_seq_literal`)"),
             TExpr::ArrayLit(_) | TExpr::Index(..) => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::Spread(_) => unreachable!("lowered (`Gen::lower_node`)"),
-            TExpr::Return(_) => unreachable!("written where the type wanted is known (`Gen::return_`)"),
+            TExpr::Return(_) => unreachable!("lowered where the type wanted is known (`Gen::lower_return`)"),
             TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) => unreachable!("refused by the lowering (`Gen::lower_refused`)"),
             TExpr::Null => unreachable!("lowered (`Gen::lower_node`)"),
             TExpr::Throw(..) | TExpr::Try(_) => unreachable!("emitted by expr"),
@@ -4202,7 +4159,10 @@ impl<'a> Gen<'a> {
                 VT::Long => ErasedType::J,
                 VT::Float => ErasedType::F,
                 VT::Double => ErasedType::D,
-                VT::Object(_) | VT::Null => ErasedType::object(),
+                // An object `new` made and its constructor has not run yet (an argument of a constructor, an
+                // element of a list literal's array) is stashed as it is, as dotty's stack stash keeps it
+                // (`acquireFullStack`): the verifier takes an uninitialised reference in a local.
+                VT::Object(_) | VT::Null | VT::Uninit(_) => ErasedType::object(),
                 _ => {
                     self.unsupported("not supported on the JVM yet: try as an argument of a constructor");
                     return Vec::new();
@@ -6417,8 +6377,14 @@ impl<'a> Gen<'a> {
         if let Some(k) = copy {
             self.finally_lambdas.insert(k, lifted.clone());
         }
-        self.defer(Pending { lifted: lifted.clone(), body: PendingBody::Lambda(params, code) });
+        let return_target = if shape.key { self.return_target() } else { ReturnTarget::Unknown };
+        self.defer(Pending { lifted: lifted.clone(), body: PendingBody::Lambda(params, code), return_target });
         lifted
+    }
+
+    /// The def a `return` written here leaves: the method's own, or in a closure the one its key came with.
+    pub(super) fn return_target(&self) -> ReturnTarget {
+        if self.m.closure { self.m.return_target.clone() } else { ReturnTarget::Def(self.m.ret.clone()) }
     }
 
     /// The number of the `try` whose finalizer is about to be written, the same in every copy of the finalizers
@@ -6540,7 +6506,7 @@ impl<'a> Gen<'a> {
         // take their names from it.
         let f = cx.fun_of_sym[s.idx()];
         if f != u32::MAX && cx.input.prog.funs[f as usize].body.is_some() {
-            self.defer(Pending { lifted: lifted.clone(), body: PendingBody::Fun(FunId(f)) });
+            self.defer(Pending { lifted: lifted.clone(), body: PendingBody::Fun(FunId(f)), return_target: ReturnTarget::Unknown });
         }
         lifted
     }
@@ -6601,7 +6567,7 @@ impl<'a> Gen<'a> {
         let place = self.lifted_place(Placed::Default(s, i));
         let l = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone(), place));
         self.lifted_defaults.insert((s, i), l.clone());
-        (l.clone(), Some(Pending { lifted: l, body: PendingBody::Default(FunId(f), i) }))
+        (l.clone(), Some(Pending { lifted: l, body: PendingBody::Default(FunId(f), i), return_target: ReturnTarget::Unknown }))
     }
 
     // ---- blocks ----

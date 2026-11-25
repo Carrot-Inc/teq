@@ -132,7 +132,8 @@ impl<'a> Gen<'a> {
                 _ => Some(PendingBody::LazyAccessor(s)),
             };
             if let Some(body) = body {
-                self.defer(Pending { lifted: lifted.clone(), body });
+                let return_target = self.lazy_return_target(s, &lifted);
+                self.defer(Pending { lifted: lifted.clone(), body, return_target });
             }
         }
         lifted
@@ -145,9 +146,24 @@ impl<'a> Gen<'a> {
         for &s in cx.owned_lazies(home, file) {
             let Some(init) = cx.lazy_local_init(s) else { continue };
             let accessor = self.lazy_method(s, false);
-            self.defer(Pending { lifted: accessor, body: PendingBody::LazyAccessor(s) });
+            self.defer(Pending { lifted: accessor, body: PendingBody::LazyAccessor(s), return_target: ReturnTarget::Unknown });
             let initialiser = self.lazy_method(s, true);
-            self.defer(Pending { lifted: initialiser, body: PendingBody::LazyInit(s, init) });
+            let return_target = self.lazy_return_target(s, &initialiser);
+            self.defer(Pending { lifted: initialiser, body: PendingBody::LazyInit(s, init), return_target });
+        }
+    }
+
+    /// The def the `return`s of the method `lifted` of the local lazy val `s` leave: the def around the val, none
+    /// where the walk met it in code no def holds.
+    fn lazy_return_target(&mut self, s: SymId, lifted: &Lifted) -> ReturnTarget {
+        let cx = self.cx;
+        if !lifted.key {
+            return ReturnTarget::Unknown;
+        }
+        match (cx.local_home(s), cx.return_def(s)) {
+            (_, Some(def)) => ReturnTarget::Def(self.return_type(def)),
+            (Some(_), None) => ReturnTarget::NoDef,
+            (None, None) => ReturnTarget::Unknown,
         }
     }
 

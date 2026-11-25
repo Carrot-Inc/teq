@@ -615,6 +615,7 @@ impl<'a> Gen<'a> {
         self.m.closure = is_lambda || matches!(p.body, PendingBody::LazyInit(..));
         if l.key {
             self.m.return_key = Some(key_slot);
+            self.m.return_target = p.return_target.clone();
             // A lazy val's accessor and initialiser take the key of its holder.
             if let PendingBody::LazyAccessor(s) | PendingBody::LazyInit(s, _) = p.body {
                 self.m.lazy_keys.insert(s, key_slot);

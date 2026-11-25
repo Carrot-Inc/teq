@@ -1,0 +1,8 @@
+lazy direct 2 1
+lazy lambda 2 1
+lazy twice 2 6
+lazy in lambda 200 0
+lazy in lazy 2 1
+lazy string n2 none
+class 7 5
+local 1002 1000

@@ -4,7 +4,7 @@
 use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LabelId, LiftedFrom, LirId, List, Relation, SwitchCase, TempId};
 use super::classfile::{op, switch_layout, Label, VT};
 use super::classes::Declared;
-use super::gen::{Gen, Local};
+use super::gen::{FinallyFrame, Gen, Local};
 use super::names::*;
 use std::rc::Rc;
 
@@ -257,14 +257,9 @@ impl<'a> Gen<'a> {
                 }
             }
             Kind::Return(value) => {
+                let frame = self.m.finalizers.last().copied();
                 self.write(value);
-                let ret = self.m.ret.clone();
-                self.return_value(&ret);
-                // Where a value is wanted, the dead code after it stands over one, as after a jump.
-                if ty != ErasedType::V {
-                    let vt = self.vt(&ty);
-                    self.code.push(vt);
-                }
+                self.leave_method(frame, &ty);
             }
             Kind::SelfTailCall { receiver, args } => {
                 self.write_self_tail_call(receiver, args);
@@ -698,6 +693,38 @@ impl<'a> Gen<'a> {
         self.leave_to_join(&held, exit);
     }
 
+    /// The return of the value on the stack, `frame` the finalizer or monitor exit that encloses it, where the
+    /// writer stood before the value. Off `write`'s frame, which every depth recurses through.
+    #[inline(never)]
+    fn leave_method(&mut self, frame: Option<FinallyFrame>, ty: &ErasedType) {
+        let ret = self.m.ret.clone();
+        match frame {
+            // Through the enclosing finalizer or monitor exit, as dotty's `genReturn` leaves
+            // (BCodeBodyBuilder.scala 649-661): the value kept in the early-return slot, the
+            // operands under it dropped, dead as the method leaves, the frame's cleanup taken; the
+            // operands dropped stand under the dead code again.
+            Some(frame) => {
+                match self.m.early_return {
+                    Some(slot) if ret != ErasedType::V => self.store(slot, &ret),
+                    None if ret != ErasedType::V => self.unsupported("internal error: a return through a finalizer before its slot"),
+                    _ => {}
+                }
+                let dropped = self.drop_stack();
+                self.m.exits_taken.push(frame.cleanup);
+                self.goto(frame.cleanup);
+                for vt in dropped {
+                    self.code.push(vt);
+                }
+            }
+            None => self.return_value(&ret),
+        }
+        // Where a value is wanted, the dead code after it stands over one, as after a jump.
+        if *ty != ErasedType::V {
+            let vt = self.vt(ty);
+            self.code.push(vt);
+        }
+    }
+
     /// A `try`'s or a `synchronized` block's recorded `returns` is the tree's answer wherever no
     /// escape node inside holds typed IR the tree does not see into (`Body::returns_through`).
     fn check_returns(&self, id: LirId, returns: bool) {
@@ -709,7 +736,7 @@ impl<'a> Gen<'a> {
     /// branches of a conditional (`Gen::leaves`, which a node of typed IR asks).
     fn branch_leaves(&self, id: LirId) -> bool {
         match &self.lir.node(id).kind {
-            Kind::SelfTailCall { .. } => true,
+            Kind::Return(_) | Kind::SelfTailCall { .. } => true,
             Kind::Legacy(e, _) => self.leaves(*e),
             Kind::Block { result, .. } => self.branch_leaves(*result),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.branch_leaves(*then) && self.branch_leaves(*otherwise),

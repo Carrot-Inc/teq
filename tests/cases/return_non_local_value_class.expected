@@ -1,0 +1,11 @@
+lambda 2 0
+nested 20 0
+by-name 200 0
+long 20000000000 0
+double 2.5 0.25
+string n2 none
+generic 2 0
+any Meters 2 0
+option Some(2) None
+class 7 5
+local 1002 1000

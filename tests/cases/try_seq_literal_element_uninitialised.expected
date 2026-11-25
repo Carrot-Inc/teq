@@ -1,0 +1,6 @@
+list: 4 3 E:r 34 44
+list, two: E:r List(-1, 30) E:r List(30, 50) List(40, 60)
+list of strings: List(a, v0) List(a, c) E:r List(a, v30) List(a, v40)
+seq: List(1, 0) List(1, -1) E:r List(1, 30) List(1, 40)
+vector: Vector(0, 2) Vector(-1, 2) E:r Vector(30, 2) Vector(40, 2)
+array: 1 0 E:r 31 41

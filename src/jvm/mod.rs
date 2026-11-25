@@ -764,19 +764,26 @@ impl<'a> Cx<'a> {
     /// every class whose code reads the val writes its own accessor and initialiser over the one
     /// holder (`LazyVals.transformLocalDef`, lifted per class as a local def is).
     pub fn lazy_local_init(&self, s: SymId) -> Option<TExprId> {
-        self.lazy_locals().get(&s).and_then(|&(init, _, _)| init)
+        self.lazy_locals().get(&s).and_then(|&(init, _, _, _)| init)
+    }
+
+    /// The def a `return` in the initialiser of the local lazy val `s` leaves: the nearest def around the val, a
+    /// lambda's or an initialiser's code being its def's (dotty's `Typer.typedReturn`, `enclMethInfo`, which skips
+    /// what is no real method).
+    pub fn return_def(&self, s: SymId) -> Option<SymId> {
+        self.lazy_locals().get(&s).and_then(|&(_, _, _, def)| def)
     }
 
     /// The class whose code declares the local lazy val or local def `s` (`None` for a file's top-level
     /// code): the class `LambdaLift` lifts it into, whose instance a copy of it in another class reads.
     pub fn local_home(&self, s: SymId) -> Option<Option<ClassId>> {
-        self.lazy_locals().get(&s).map(|&(_, home, _)| home)
+        self.lazy_locals().get(&s).map(|&(_, home, _, _)| home)
     }
 
     /// The file whose top-level code declares the local lazy val or local def `s` (`local_home` `Some(None)`):
     /// the file of the code, an inline body's expansion included, not of the definition's symbol.
     pub fn local_file(&self, s: SymId) -> Option<crate::source::FileId> {
-        self.lazy_locals().get(&s).map(|&(_, _, file)| crate::source::FileId(file))
+        self.lazy_locals().get(&s).map(|&(_, _, file, _)| crate::source::FileId(file))
     }
 
     /// The local lazy vals of the reached code of the class `home` (with `None`, of the top level of the file
@@ -802,11 +809,11 @@ impl<'a> Cx<'a> {
         let all = self.owned_lazies.get_or_init(|| {
             let syms = self.input.syms;
             let mut found: FxMap<SymId, LocalPlace> = FxMap::default();
-            for (r, home, file) in self.local_roots(true) {
-                lazy_locals_in(self, r, home, file, &mut found);
+            for (r, home, file, def) in self.local_roots(true) {
+                lazy_locals_in(self, r, home, file, def, &mut found);
             }
             let mut out: FxMap<(Option<ClassId>, u32), Vec<SymId>> = FxMap::default();
-            for (&s, &(init, home, file)) in &found {
+            for (&s, &(init, home, file, _)) in &found {
                 if init.is_some() {
                     let file = if home.is_some() { u32::MAX } else { file };
                     out.entry((home, file)).or_default().push(s);
@@ -823,21 +830,23 @@ impl<'a> Cx<'a> {
 
     /// The roots of the program's code with the class each stands in (`None` for a file's top level) and the file
     /// of the code: every class's methods, constructors, defaults, initialisers and superclass and trait calls, the
-    /// files' functions and top-level vals; with `reached`, the methods and the files' functions the reach keeps alone.
-    fn local_roots(&self, reached: bool) -> Vec<(TExprId, Option<ClassId>, u32)> {
+    /// files' functions and top-level vals; with `reached`, the methods and the files' functions the reach keeps alone;
+    /// and the def whose body the root is (`Cx::return_def`).
+    fn local_roots(&self, reached: bool) -> Vec<(TExprId, Option<ClassId>, u32, Option<SymId>)> {
         let prog = self.input.prog;
         let syms = self.input.syms;
         let kept = |f: crate::tir::FunId| !reached || self.input.reach.funs.get(f.idx()).copied().unwrap_or(false);
-        let mut out: Vec<(TExprId, Option<ClassId>, u32)> = Vec::new();
+        let mut out: Vec<(TExprId, Option<ClassId>, u32, Option<SymId>)> = Vec::new();
         for tc in prog.classes.iter() {
             let home = Some(tc.id);
             // The unit holding the class: an expansion's copy is its site's.
             let file = syms.class(tc.id).module_file().0;
             for &f in tc.methods.iter().filter(|&&f| kept(f)).chain(&tc.ctors) {
-                out.extend(prog.funs[f.idx()].body.map(|b| (b, home, file)));
-                out.extend(prog.funs[f.idx()].defaults.iter().flatten().map(|&d| (d, home, file)));
+                let fun = &prog.funs[f.idx()];
+                out.extend(fun.body.map(|b| (b, home, file, Some(fun.sym))));
+                out.extend(fun.defaults.iter().flatten().map(|&d| (d, home, file, None)));
             }
-            out.extend(tc.ctor_defaults.iter().flatten().map(|&d| (d, home, file)));
+            out.extend(tc.ctor_defaults.iter().flatten().map(|&d| (d, home, file, None)));
             // The superclass call the constructor makes: its named arguments' temporaries and its arguments, which
             // for an anonymous class are evaluated where it is made (`lazy_locals_in`).
             let stmt_roots = |l: crate::ast::ListRef| {
@@ -846,30 +855,31 @@ impl<'a> Cx<'a> {
                     TStmt::Fun(_) => None,
                 })
             };
-            out.extend(stmt_roots(tc.parent_prelude).map(|x| (x, home, file)));
+            out.extend(stmt_roots(tc.parent_prelude).map(|x| (x, home, file, None)));
             // Where the class's constructor evaluates its superclass's arguments: not those an anonymous class's
             // creation evaluates (`tir::parent_call_at_creation`), which are the creation's code.
             if !crate::tir::parent_call_at_creation(syms, self.input.types, tc.id) {
-                out.extend(tc.parent_args.iter().flat_map(|&l| prog.expr_list(l).iter().map(|&a| (a, home, file))));
+                out.extend(tc.parent_args.iter().flat_map(|&l| prog.expr_list(l).iter().map(|&a| (a, home, file, None))));
             }
             for init in &tc.init {
                 match *init {
-                    TInit::Field(_, e) | TInit::Stmt(e) => out.push((e, home, file)),
+                    TInit::Field(_, e) | TInit::Stmt(e) => out.push((e, home, file, None)),
                     TInit::Parent(_, call) => {
-                        out.extend(stmt_roots(call.prelude).map(|x| (x, home, file)));
-                        out.extend(prog.expr_list(call.args).iter().map(|&a| (a, home, file)));
+                        out.extend(stmt_roots(call.prelude).map(|x| (x, home, file, None)));
+                        out.extend(prog.expr_list(call.args).iter().map(|&a| (a, home, file, None)));
                     }
                 }
             }
         }
         for (file, funs) in self.file_funs.iter().enumerate() {
             for &f in funs.iter().filter(|&&f| kept(f)) {
-                out.extend(prog.funs[f.idx()].body.map(|b| (b, None, file as u32)));
-                out.extend(prog.funs[f.idx()].defaults.iter().flatten().map(|&d| (d, None, file as u32)));
+                let fun = &prog.funs[f.idx()];
+                out.extend(fun.body.map(|b| (b, None, file as u32, Some(fun.sym))));
+                out.extend(fun.defaults.iter().flatten().map(|&d| (d, None, file as u32, None)));
             }
         }
         for &(s, e) in prog.top_vals.iter() {
-            out.push((e, None, syms.sym(s).file.0));
+            out.push((e, None, syms.sym(s).file.0, None));
         }
         out
     }
@@ -879,8 +889,8 @@ impl<'a> Cx<'a> {
     fn lazy_locals(&self) -> &FxMap<SymId, LocalPlace> {
         self.lazy_locals.get_or_init(|| {
             let mut out: FxMap<SymId, LocalPlace> = FxMap::default();
-            for (r, home, file) in self.local_roots(false) {
-                lazy_locals_in(self, r, home, file, &mut out);
+            for (r, home, file, def) in self.local_roots(false) {
+                lazy_locals_in(self, r, home, file, def, &mut out);
             }
             out
         })
@@ -1449,12 +1459,14 @@ fn test_exprs(prog: &Program, t: TestId, out: &mut Vec<TExprId>) {
 }
 
 /// A local lazy val's initialiser (none for a local def), the class whose code declares it (`None` for a file's top
-/// level) and the file of that code (`Cx::lazy_local_init`, `local_home`, `local_file`).
-type LocalPlace = (Option<TExprId>, Option<ClassId>, u32);
+/// level), the file of that code and the def around it (`Cx::lazy_local_init`, `local_home`, `local_file`,
+/// `return_def`).
+type LocalPlace = (Option<TExprId>, Option<ClassId>, u32, Option<SymId>);
 
-/// The local lazy vals and local defs the code `e` declares, its lambdas' and local defs' included, each with
-/// `home` and `file` (`Cx::local_home`, `local_file`); a local class's code is its own class's.
-fn lazy_locals_in(cx: &Cx, e: TExprId, home: Option<ClassId>, file: u32, out: &mut FxMap<SymId, LocalPlace>) {
+/// The local lazy vals and local defs the code `e` of the def `def` declares, its lambdas' and local defs' included,
+/// each with `home` and `file` (`Cx::local_home`, `local_file`) and the def around it; a local class's code is its own
+/// class's.
+fn lazy_locals_in(cx: &Cx, e: TExprId, home: Option<ClassId>, file: u32, def: Option<SymId>, out: &mut FxMap<SymId, LocalPlace>) {
     let prog = cx.input.prog;
     let syms = cx.input.syms;
     let mut stack: Vec<TExprId> = vec![e];
@@ -1500,14 +1512,19 @@ fn lazy_locals_in(cx: &Cx, e: TExprId, home: Option<ClassId>, file: u32, out: &m
                         TStmt::Val(sym, init) => {
                             let info = syms.sym(sym);
                             if info.owner == Owner::Local && info.mods & mods::LAZY != 0 && info.kind != SymKind::Def {
-                                out.insert(sym, (Some(init), home, file));
+                                out.insert(sym, (Some(init), home, file, def));
                             }
                             stack.push(init);
                         }
                         TStmt::Fun(f) => {
-                            out.insert(prog.funs[f.idx()].sym, (None, home, file));
-                            stack.extend(prog.funs[f.idx()].body);
-                            stack.extend(prog.funs[f.idx()].defaults.iter().flatten().copied());
+                            let fun = &prog.funs[f.idx()];
+                            out.insert(fun.sym, (None, home, file, def));
+                            if let Some(body) = fun.body {
+                                lazy_locals_in(cx, body, home, file, Some(fun.sym), out);
+                            }
+                            for &d in fun.defaults.iter().flatten() {
+                                lazy_locals_in(cx, d, home, file, None, out);
+                            }
                         }
                     }
                 }

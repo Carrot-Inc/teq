@@ -375,6 +375,7 @@ regex_class_sets	error: not supported on JavaScript: method split of java.util.r
 regex_scoped_flags	throw new PatternSyntaxException(error, regex, -1);
 regex_unicode_class_case	throw new PatternSyntaxException(error, regex, -1);
 regroup_bincompat_lib	error: not found: rgb
+return_non_local_lazy_value_class	output differs
 return_tail_call	error: Not found: type IllegalThreadStateException
 return_tail_call_and_or	RangeError: Maximum call stack size exceeded
 return_tail_call_argument_jump	RangeError: Maximum call stack size exceeded

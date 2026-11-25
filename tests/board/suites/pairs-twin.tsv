@@ -2619,6 +2619,8 @@ cases/repeated_args_solved_later	pass	-
 cases/repeated_args_value_class_cast	pass	-	
 cases/result_takes_arguments	pass	-	
 cases/return_local	pass	-	
+cases/return_non_local_lazy_value_class	pass	-	
+cases/return_non_local_value_class	pass	-	
 cases/return_stmt	pass	-	
 cases/return_tail_call	pass	-	
 cases/return_tail_call_and_or	pass	-	
@@ -3226,8 +3228,11 @@ cases/transparent_inline_js_class_twice	pass	-
 cases/transparent_match_constant_branch	pass	-	
 cases/transparent_widened_ascription	pass	-	
 cases/try_collect_lazy_zip	pass	-	
+cases/try_constructor_argument_uninitialised	pass	-	
 cases/try_handler_finally	pass	-	
 cases/try_handler_typed_first	pass	-	
+cases/try_macro_seq_literal_element	pass	-	
+cases/try_seq_literal_element_uninitialised	pass	-	
 cases/try_without_handlers	pass	-	
 cases/tuple_applied_values_xxl	pass	-	
 cases/tuple_apply_known_prefix	pass	-	

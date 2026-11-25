@@ -256,10 +256,6 @@ pub struct Node {
 /// the old generator still writes are this list (docs/LIR.md, "How the extraction goes").
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Unlowered {
-    /// `return x` where it is not the def's result: a statement, an operand, inside a `try`.
-    ReturnInValuePosition,
-    /// `return x` inside a lambda, which leaves the def around it by a throw.
-    NonLocalReturn,
     /// A lambda, a local def's call, a local lazy val's read, `new` or a default of a class that
     /// captures, or a local trait's member call, after an earlier part of the method was left to
     /// the old generator: what it captures is asked in the order the code is written.

@@ -4,7 +4,7 @@
 //! written is the output's bytes.
 
 use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LiftedFrom, LirId, List, MethodRef, Refusal, Relation, TempId, Unlowered};
-use super::gen::{rank_type, CallRoute, CaptureArgument, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
+use super::gen::{rank_type, CallRoute, CaptureArgument, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, ReturnTarget, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::names::*;
 use crate::ast::ListRef;
 use crate::classfile::ACC_STATIC;
@@ -125,6 +125,7 @@ impl<'a> Gen<'a> {
                 let value = self.lower_expr(inner, &ErasedType::L(Rc::from(THROWABLE)));
                 self.lir.push(Kind::Throw(value), want.clone())
             }
+            TExpr::Return(v) => self.lower_return(e, v, want),
             // A statement's `try` is written at its own type and what it leaves dropped after the join, as dotty's
             // `genStat` loads it (BCodeBodyBuilder.scala 135) and `genLoad` adapts the type `genLoadTry` gives
             // (363, 504-507); where a value is wanted, Erasure's `typedTry` has adapted each branch to it
@@ -160,7 +161,7 @@ impl<'a> Gen<'a> {
             | TExpr::Lambda(..) | TExpr::While(..) | TExpr::Assign(..) | TExpr::Prim(..) | TExpr::Unary(..) | TExpr::StrConcat(_)
             | TExpr::ToStr(..) | TExpr::Js(..) | TExpr::TypeTest(..) | TExpr::Cast(..) | TExpr::ClassOf(..) | TExpr::SeqLit(_)
             | TExpr::ArrayLit(_) | TExpr::Index(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_)
-            | TExpr::Spread(_) | TExpr::Return(_) | TExpr::Splice(_) => {
+            | TExpr::Spread(_) | TExpr::Splice(_) => {
                 let (node, t) = match self.lower_node(e) {
                     Ok(node) => (node, self.lir.ty(node).clone()),
                     Err(why) => match self.expr_value_class(e).map(|_| self.static_type(e)) {
@@ -286,8 +287,6 @@ impl<'a> Gen<'a> {
             TExpr::Lambda(params, body) if self.analysis_in_order() => self.lower_lambda(params, body),
             TExpr::Lambda(..) => return Err(Unlowered::AfterEscape),
             TExpr::Js(template, args) => self.lower_template(e, template, args),
-            TExpr::Return(_) if self.m.closure => return Err(Unlowered::NonLocalReturn),
-            TExpr::Return(_) => return Err(Unlowered::ReturnInValuePosition),
             // `xs*` passed to a JavaScript member with repeated parameters (the typer's `js_call_args`):
             // the sequence as it is, at its own type.
             TExpr::Spread(inner) => {
@@ -296,6 +295,8 @@ impl<'a> Gen<'a> {
                 self.lir.push(Kind::Typed(value), t)
             }
             TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) => self.lower_refused(Refusal::JavaScriptInterop),
+            // Where the value leaves nothing (`Gen::lower_read_again` asks the node at the type it leaves).
+            TExpr::Return(v) => self.lower_return(e, v, &ErasedType::V),
             TExpr::If(..) | TExpr::Match(..) | TExpr::Block(..) | TExpr::Throw(..) | TExpr::Try(_) => unreachable!("lowered by `Gen::lower_marked`"),
             TExpr::Splice(_) => unreachable!("a stored inline body is lowered nowhere"),
         })
@@ -695,13 +696,7 @@ impl<'a> Gen<'a> {
             // A return out of the method here is that return, its value the method's result (dotty's
             // `genReturn` sends the value to the method's return); out of a closure it is a throw,
             // after which the return of what it leaves is dead.
-            TExpr::Return(v) if !self.m.closure => match self.jump_call(v) {
-                Some((receiver, args)) => self.lower_self_tail_call(receiver, args),
-                None => {
-                    let ret = self.m.ret.clone();
-                    Kind::Return(self.lower_expr(v, &ret))
-                }
-            },
+            TExpr::Return(v) if !self.m.closure => self.lower_local_return(v),
             TExpr::If(..) | TExpr::Block(..) | TExpr::Match(..) | TExpr::Return(_) | TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_)
             | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Super(_)
             | TExpr::Static(_) | TExpr::Module(_) | TExpr::Field(..) | TExpr::CallStatic(..) | TExpr::CallMethod(..) | TExpr::CallClosure(..)
@@ -743,6 +738,57 @@ impl<'a> Gen<'a> {
             }
             _ => unreachable!("a null test is an `If`, or a block around one"),
         }
+    }
+
+    /// `return v` where a value of the type `want` is wanted: nothing follows it, so the node's type
+    /// is the place's (dotty's `genLoadTo` sends a `Return` to its destination and adapts nothing
+    /// after it). Out of a closure it is the throw the def's handler takes by its key.
+    fn lower_return(&mut self, e: TExprId, v: TExprId, want: &ErasedType) -> LirId {
+        if self.m.closure {
+            return self.lower_non_local_return(v, want);
+        }
+        let kind = self.lower_local_return(v);
+        let id = self.lir.push(kind, want.clone());
+        // The jump back stands for the whole `return`, whose position it takes.
+        self.lir.nodes[id.0 as usize].of = Some(e);
+        id
+    }
+
+    /// `return v` out of the def's own method: the jump back where `v` is the def's call of itself
+    /// that loops (`Gen::jump_call`), else the method left with `v` (dotty's `genReturn`), through
+    /// the finalizers and monitors around it.
+    fn lower_local_return(&mut self, v: TExprId) -> Kind {
+        match self.jump_call(v) {
+            Some((receiver, args)) => self.lower_self_tail_call(receiver, args),
+            None => {
+                let ret = self.m.ret.clone();
+                Kind::Return(self.lower_expr(v, &ret))
+            }
+        }
+    }
+
+    /// `return v` out of a closure: the throw of a `NonLocalReturnControl` of the key of the def it
+    /// leaves and the value, as dotty's `NonLocalReturns.nonLocalReturnThrow` makes it. The value is the
+    /// def's erased result, as Erasure adapts a `return`'s expression before NonLocalReturns passes it on
+    /// as an `Object` (`ensureConforms`): a value class's underlying value, a primitive boxed.
+    fn lower_non_local_return(&mut self, v: TExprId, want: &ErasedType) -> LirId {
+        let object = ErasedType::object();
+        let key = self.lir.push(Kind::ReturnKey, object.clone());
+        let value = match self.m.return_target.clone() {
+            ReturnTarget::Def(ErasedType::V) => self.lower_expr(v, &object),
+            ReturnTarget::Def(ret) => {
+                let value = self.lower_expr(v, &ret);
+                self.lower_adapt(value, &ret, &object)
+            }
+            ReturnTarget::NoDef => self.lower_expr(v, &object),
+            ReturnTarget::Unknown => {
+                self.unsupported("internal error: a return out of a closure whose def is not known");
+                self.lower_expr(v, &object)
+            }
+        };
+        let ctor = method_ref(Invoke::Special, &Rc::from(NON_LOCAL_RETURN), false, "<init>", &[object.clone(), object], &ErasedType::V);
+        let control = self.lir.make(&ctor, &[key, value]);
+        self.lir.push(Kind::Throw(control), want.clone())
     }
 
     pub(super) fn lower_self_tail_call(&mut self, receiver: Option<TExprId>, args: ListRef) -> Kind {

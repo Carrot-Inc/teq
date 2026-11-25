@@ -190,6 +190,7 @@ quoted_values_reflection_kinds	< other expr other type expr
 reducer_literal_bound	< true
 reducer_wildcard_bound	< true
 reflect_given_classes	< true
+return_non_local_lazy_value_class	< lazy direct 2 1
 return_tail_call_and_or	< true
 return_tail_call_argument_jump	< 100
 return_tail_call_deep	< 0

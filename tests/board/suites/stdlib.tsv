@@ -2633,6 +2633,8 @@ repeated_args_solved_later	pass	-
 repeated_args_value_class_cast	pass	-	
 result_takes_arguments	pass	-	
 return_local	pass	-	
+return_non_local_lazy_value_class	fail	-	output differs
+return_non_local_value_class	pass	-	
 return_stmt	pass	-	
 return_tail_call	fail	-	error: Not found: type IllegalThreadStateException
 return_tail_call_and_or	fail	-	RangeError: Maximum call stack size exceeded
@@ -3229,8 +3231,11 @@ transparent_inline_enclosing_parameter	pass	-
 transparent_match_constant_branch	pass	-	
 transparent_widened_ascription	pass	-	
 try_collect_lazy_zip	pass	-	
+try_constructor_argument_uninitialised	pass	-	
 try_handler_finally	pass	-	
 try_handler_typed_first	pass	-	
+try_macro_seq_literal_element	pass	-	
+try_seq_literal_element_uninitialised	pass	-	
 try_without_handlers	pass	-	
 tuple_applied_values_xxl	pass	-	
 tuple_apply_known_prefix	pass	-	
