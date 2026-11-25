@@ -2668,7 +2668,7 @@ impl<'a> Gen<'a> {
         self.lower_adapt(held, &t, want)
     }
 
-    /// The `Extras` `e` as the code holds them (`Gen::load_extras`).
+    /// The `Extras` `e` as the code holds them.
     pub(super) fn lower_extras(&mut self, e: &Extras) -> Vec<LirId> {
         let mut nodes: Vec<LirId> = e.homes.iter().map(|&h| self.lower_instance_of(h)).collect();
         nodes.extend(e.keys.iter().map(|&x| self.lir.push(Kind::LazyKey(x), ErasedType::object())));

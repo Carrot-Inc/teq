@@ -217,7 +217,7 @@ pub(super) enum CaptureArgument {
 }
 
 /// Where the default of a constructor's parameter comes from: one decision
-/// (`Gen::ctor_default_route`), read by `Gen::ctor_default` and by the lowering.
+/// (`Gen::ctor_default_route`), read by the lowering (`Gen::lower_ctor_default`).
 pub(super) enum CtorDefault {
     /// A class of the JDK, which has no getters: the default's expression where the creation
     /// stands, nothing for a parameter that has none.
@@ -419,10 +419,6 @@ pub enum PendingBody {
     LazyAccessor(SymId),
     /// A local lazy val's initialiser over its holder's monitor, the holder the last parameter.
     LazyInit(SymId, TExprId),
-    /// The thunk a by-name parameter's default from a jar is passed as: scalac's getter returns
-    /// the value, and the argument calls it (`() => f$default$n(...)`), with the receiver and
-    /// the arguments before it captured.
-    JarGetter(JarGetter),
 }
 
 /// The getter of a default as scalac writes it (`Gen::default_getter_shape`).
@@ -464,15 +460,6 @@ impl Prior {
             Prior::Held(_, t) | Prior::Written(_, t) => t,
         }
     }
-}
-
-pub struct JarGetter {
-    pub kind: Invoke,
-    pub owner: Rc<str>,
-    pub owner_is_interface: bool,
-    pub name: String,
-    pub desc: String,
-    pub ret: ErasedType,
 }
 
 pub struct Pending {
@@ -724,8 +711,6 @@ pub struct Gen<'a> {
     /// What the getter of a local def's default takes and binds, decided where it is first lowered or written.
     pub(super) lifted_default_shapes: FxMap<(SymId, usize), (Rc<LiftedShape>, Rc<LiftedBody>)>,
     pub an: Analysis,
-    /// The thunks of jars' defaults the class's code made (`$default$thunk$N`).
-    pub thunks: u32,
     /// The lifted methods of the lambdas of the class's code, by the lowered body each closure carries
     /// (`Gen::lambda_method`), the body kept so that its address names it while the class is written.
     pub lambdas: FxMap<*const LiftedBody, (Rc<LiftedBody>, Rc<Lifted>)>,
@@ -854,7 +839,6 @@ impl<'a> Gen<'a> {
             lifted_defaults: FxMap::default(),
             lifted_default_shapes: FxMap::default(),
             an: Analysis::default(),
-            thunks: 0,
             lambdas: FxMap::default(),
             lambda_places: FxMap::default(),
             finally_lambdas: FxMap::default(),
@@ -958,7 +942,6 @@ impl<'a> Gen<'a> {
         self.lifted_defaults.clear();
         self.lifted_default_shapes.clear();
         self.an = Analysis::default();
-        self.thunks = 0;
         self.lambdas.clear();
         self.lambda_places.clear();
         self.finally_lambdas.clear();
@@ -4872,100 +4855,9 @@ impl<'a> Gen<'a> {
         written
     }
 
-    /// The default `i` of a constructor of `c`, the secondary `via` where named, with the
-    /// arguments of the clauses before its own in `temps`, left as `types[i]`, as scalac's caller
-    /// gets it: a JDK class's evaluated where it stands, having no getter; a named local class's
-    /// from its static getter, which takes the captures first; the companion's getter where the
-    /// companion holds them (scalac's layout), each taking the parameters of the clauses before
-    /// the default's; a jar class's as its class files declare it; else the class's static one.
-    fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, recv: Option<TExprId>, i: usize, temps: &[Prior], types: &[ErasedType]) {
-        let route = self.ctor_default_route(c, via, recv.is_some(), i, temps.len(), types);
-        if temps.is_empty() && self.ctor_default_refusal(c, &route, recv).is_none() {
-            let node = self.lowering(|g| g.lower_ctor_default(c, route, recv, &[], &types[i]));
-            self.write(node);
-            return;
-        }
-        match route {
-            CtorDefault::InPlace(Some(d)) => self.expr(d, &types[i]),
-            CtorDefault::InPlace(None) => self.adapt(&ErasedType::V, &types[i]),
-            CtorDefault::LocalCompanion(v, getter) => {
-                let mt = ErasedType::L(getter.owner.clone());
-                match recv {
-                    Some(r) => self.expr(r, &mt),
-                    None => {
-                        let t = self.load_local(v);
-                        self.adapt(&t, &mt);
-                    }
-                }
-                self.companion_getter_call(&getter, temps, &types[i]);
-            }
-            CtorDefault::InnerCompanion(accessor, getter) => {
-                let outer = ErasedType::L(accessor.owner.clone());
-                match recv {
-                    Some(r) => self.expr(r, &outer),
-                    None => {
-                        let first = self.class_captured(c).first().copied();
-                        match first {
-                            Some(s) => {
-                                let t = self.load_capture(s);
-                                self.adapt(&t, &outer);
-                            }
-                            None => self.load_class_captures(c),
-                        }
-                    }
-                }
-                self.invoke_mref(&accessor);
-                self.companion_getter_call(&getter, temps, &types[i]);
-            }
-            CtorDefault::Captured(captures, getter) => {
-                match recv {
-                    // The enclosing instance the creation passes, the getter's receiver, for the
-                    // capture that stands for it (`Worker::retarget_defaults`).
-                    Some(r) => {
-                        let t = if captures > 0 { getter.params[0].clone() } else { ErasedType::object() };
-                        self.expr(r, &t);
-                        self.load_class_captures_after(c, 1);
-                    }
-                    None => self.load_class_captures(c),
-                }
-                for prior in temps {
-                    self.write_prior(prior);
-                }
-                self.invoke_mref(&getter);
-            }
-            CtorDefault::Companion(getter) => {
-                self.get_module(&getter.owner);
-                self.companion_getter_call(&getter, temps, &types[i]);
-            }
-            CtorDefault::Jar(getter) => {
-                if getter.kind == Invoke::Virtual {
-                    self.get_module(&getter.owner);
-                }
-                for (prior, p) in temps.iter().zip(&getter.params) {
-                    self.write_prior(prior);
-                    self.adapt(prior.ty(), p);
-                }
-                self.invoke_mref(&getter);
-                self.adapt(&getter.ret, &types[i]);
-            }
-            CtorDefault::Static(getter) => {
-                for prior in temps {
-                    self.write_prior(prior);
-                }
-                self.invoke_mref(&getter);
-            }
-        }
-    }
-
-    /// The companion's getter called on the companion on the stack, leaving the parameter's
-    /// type `want`.
-    fn companion_getter_call(&mut self, getter: &MethodRef, temps: &[Prior], want: &ErasedType) {
-        self.getter_call(Invoke::Virtual, &getter.owner, false, getter.name.clone(), &getter.desc, temps, &getter.ret, false);
-        self.adapt(&getter.ret, want);
-    }
-
-    /// `ctor_default`'s decision, for a getter that takes the first `taken` of the parameters;
-    /// `received` where the typer selected the getter on a receiver.
+    /// Where the default `i` of a constructor of `c` comes from, the secondary `via` where named, for
+    /// a getter that takes the first `taken` of the parameters; `received` where the typer selected
+    /// the getter on a receiver.
     pub(super) fn ctor_default_route(&mut self, c: ClassId, via: Option<SymId>, received: bool, i: usize, taken: usize, types: &[ErasedType]) -> CtorDefault {
         let cx = self.cx;
         if cx.jvm_class(c).is_some() {
@@ -5073,10 +4965,9 @@ impl<'a> Gen<'a> {
     }
 
     /// Why the getter of a constructor's default, where no argument precedes it, takes what the
-    /// method being written does not hold, as the old generator's loads of it report it
-    /// (`Gen::load_capture`, `Gen::load_class_captures_after`): a local companion or a capture
-    /// out of scope, a capture of a kind no local holds, an inner class's enclosing instance; None
-    /// where the lowering has a node for all of it.
+    /// method being written does not hold: a local companion or a capture out of scope, a capture
+    /// of a kind no local holds, an inner class's enclosing instance; None where the lowering has a
+    /// node for all of it.
     pub(super) fn ctor_default_refusal(&mut self, c: ClassId, route: &CtorDefault, recv: Option<TExprId>) -> Option<crate::lir::Refusal> {
         let name = |g: &Self, s: SymId| -> Rc<str> { Rc::from(g.cx.input.interner.get(g.cx.input.syms.sym(s).name)) };
         match *route {
@@ -5188,7 +5079,7 @@ impl<'a> Gen<'a> {
             return DefaultRoute::Refused(refusal);
         }
         // Each argument at the type the route's getter takes it: a companion's getter and a jar's
-        // adapt it to their parameters (`Gen::getter_call`, `CtorDefault::Jar`), a captured class's
+        // adapt it to their parameters (`Gen::lower_getter_arguments`, `CtorDefault::Jar`), a captured class's
         // and a static one take it as written; the class files of the JDK take none.
         let written = |p: &Prior| match p {
             Prior::Written(e, t) => (*e, t.clone()),
@@ -5304,23 +5195,6 @@ impl<'a> Gen<'a> {
         };
         let getter = MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name, params, ret, desc, kind: m.kind };
         DefaultRoute::Method { receiver: r, receiver_type, getter, at, args, want }.held_unless_paths(paths, &written)
-    }
-
-    /// The arguments of a constructor of `c` whose every parameter has a default and which a
-    /// parent passes nothing: each default's getter applied to the values before its clause.
-    pub fn all_ctor_defaults(&mut self, c: ClassId, types: &[ErasedType]) {
-        let clauses = self.cx.input.syms.class(c).ctor.clone();
-        let mut temps: Vec<(u16, ErasedType)> = Vec::with_capacity(types.len());
-        for (i, t) in types.iter().enumerate() {
-            let before = clause_shape(&clauses, i).0.min(temps.len());
-            let prior: Vec<Prior> = temps[..before].iter().map(|(slot, t)| Prior::Held(*slot, t.clone())).collect();
-            self.ctor_default(c, None, None, i, &prior, types);
-            let slot = self.store_new(t);
-            temps.push((slot, t.clone()));
-        }
-        for (slot, t) in &temps {
-            self.load(*slot, t);
-        }
     }
 
     /// The arguments of a getter's application, each at its parameter's type in the signature's
@@ -5485,27 +5359,6 @@ impl<'a> Gen<'a> {
             None => method_desc(&m.params[..shape.before], &shape.ret),
         };
         (name, desc)
-    }
-
-    /// The getter `name` of descriptor `desc` called with the first of `temps` as its arguments,
-    /// the receiver on the stack unless it is static, leaving the value as the parameter's type
-    /// `want`: a by-name parameter's default is passed as a thunk that calls the getter, as
-    /// scalac's caller passes it, its value a function or not (`y: => (() => Long)`, whose getter
-    /// and thunk both erase to `Function0`).
-    fn getter_call(&mut self, kind: Invoke, owner: &Rc<str>, interface: bool, name: String, desc: &str, temps: &[Prior], want: &ErasedType, by_name: bool) {
-        let (params, ret) = parse_method_desc(desc);
-        for (prior, p) in temps.iter().zip(&params) {
-            self.write_prior(prior);
-            self.adapt(prior.ty(), p);
-        }
-        let thunk = self.function_type(0);
-        if *want == thunk && (by_name || ret != thunk) {
-            let getter = JarGetter { kind, owner: owner.clone(), owner_is_interface: interface, name, desc: desc.to_string(), ret };
-            self.jar_default_thunk(getter, &params);
-            return;
-        }
-        self.invoke_desc(kind, owner, interface, &name, desc, params.len(), &ret);
-        self.adapt(&ret, want);
     }
 
     /// The getter of the default of parameter `i` (flattened, in the signature's order) of program
@@ -6042,25 +5895,6 @@ impl<'a> Gen<'a> {
         out
     }
 
-    /// What a named local class captures, loaded as a `new` of it passes them
-    /// (`Gen::lower_new_captures`), for its static default getter.
-    fn load_class_captures(&mut self, c: ClassId) {
-        self.load_class_captures_after(c, 0)
-    }
-
-    /// `load_class_captures` from the capture at `from` on.
-    fn load_class_captures_after(&mut self, c: ClassId, from: usize) {
-        for s in self.class_captures_after(c, from) {
-            if self.is_capturable(s) {
-                self.load_capture(s);
-            } else {
-                self.unsupported("a default argument of a local class that captures this kind of value");
-            }
-        }
-        let extras = self.class_extras(c);
-        self.load_extras(&extras);
-    }
-
     /// What a named local class captures from the capture at `from` on, a local def left out:
     /// the class has a copy of it.
     pub(super) fn class_captures_after(&mut self, c: ClassId, from: usize) -> Vec<SymId> {
@@ -6251,16 +6085,6 @@ impl<'a> Gen<'a> {
         out
     }
 
-    /// Pushes the `Extras` `e` as the code being written holds them.
-    pub fn load_extras(&mut self, e: &Extras) {
-        for &h in &e.homes {
-            self.load_instance_of(h);
-        }
-        for &x in &e.keys {
-            self.load_lazy_key(x);
-        }
-    }
-
     /// Binds the `Extras` `e` that a method takes from the slot `first` on.
     pub fn bind_extras(&mut self, e: &Extras, first: u16) {
         let mut slot = first;
@@ -6284,14 +6108,6 @@ impl<'a> Gen<'a> {
     /// class's `Extras::keys`.
     pub fn key_field(&self, x: SymId, i: usize) -> String {
         format!("{}$lzyKey{}", encode(self.cx.input.interner.get(self.cx.input.syms.sym(x).name)), i)
-    }
-
-    /// Pushes the instance of the class `h` where the code being written reads it
-    /// (`Gen::lower_instance_of`).
-    pub fn load_instance_of(&mut self, h: ClassId) -> ErasedType {
-        let instance = self.lowering(|g| g.lower_instance_of(h));
-        self.write(instance);
-        self.lir.ty(instance).clone()
     }
 
     /// Pushes the key travelling with the holder of the local lazy val `x`: a parameter or a field of the
@@ -6453,13 +6269,6 @@ impl<'a> Gen<'a> {
         self.pending.push(body);
     }
 
-    /// A name for a jar default's thunk (`$default$thunk$N`), numbered in the class.
-    pub(super) fn fresh_name(&mut self, base: &str) -> String {
-        assert!(!self.code.frozen, "a name is numbered while a lowering runs");
-        self.thunks += 1;
-        format!("{}${}", base, self.thunks)
-    }
-
     /// What the lifted method of the code whose captures are `free` takes and binds: of a lambda (`code`, its
     /// parameters and body), or the copy of the local def or lazy val `copy_of`, its `this` the instance of the
     /// class whose code declares it where that is another class's (`Lifted::home`), else the code's own.
@@ -6585,23 +6394,6 @@ impl<'a> Gen<'a> {
         self.m.finally_copies.push(FinallyCopy { of, lambdas: FxMap::default(), places: FxMap::default(), tries: 0 });
         self.write(f);
         self.m.finally_copies.pop();
-    }
-
-    /// The receiver (unless the getter is static) and its arguments are on the stack: they
-    /// become a `Function0` whose `apply` calls the getter.
-    fn jar_default_thunk(&mut self, getter: JarGetter, params: &[ErasedType]) {
-        let mut captured: Vec<ErasedType> = Vec::new();
-        if getter.kind != Invoke::Static {
-            captured.push(ErasedType::L(getter.owner.clone()));
-        }
-        captured.extend(params.iter().cloned());
-        let name = self.fresh_name("$default$thunk");
-        let object = ErasedType::object();
-        let shape = LiftedShape { instance: None, key: false, captured: captured.clone(), params: Vec::new(), ret: object.clone() };
-        let lifted = Rc::new(Lifted::new(name, Rc::new(shape), Vec::new(), None, None, None));
-        self.defer(Pending { lifted: lifted.clone(), body: PendingBody::JarGetter(getter) });
-        let ft = self.function_type(0);
-        self.call_site(&lifted, &ft, "apply", &method_desc(&[], &object), &captured);
     }
 
     /// `invokedynamic` through `LambdaMetafactory`: the captures on the stack become an instance

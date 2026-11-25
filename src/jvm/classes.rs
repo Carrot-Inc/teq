@@ -63,13 +63,18 @@ struct FieldDef {
     constant: Option<ConstVal>,
 }
 
-/// Where the parts of a constructor's body go as they are lowered: into the one tree of the
-/// body, or written each in its turn, where a part has no nodes yet and `Gen`'s own code
-/// writes it.
-pub(super) enum Parts {
-    /// The statements, and the fields the class declares where the class file meets them.
-    Tree(Vec<LirId>, Vec<Declared>),
-    Written,
+/// The parts of a constructor's body as they are lowered into the one tree of the body: the statements, and the
+/// fields the class declares where the class file meets them.
+pub(super) struct Parts {
+    nodes: Vec<LirId>,
+    fields: Vec<Declared>,
+}
+
+impl Parts {
+    /// The parts that begin with `nodes`.
+    pub(super) fn of(nodes: Vec<LirId>) -> Parts {
+        Parts { nodes, fields: Vec::new() }
+    }
 }
 
 /// A field a class declares before the statement at `at` of an object's constructor tree, where
@@ -97,10 +102,8 @@ enum SuperCall {
     Via(ClassId, SymId, crate::ast::ListRef),
     /// What the superclass, a class nested in a class or local, captures first.
     Captured(ClassId, crate::ast::ListRef),
-    /// Every parameter's default, none written. Not lowered yet.
-    Defaults(ClassId, Vec<ErasedType>),
-    /// An enum case without the arguments of its enum.
-    Refused,
+    /// No call where the superclass's constructor takes arguments, refused for this reason.
+    Refused(Refusal),
 }
 
 /// How a secondary constructor's call of another constructor of its class passes the
@@ -314,20 +317,15 @@ impl<'a> Gen<'a> {
     /// after what it holds and the back end writes the class's members in their order. Every queued body is lowered
     /// first, and the bodies its tree asks for are queued and lowered too, before any is written. A body only a
     /// writer asks for (a `Legacy` node's code, a local default's getter at its call) is queued while its container is
-    /// written, and comes in the next round; a jar default's thunk, placed nowhere, after the placed ones.
+    /// written, and comes in the next round.
     pub fn drain_pending(&mut self) {
         loop {
             let mut held = Vec::new();
-            let mut thunks = Vec::new();
             while let Some(p) = self.pending.pop() {
-                if matches!(p.body, PendingBody::JarGetter(_)) {
-                    thunks.push(p);
-                    continue;
-                }
                 let span = self.lifted_span(&p);
                 held.push((self.lower_lifted(p), span));
             }
-            if held.is_empty() && thunks.is_empty() {
+            if held.is_empty() {
                 return;
             }
             held.sort_by_key(|(h, _)| h.method.place.map_or((1, 0), |place| (0, place)));
@@ -336,11 +334,6 @@ impl<'a> Gen<'a> {
                 self.lifted_body = Some(span);
                 self.write_lifted(h);
                 self.lifted_body = None;
-            }
-            for p in thunks {
-                if let PendingBody::JarGetter(g) = &p.body {
-                    self.jar_getter_thunk(&p.lifted, g);
-                }
             }
         }
     }
@@ -369,7 +362,7 @@ impl<'a> Gen<'a> {
             PendingBody::Lambda(_, body) | PendingBody::LazyInit(_, body) => Some(*body),
             PendingBody::Fun(f) => prog.funs[f.idx()].body,
             PendingBody::Default(f, i) => prog.funs[f.idx()].own_default(*i),
-            PendingBody::LazyAccessor(_) | PendingBody::JarGetter(_) => None,
+            PendingBody::LazyAccessor(_) => None,
         };
         body.and_then(|e| prog.span_of(e)).map_or((u32::MAX, 0), |(_, span)| (span.end, span.start))
     }
@@ -418,7 +411,6 @@ impl<'a> Gen<'a> {
             }
             PendingBody::LazyInit(_, init) => (Vec::new(), Some(*init), vec![*init]),
             PendingBody::LazyAccessor(_) => (Vec::new(), None, Vec::new()),
-            PendingBody::JarGetter(_) => unreachable!(),
         };
         let is_lambda = matches!(p.body, PendingBody::Lambda(..));
         for (i, t) in l.params.iter().enumerate() {
@@ -571,23 +563,6 @@ impl<'a> Gen<'a> {
             HeldCode::Tree(tree) => self.write_body(tree),
             HeldCode::Def(body) => self.write_method_body(body),
         }
-        self.end_method();
-    }
-
-    fn jar_getter_thunk(&mut self, l: &Lifted, g: &JarGetter) {
-        let (captured, _) = parse_method_desc(&l.desc);
-        let params: Vec<(Option<SymId>, ErasedType)> = captured.iter().map(|t| (None, t.clone())).collect();
-        self.begin_method(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, false, &params, l.ret.clone(), &[]);
-        self.outside(Unlowered::JarGetterThunk);
-        let mut slot = 0;
-        for t in &captured {
-            self.load(slot, t);
-            slot += if t.wide() { 2 } else { 1 };
-        }
-        let n_params = captured.len() - (g.kind != Invoke::Static) as usize;
-        self.invoke_desc(g.kind, &g.owner, g.owner_is_interface, &g.name, &g.desc, n_params, &g.ret);
-        self.adapt(&g.ret, &l.ret);
-        self.return_value(&l.ret);
         self.end_method();
     }
 
@@ -1612,20 +1587,10 @@ impl<'a> Gen<'a> {
     /// then the body of its constructor's tree (the traits it adds, its fields and its
     /// statements, in order), where the class file runs it (`Gen::write_module_part`).
     fn module_clinit(&mut self, k: &PrimaryCtor) {
-        let tc = k.tc;
         let name = self.this_name.clone();
-        let this = ErasedType::L(name.clone());
         let roots = self.primary_roots(k);
         self.begin_module_clinit(self.clinit_flags(), &name, &roots);
-        if let Err(why) = self.constructor_lowers(k) {
-            self.outside(why);
-            let mut parts = Parts::Written;
-            self.object_enum_parts(&mut parts, tc);
-            self.class_body(&mut parts, tc, k.fields, &this);
-            self.return_value(&ErasedType::V);
-        } else {
-            self.write_module(false, |g| g.primary_tree(k));
-        }
+        self.write_module(false, |g| g.primary_tree(k));
         self.end_method();
     }
 
@@ -1709,30 +1674,20 @@ impl<'a> Gen<'a> {
     }
 
     fn add(&mut self, parts: &mut Parts, nodes: &[LirId]) {
-        match parts {
-            Parts::Tree(all, _) => all.extend_from_slice(nodes),
-            Parts::Written => {
-                for &node in nodes {
-                    self.write(node);
-                }
-            }
-        }
+        parts.nodes.extend_from_slice(nodes);
     }
 
     /// The tree of a body of no value whose statements are the parts.
     pub(super) fn returning(&mut self, parts: Parts) -> (LirId, Vec<Declared>) {
-        let Parts::Tree(nodes, fields) = parts else { unreachable!("the parts of a tree") };
+        let Parts { nodes, fields } = parts;
         let unit = self.lir.unit();
         let done = self.lir.seq(&nodes, unit);
         (self.lir.ret(done), fields)
     }
 
-    /// The field declared before the next part: now where the parts are written in turn.
+    /// The field declared before the next part.
     fn declare(&mut self, parts: &mut Parts, flags: FieldFlags, name: &str, ty: &ErasedType) {
-        match parts {
-            Parts::Tree(nodes, fields) => fields.push(Declared { at: nodes.len(), flags, name: name.to_string(), ty: ty.clone() }),
-            Parts::Written => self.field(flags, name, ty),
-        }
+        parts.fields.push(Declared { at: parts.nodes.len(), flags, name: name.to_string(), ty: ty.clone() });
     }
 
     /// What the companion object of an enum runs before its own body: the enum's `$touch` where
@@ -2125,11 +2080,7 @@ impl<'a> Gen<'a> {
         }
         let extras = Extras { homes: self.class_homes.iter().map(|h| h.0).collect(), keys: self.class_keys.iter().map(|k| k.0).collect() };
         self.bind_extras(&extras, slot);
-        if let Err(why) = self.constructor_lowers(k) {
-            self.outside(why);
-            self.constructor_parts(&mut Parts::Written, k);
-            self.return_value(&ErasedType::V);
-        } else if k.is_object {
+        if k.is_object {
             self.write_module(true, |g| g.primary_tree(k));
         } else {
             self.body(|g| {
@@ -2161,24 +2112,9 @@ impl<'a> Gen<'a> {
         roots
     }
 
-    /// Whether every part of a primary constructor has nodes, an object's body among them, so
-    /// that the constructor is one tree; or why not.
-    fn constructor_lowers(&mut self, k: &PrimaryCtor) -> Result<(), Unlowered> {
-        self.super_call_lowers(k)
-    }
-
-    /// Whether the lowering has nodes for the superclass's call by its route, or why not: every
-    /// route but every parameter's default and the refused one.
-    fn super_call_lowers(&self, k: &PrimaryCtor) -> Result<(), Unlowered> {
-        match k.route {
-            SuperCall::Defaults(..) => Err(Unlowered::CtorSuperDefaults),
-            SuperCall::Own(_) | SuperCall::Declared(..) | SuperCall::Unwritten(..) | SuperCall::Via(..) | SuperCall::Captured(..) | SuperCall::Refused => Ok(()),
-        }
-    }
-
-    /// A primary constructor's one tree (`Gen::constructor_lowers`).
+    /// A primary constructor's one tree.
     fn primary_tree(&mut self, k: &PrimaryCtor) -> (LirId, Vec<Declared>) {
-        let mut parts = Parts::Tree(Vec::new(), Vec::new());
+        let mut parts = Parts::of(Vec::new());
         self.constructor_parts(&mut parts, k);
         self.returning(parts)
     }
@@ -2211,7 +2147,6 @@ impl<'a> Gen<'a> {
     /// where the creation of an anonymous class over a class evaluates them
     /// (`tir::parent_call_at_creation`).
     fn super_call_route(&mut self, tc: &TClass, superclass: Option<ClassId>, anon_super: Option<Vec<ErasedType>>, at_creation: bool) -> SuperCall {
-        let cx = self.cx;
         let Some(e) = superclass else { return SuperCall::Declared(Vec::new(), crate::ast::ListRef::EMPTY) };
         if let Some(types) = anon_super {
             return SuperCall::Own(types);
@@ -2238,9 +2173,12 @@ impl<'a> Gen<'a> {
         match tc.parent_args {
             Some(args) => SuperCall::Declared(types, args),
             None if types.is_empty() => SuperCall::Declared(types, crate::ast::ListRef::EMPTY),
-            // Every parameter of the superclass has a default: each its getter's.
-            None if cx.input.syms.class(e).ctor.iter().all(|cl| cl.params.iter().all(|p| p.has_default)) => SuperCall::Defaults(e, types),
-            None => SuperCall::Refused,
+            // No call where the superclass takes arguments: an enum case without its enum's.
+            None if self.cx.input.syms.class(e).kind == ClassKind::Enum => SuperCall::Refused(Refusal::EnumCaseWithoutArguments),
+            // The typer types every other call, a left-out argument as its default's getter (dotty's
+            // `ensureConstrCall`), an anonymous class's over a trait too (`tir::parent_call_at_creation`):
+            // a class left without one is refused where it stands, never written without its arguments.
+            None => SuperCall::Refused(Refusal::SuperCallWithoutArguments),
         }
     }
 
@@ -2286,18 +2224,15 @@ impl<'a> Gen<'a> {
         }
         self.prelude(parts, &prog.stmts[tc.parent_prelude.range()]);
         self.super_call(parts, k);
-        if let SuperCall::Refused = k.route {
+        if let SuperCall::Refused(_) = k.route {
             return;
         }
         // An object's body is its constructor's, which the class file runs in the `<clinit>`
-        // (`Gen::write_module_part`); a constructor written in place leaves it to the `<clinit>`
-        // written in place (`Gen::module_clinit`).
-        if !(k.is_object && matches!(parts, Parts::Written)) {
-            if k.is_object {
-                self.object_enum_parts(parts, tc);
-            }
-            self.class_body(parts, tc, k.fields, &this);
+        // (`Gen::write_module_part`).
+        if k.is_object {
+            self.object_enum_parts(parts, tc);
         }
+        self.class_body(parts, tc, k.fields, &this);
     }
 
     /// The fields of what the class captures, then of the instances and the keys its copies of
@@ -2386,35 +2321,17 @@ impl<'a> Gen<'a> {
     /// The superclass's constructor run on the instance: the name and ordinal of a value of a
     /// Java enum first, then the arguments by the route.
     fn super_call(&mut self, parts: &mut Parts, k: &PrimaryCtor) {
-        if self.super_call_lowers(k).is_ok() {
-            self.part(parts, |g| g.lower_superclass_ctor(k));
-            return;
-        }
-        // Every parameter's default, not lowered yet, written in place (`Gen::constructor`).
-        assert!(matches!(parts, Parts::Written), "a route not lowered in a tree");
-        let leading = k.leading_params();
-        let mut params: Vec<ErasedType> = leading.iter().map(|&i| self.m.params[i].1.clone()).collect();
-        let this = ErasedType::L(self.this_name.clone());
-        self.load(0, &this);
-        for &i in &leading {
-            self.part(parts, |g| g.param(i));
-        }
-        let SuperCall::Defaults(e, types) = &k.route else { unreachable!("a route taken above") };
-        self.m.before_super = true;
-        self.all_ctor_defaults(*e, types);
-        self.m.before_super = false;
-        params.extend(types.iter().cloned());
-        self.invoke(Invoke::Special, k.super_name, false, "<init>", &params, &ErasedType::V);
+        self.part(parts, |g| g.lower_superclass_ctor(k));
     }
 
-    /// The superclass's constructor run on the instance, by a route that has nodes (`Gen::super_call_lowers`):
+    /// The superclass's constructor run on the instance, by its route:
     /// the name and ordinal of a value of a Java enum, then an anonymous class's own parameters, the written
     /// arguments at the declared parameters' types, or the arguments as a creation of the superclass passes
     /// them through its selected constructor, what it captures first, or as its class file takes them
     /// (`Gen::lower_via_arguments`, `Gen::lower_new_arguments`, `Gen::lower_unwritten_ctor_arguments`).
     fn lower_superclass_ctor(&mut self, k: &PrimaryCtor) -> LirId {
-        if let SuperCall::Refused = k.route {
-            return self.lower_refused(Refusal::EnumCaseWithoutArguments);
+        if let SuperCall::Refused(why) = &k.route {
+            return self.lower_refused(why.clone());
         }
         let leading = k.leading_params();
         let mut params: Vec<ErasedType> = leading.iter().map(|&i| self.m.params[i].1.clone()).collect();
@@ -2439,8 +2356,7 @@ impl<'a> Gen<'a> {
                 let (outer, declared) = self.unwritten_ctor_layout(e, via).expect("its class file's layout, by the route");
                 self.lower_unwritten_ctor_arguments(via, written, outer, declared)
             }
-            SuperCall::Defaults(..) => unreachable!("not lowered (`Gen::super_call_lowers`)"),
-            SuperCall::Refused => unreachable!("refused above"),
+            SuperCall::Refused(_) => unreachable!("refused above"),
         };
         self.m.before_super = false;
         args.extend(nodes);
@@ -2499,7 +2415,7 @@ impl<'a> Gen<'a> {
             }
         }
         self.body(|g| {
-            let mut parts = Parts::Tree(Vec::new(), Vec::new());
+            let mut parts = Parts::of(Vec::new());
             g.secondary_parts(&mut parts, prelude, route, after);
             g.returning(parts).0
         });
@@ -4412,7 +4328,7 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        self.returning(Parts::Tree(parts, Vec::new()))
+        self.returning(Parts::of(parts))
     }
 
     pub fn emit_file_module(&mut self, file: FileId) -> (String, Vec<u8>) {

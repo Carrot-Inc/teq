@@ -3719,8 +3719,22 @@ pub(crate) fn with_typed_program<R: Send>(name: &str, text: &str, flags: &[&str]
 /// (`with_jvm_input`); nothing is written and the process does not exit.
 #[cfg(test)]
 pub(crate) fn with_jvm_output<R: Send>(name: &str, text: &str, flags: &[&str], f: impl FnOnce(&jvm::Output, &[SourceFile]) -> R + Send) -> R {
+    with_jvm_output_planted(name, text, flags, |_| {}, f)
+}
+
+/// `with_jvm_output` with `plant` changing the typed program before the back end reads it: a record no source
+/// makes, for a test of what the back end does with it.
+#[cfg(test)]
+pub(crate) fn with_jvm_output_planted<R: Send>(
+    name: &str,
+    text: &str,
+    flags: &[&str],
+    plant: impl FnOnce(&mut typer::Worker) + Send,
+    f: impl FnOnce(&jvm::Output, &[SourceFile]) -> R + Send,
+) -> R {
     let flags: Vec<&str> = ["--target", "jvm"].into_iter().chain(flags.iter().copied()).collect();
     with_test_typer(name, text, &flags, |typer, opts, asts| {
+        plant(&mut typer.w);
         // As the build's path does between the typing and `build_jvm`.
         let array_seq = typer.on_thread(|w| w.array_seq_class());
         let source_target_names = typer.on_thread(|w| w.source_target_names());
@@ -3807,6 +3821,26 @@ mod jvm_output_tests {
         crate::with_jvm_output("small_method", &big_method(100), &[], |output, _| {
             assert!(output.errors.is_empty() && output.refused.is_empty(), "{:?} {:?}", output.errors, output.refused);
             assert!(output.classes.iter().any(|c| c.name == "Big$"), "the module class is written");
+        });
+    }
+
+    /// A class whose superclass's constructor takes arguments, its call left without them, is refused at the class,
+    /// never written without its arguments. No source leaves such a call (the typer types each, a left-out argument
+    /// as its default's getter: dotty's `ensureConstrCall`), so the record is planted on a typed program.
+    #[test]
+    fn a_superclass_call_left_without_its_arguments_is_refused() {
+        let text = "class A(val x: Int = 1)\nclass B extends A\nobject Main:\n  def main(args: Array[String]): Unit = println(new B().x)\n";
+        let plant = |w: &mut crate::typer::Worker| {
+            let b = w.prog.classes.iter().position(|tc| w.interner.get(w.syms.class(tc.id).name) == "B").expect("the class B typed");
+            assert!(w.prog.classes[b].parent_args.is_some(), "the typer types the call");
+            w.prog.classes[b].parent_args = None;
+        };
+        crate::with_jvm_output_planted("super_call_without_arguments", text, &[], plant, |output, _| {
+            let refusal = "a call of the superclass's constructor without the arguments it takes";
+            assert!(output.errors.iter().any(|e| e.starts_with("B") && e.ends_with(refusal)), "{:?}", output.errors);
+        });
+        crate::with_jvm_output("super_call_with_its_defaults", text, &[], |output, _| {
+            assert!(output.errors.is_empty() && output.refused.is_empty(), "{:?} {:?}", output.errors, output.refused);
         });
     }
 }

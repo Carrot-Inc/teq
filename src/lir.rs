@@ -267,14 +267,10 @@ pub enum Unlowered {
     /// captures, or a local trait's member call, after an earlier part of the method was left to
     /// the old generator: what it captures is asked in the order the code is written.
     AfterEscape,
-    /// `class B extends A` where every parameter of `A` has a default and none is written.
-    CtorSuperDefaults,
     /// An enum companion's `fromOrdinal` over its stored values.
     EnumCompanionMembers,
     /// A value class's method forwarding to its `m$extension`, and the copies of extension methods.
     ValueClassForwarder,
-    /// The function a by-name default of a jar's method is passed as.
-    JarGetterThunk,
     /// An object's `<clinit>` own code: the handles of its lazy members, its instance made and
     /// stored in `MODULE$`.
     ModuleClinit,
@@ -539,6 +535,8 @@ pub enum Refusal {
     SuperCallOfOwnTemplate { member: Rc<str> },
     /// An enum case's call of its enum's constructor that passes none of the enum's arguments.
     EnumCaseWithoutArguments,
+    /// A class's call of its superclass's constructor, which takes arguments, that the typer left without them.
+    SuperCallWithoutArguments,
     /// A class's arguments to a trait that do not match the trait's parameters.
     TraitArgumentsMismatch,
     /// A by-name parameter's default whose getter returns the value while the parameter is read as a
@@ -589,6 +587,7 @@ impl Refusal {
             Refusal::NewArrayOfUnknownElement => "a new array of an element type only a ClassTag knows".to_string(),
             Refusal::SuperCallOfOwnTemplate { member } => format!("not supported on the JVM yet: a super call of {}, which carries its own `@jvm` template", member),
             Refusal::EnumCaseWithoutArguments => "an enum case without the arguments of its enum".to_string(),
+            Refusal::SuperCallWithoutArguments => "a call of the superclass's constructor without the arguments it takes".to_string(),
             Refusal::TraitArgumentsMismatch => "the arguments of a trait that its parameters do not match".to_string(),
             Refusal::ByNameDefaultWithoutSignature => "the default of a by-name parameter of a class file without its Scala signature".to_string(),
             Refusal::DefaultOfConstructorOfNoClass => "the default of a constructor that is not in a class".to_string(),

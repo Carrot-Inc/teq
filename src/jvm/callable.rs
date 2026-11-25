@@ -1404,7 +1404,7 @@ impl<'a> Gen<'a> {
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
         let tree = |g: &mut Self| {
             let made = g.lir.init(&object_init, &[]);
-            let mut parts = super::classes::Parts::Tree(vec![made], Vec::new());
+            let mut parts = super::classes::Parts::of(vec![made]);
             g.enum_companion_parts(&mut parts, &name, touch.clone(), &values);
             g.returning(parts)
         };
