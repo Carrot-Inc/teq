@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- `java.lang.String.format(fmt, args*)` named in full builds and runs on the JVM and in the interpreter, as
+  `String.format` does, where the JVM refused it ("no @jvm intrinsic or body for format of java/lang/String") and the
+  interpreter stopped ("java.lang.String$ has no member format").
 - An extension whose receiver is a class `String` or `Array` derives from (`extension (x: CharSequence) def +:(y:
   java.util.List[String])`, an extension on `AnyRef`, `Object` or `Comparable[String]`) applies to a receiver of that
   type, a val's or a call's as a literal's, in a selection, an infix or right-associative operator's call and the

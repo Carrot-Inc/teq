@@ -205,6 +205,7 @@ package java.lang:
     @jvm("new java/lang/String dup rt $1:L rtcall javaBytes(Ljava/lang/Object;)Ljava/lang/Object; checkcast [B $2:I $3:I $4 invokespecial java/lang/String.<init>([BIILjava/nio/charset/Charset;)V")
     def newString(bytes: Array[scala.Byte], offset: Int, length: Int, charset: java.nio.charset.Charset): String = java.nio.charset.decode(bytes, offset, length, charset)
     @js("$format($1, [...$2])")
+    @jvm("$1 rt $2:L rtcall objectArray(Ljava/lang/Object;)[Ljava/lang/Object; invokestatic java/lang/String.format(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;")
     def format(format: String, args: Any*): String
 
   // The class `java.lang.String` is the builtin `String`, as `Object` is `AnyRef` (lang.scala): a type written in full

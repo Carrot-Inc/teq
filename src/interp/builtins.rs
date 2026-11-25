@@ -1205,6 +1205,13 @@ fn install_strings(it: &mut Table) {
         let s = text(it, a, 0)?;
         Ok(Value::array(crate::text::utf16_units(&s).map(Value::Char).collect()))
     });
+    // `java.lang.String.format(fmt, args*)`, the JDK's static: the first argument is the `String` object, the
+    // repeated arguments one sequence.
+    reg!(it, "java.lang.String.format", |it, a| {
+        let s = text(it, a, 1)?;
+        let items = it.elements_of(&arg(a, 2))?;
+        Ok(Value::string(it.format(&s, &items)?))
+    });
     reg!(it, "scala.String.formatImpl", |it, a| {
         let s = text(it, a, 0)?;
         let args = array(it, a, 1)?;

@@ -1643,6 +1643,7 @@ java_parens	pass	-
 java_parens_overloads	pass	-	
 java_queues_threads	pass	-	
 java_stand_ins	fail	-	compile
+java_string_format_static	pass	-	
 java_time_parse_iso	pass	-	
 java_tree_map	fail	-	output
 java_tree_map_calls	pass	-	

@@ -1643,6 +1643,7 @@ java_parens	pass	-
 java_parens_overloads	pass	-	
 java_queues_threads	pass	-	
 java_stand_ins	pass	-	
+java_string_format_static	pass	-	
 java_time_parse_iso	cannot run	-	the JVM's platform
 java_tree_map	pass	-	
 java_tree_map_calls	pass	-	

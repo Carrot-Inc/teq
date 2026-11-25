@@ -1640,6 +1640,7 @@ java_parens	fail	-	error: not supported on JavaScript: method random of java.lan
 java_parens_overloads	pass	-	
 java_queues_threads	pass	-	
 java_stand_ins	fail	-	error: Not found: println
+java_string_format_static	pass	-	
 java_time_parse_iso	fail	-	error: not supported on JavaScript: class DateTimeException java.time.DateTimeException (a Java definition without an implementation in the
 java_tree_map	pass	-	
 java_tree_map_calls	pass	-	

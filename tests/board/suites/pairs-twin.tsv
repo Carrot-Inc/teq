@@ -1624,6 +1624,7 @@ cases/java_parens	pass	-
 cases/java_parens_overloads	pass	-	
 cases/java_queues_threads	pass	-	
 cases/java_stand_ins	pass	-	
+cases/java_string_format_static	pass	-	
 cases/java_time_parse_iso	pass	-	
 cases/java_tree_map	pass	-	
 cases/java_tree_map_calls	pass	-	
