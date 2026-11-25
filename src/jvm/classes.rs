@@ -81,6 +81,7 @@ impl Parts {
 /// A field a class declares before the statement at `at` of an object's constructor tree, where
 /// the class file meets it: a field enters the constant pool as it is declared, so its place among
 /// the statements is the class file's order (`Gen::write_module_part`).
+#[derive(Clone)]
 pub(super) struct Declared {
     pub(super) at: usize,
     pub(super) flags: FieldFlags,
@@ -137,7 +138,7 @@ impl Underlying {
 }
 
 /// An object's constructor tree, kept from the first of the class file's two methods written
-/// from it to the second (`Gen::write_module`), with the locals its lowering declared.
+/// from it to the second (`Gen::hold_module_part`), with the locals its lowering declared.
 pub(super) struct ModuleTree {
     lir: crate::lir::Body,
     declared: FxMap<SymId, (ErasedType, bool)>,
@@ -166,6 +167,18 @@ enum HeldCode {
     Tree(LirId),
     /// A local def's body.
     Def(BodyTree),
+    /// One of the two methods an object's constructor tree is written in (`Gen::hold_module_part`).
+    ModulePart(ModulePart),
+}
+
+/// What a method of an object's constructor tree writes (`Gen::write_module_part`): the tree's root, the part (`init`:
+/// the `<init>`'s statements up to the instance's constructor call, else the `<clinit>`'s, the rest), the fields the
+/// `<clinit>` declares where it meets them, and the `<clinit>`'s head with the temporary it keeps the instance in.
+struct ModulePart {
+    root: LirId,
+    init: bool,
+    fields: Vec<Declared>,
+    head: Option<(Vec<LirId>, TempId)>,
 }
 
 /// A def's body lowered, to be written (`Gen::lower_method_body`, `Gen::write_method_body`): in return position, or,
@@ -692,12 +705,8 @@ impl<'a> Gen<'a> {
                 }))
             }
         };
-        match &code {
-            HeldCode::Tree(tree) | HeldCode::Def(BodyTree::Plain(tree)) => self.ask_lifted(*tree),
-            HeldCode::Def(BodyTree::Keyed { made, tree, .. }) => {
-                self.ask_lifted(*made);
-                self.ask_lifted(*tree);
-            }
+        for r in self.held_roots(&code) {
+            self.ask_lifted(r);
         }
         self.hold_method(method, if lazy { "local lazy val's method" } else { "lifted method" }, code)
     }
@@ -733,18 +742,28 @@ impl<'a> Gen<'a> {
         method
     }
 
+    /// The roots of a held method's code whose lifted bodies it asks for (`Gen::ask_lifted`), in the order they are
+    /// written: an object's part its head's statements, then its own of the tree's (`Gen::module_statements`).
+    fn held_roots(&self, code: &HeldCode) -> Vec<LirId> {
+        match code {
+            HeldCode::Tree(tree) | HeldCode::Def(BodyTree::Plain(tree)) => vec![*tree],
+            HeldCode::Def(BodyTree::Keyed { made, tree, .. }) => vec![*made, *tree],
+            HeldCode::ModulePart(part) => {
+                let (stmts, made) = self.module_statements(part.root);
+                let own = if part.init { &stmts[..made] } else { &stmts[made..] };
+                part.head.iter().flat_map(|(head, _)| head.iter().copied()).chain(own.iter().copied()).collect()
+            }
+        }
+    }
+
     /// A def's member in the context `held_context` made: its body lowered (`Gen::lower_method_body`), asked as
     /// `hold_tree` asks, held and written, its code starting at `first_line`.
     pub(super) fn hold_def(&mut self, method: MethodDef, what: &'static str, first_line: u32, (sym, params, body): (SymId, &[SymId], TExprId)) {
-        let body = self.lower_method_body(sym, params, body);
-        let roots: Vec<LirId> = match &body {
-            BodyTree::Plain(tree) => vec![*tree],
-            BodyTree::Keyed { made, tree, .. } => vec![*made, *tree],
-        };
-        for r in roots {
+        let code = HeldCode::Def(self.lower_method_body(sym, params, body));
+        for r in self.held_roots(&code) {
             self.ask_lifted(r);
         }
-        let held = HeldMethod { first_line: Some(first_line), ..self.hold_method(method, what, HeldCode::Def(body)) };
+        let held = HeldMethod { first_line: Some(first_line), ..self.hold_method(method, what, code) };
         self.write_held(held);
     }
 
@@ -820,6 +839,16 @@ impl<'a> Gen<'a> {
         match code {
             HeldCode::Tree(tree) => self.write_body(tree),
             HeldCode::Def(body) => self.write_method_body(body),
+            HeldCode::ModulePart(part) => {
+                if let Some((stmts, kept)) = &part.head {
+                    for &s in stmts {
+                        self.write(s);
+                    }
+                    self.m.this_slot = Some(self.m.temps[kept]);
+                    debug_assert_eq!(self.m.temps[kept], 0, "an object's instance is its <clinit>'s first local (`MethodCx::instance_is_first_local`)");
+                }
+                self.write_module_part(part.root, part.init, &part.fields);
+            }
         }
         self.end_method();
     }
@@ -2002,14 +2031,12 @@ impl<'a> Gen<'a> {
         } else if is_enum && !instance_enum && !clinit_first {
             self.enum_clinit(c);
         } else if !self.lazy_holders.is_empty() && !self.plan.has_method("<clinit>", "()V") {
-            self.begin_method(self.clinit_flags(), "<clinit>", "()V", false, &[], ErasedType::V, &[]);
-            self.body(|g| {
+            self.hold_member(self.clinit_flags(), "<clinit>", "()V", &[], ErasedType::V, &[], MethodSite::default(), "class's static initialiser", |g| {
                 let lookups = g.lower_var_handle_lookups();
                 let unit = g.lir.unit();
                 let done = g.lir.seq(&lookups, unit);
                 g.lir.ret(done)
             });
-            self.end_method();
         }
         if early_lookups.is_some_and(|n| self.lazy_holders.len() > n) {
             self.unsupported("a lazy member the names walk did not number (its handle has no lookup)");
@@ -2104,35 +2131,29 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The start of a module class's `<clinit>`, as scalac's: the instance is made and stored in
-    /// `MODULE$` before anything of the body runs, so the body may name the object, and the
-    /// constructor has run the superclass's alone. The instance stays in a temporary that stands
-    /// for `this` in the body, which the caller writes next.
-    pub fn begin_module_clinit(&mut self, flags: MethodFlags, name: &Rc<str>, roots: &[TExprId]) {
-        self.begin_method(flags, "<clinit>", "()V", false, &[], ErasedType::V, roots);
-        // The handles of the module class's lazy members come first (`MoveStatics.rebuild`'s
-        // static constructor, which `genPlainClass` puts before the instance's making).
-        self.var_handle_lookups();
-        let init = method_ref(Invoke::Special, name, false, "<init>", &[], &ErasedType::V);
-        let (made, temp) = self.lowering(|g| {
-            let instance = g.lir.make(&init, &[]);
-            let stored = g.lir.set_static(name, "MODULE$", instance);
-            let temp = g.lir.temp();
-            (g.lir.keep(temp, stored), temp)
-        });
-        self.write(made);
-        self.m.this_slot = Some(self.m.temps[&temp]);
+    /// The head of a module class's `<clinit>`, as scalac's: the handles of its lazy members looked up first
+    /// (`MoveStatics.rebuild`'s static constructor, which `genPlainClass` puts before the instance's making), then the
+    /// instance made and stored in `MODULE$` before anything of the body runs, so the body may name the object, and the
+    /// constructor has run the superclass's alone. The instance stays in a temporary that stands for `this` in the
+    /// body.
+    fn lower_module_head(&mut self) -> (Vec<LirId>, TempId) {
+        let name = self.this_name.clone();
+        let mut stmts = self.lower_var_handle_lookups();
+        let init = method_ref(Invoke::Special, &name, false, "<init>", &[], &ErasedType::V);
+        let instance = self.lir.make(&init, &[]);
+        let stored = self.lir.set_static(&name, "MODULE$", instance);
+        let temp = self.lir.temp();
+        stmts.push(self.lir.keep(temp, stored));
+        (stmts, temp)
     }
 
     /// `<clinit>` of an object: the instance, the values of the enum it is the companion of,
     /// then the body of its constructor's tree (the traits it adds, its fields and its
     /// statements, in order), where the class file runs it (`Gen::write_module_part`).
     fn module_clinit(&mut self, k: &PrimaryCtor) {
-        let name = self.this_name.clone();
         let roots = self.primary_roots(k);
-        self.begin_module_clinit(self.clinit_flags(), &name, &roots);
-        self.write_module(false, |g| g.primary_tree(k));
-        self.end_method();
+        let method = self.held_context(self.clinit_flags(), "<clinit>", "()V", &[], ErasedType::V, &roots, MethodSite::default());
+        self.hold_module_part(method, false, |g| g.primary_tree(k));
     }
 
     /// What an object that is an enum's companion runs before its body (`Gen::enum_companion_parts`):
@@ -2645,7 +2666,8 @@ impl<'a> Gen<'a> {
         let visibility = if private { Visibility::Private } else { Visibility::Public };
         let declared: Vec<SymId> = params.iter().filter_map(|p| p.0).filter(|p| tc.ctor_params.contains(p)).collect();
         let site = MethodSite { at: self.primary_ctor_place(tc.id), dotty: self.dotty_constructor(tc.id, &declared), ..MethodSite::default() };
-        self.begin_method_at(MethodFlags { visibility, ..MethodFlags::PUBLIC }, "<init>", &method_desc(&types, &ErasedType::V), true, params, ErasedType::V, &roots, site);
+        let (flags, desc) = (MethodFlags { visibility, ..MethodFlags::PUBLIC }, method_desc(&types, &ErasedType::V));
+        let method = self.held_context(flags, "<init>", &desc, params, ErasedType::V, &roots, site);
         // The constructor reads what the class captures from its parameters, which the
         // arguments of the superclass's constructor need before the fields are set.
         let mut slot = 1u16;
@@ -2665,15 +2687,14 @@ impl<'a> Gen<'a> {
         let extras = Extras { homes: self.class_homes.iter().map(|h| h.0).collect(), keys: self.class_keys.iter().map(|k| k.0).collect() };
         self.bind_extras(&extras, slot);
         if k.is_object {
-            self.write_module(true, |g| g.primary_tree(k));
+            self.hold_module_part(method, true, |g| g.primary_tree(k));
         } else {
-            self.body(|g| {
+            self.hold_tree(method, "primary constructor", true, |g| {
                 let (root, fields) = g.primary_tree(k);
                 assert!(fields.is_empty(), "a class declares no field in its constructor's tree");
                 root
             });
         }
-        self.end_method();
 
         if !cx.ctor_defaults_on_companion(tc.id) && !cx.ctor_defaults_on_inner_companion(tc.id) && !cx.ctor_defaults_on_local_companion(tc.id) {
             let clauses = cx.input.syms.class(tc.id).ctor.clone();
@@ -2704,22 +2725,33 @@ impl<'a> Gen<'a> {
     }
 
     /// One of the two methods of the class file an object's constructor tree is written in
-    /// (`Gen::write_module_part`), its `<init>` or its `<clinit>`. The first of them written makes
-    /// the tree with `make` and keeps it, with the locals its lowering declared, for the other.
-    pub(super) fn write_module(&mut self, init: bool, make: impl FnOnce(&mut Self) -> (LirId, Vec<Declared>)) {
-        let (root, fields, made) = match self.module_tree.take() {
-            Some(kept) => {
-                self.lir = kept.lir;
-                self.lower_declared = kept.declared;
-                (kept.root, kept.fields, false)
-            }
-            None => {
-                let (root, fields) = self.lowering(make);
-                (root, fields, true)
-            }
+    /// (`Gen::write_module_part`), its `<init>` (`init`) or its `<clinit>`, held in the context `held_context` made
+    /// and written. The first of the two held lowers the tree with `make`; the second takes it from the store, with
+    /// the locals its lowering declared and what the first one's writing added to it. The `<clinit>`'s head is lowered
+    /// at its own hold, before the tree where the `<clinit>` comes first, and stands for `this` while the tree is
+    /// lowered (`MethodCx::this_kept`). Each part asks for the lifted bodies of its own statements alone
+    /// (`Gen::held_roots`), in the order they are written.
+    pub(super) fn hold_module_part(&mut self, method: MethodDef, init: bool, make: impl FnOnce(&mut Self) -> (LirId, Vec<Declared>)) {
+        let kept = self.module_tree.take().map(|kept| {
+            self.lir = kept.lir;
+            self.lower_declared = kept.declared;
+            (kept.root, kept.fields)
+        });
+        let first = kept.is_none();
+        let head = (!init).then(|| self.lowering(|g| g.lower_module_head()));
+        self.m.this_kept = head.as_ref().map(|&(_, temp)| temp);
+        let (root, fields) = match kept {
+            Some(tree) => tree,
+            None => self.lowering(make),
         };
-        self.write_module_part(root, init, &fields);
-        if made {
+        let code = HeldCode::ModulePart(ModulePart { root, init, fields: fields.clone(), head });
+        for s in self.held_roots(&code) {
+            self.ask_lifted(s);
+        }
+        let what = if init { "object's constructor" } else { "object's static initialiser" };
+        let held = HeldMethod { this_uninit: init, ..self.hold_method(method, what, code) };
+        self.write_held(held);
+        if first {
             let lir = std::mem::take(&mut self.lir);
             let declared = std::mem::take(&mut self.lower_declared);
             self.module_tree = Some(ModuleTree { lir, declared, root, fields });
@@ -4840,11 +4872,10 @@ impl<'a> Gen<'a> {
     /// The file module's `<clinit>`: its lazy members' handles looked up first, the instance, then
     /// the eager vals of its constructor's tree (`Gen::file_module_tree`), where the class file
     /// runs them (`Gen::write_module_part`).
-    fn file_module_clinit(&mut self, name: &Rc<str>, fields: &[FieldDef]) {
+    fn file_module_clinit(&mut self, fields: &[FieldDef]) {
         let roots = file_module_roots(fields);
-        self.begin_module_clinit(self.clinit_flags(), name, &roots);
-        self.write_module(false, |g| g.file_module_tree(fields));
-        self.end_method();
+        let method = self.held_context(self.clinit_flags(), "<clinit>", "()V", &[], ErasedType::V, &roots, MethodSite::default());
+        self.hold_module_part(method, false, |g| g.file_module_tree(fields));
     }
 
     /// The file module's constructor as one tree, an object's (`Gen::constructor_parts`):
@@ -4946,11 +4977,10 @@ impl<'a> Gen<'a> {
         // whose lazy members' handles it looks up first.
         let clinit_first = !self.holds_lazy_members(None, file);
         if clinit_first {
-            self.file_module_clinit(&name, &fields);
+            self.file_module_clinit(&fields);
         }
-        self.begin_method(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, "<init>", "()V", true, &[], ErasedType::V, &file_module_roots(&fields));
-        self.write_module(true, |g| g.file_module_tree(&fields));
-        self.end_method();
+        let method = self.held_context(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, "<init>", "()V", &[], ErasedType::V, &file_module_roots(&fields), MethodSite::default());
+        self.hold_module_part(method, true, |g| g.file_module_tree(&fields));
         for f in &fields {
             self.accessors(f);
         }
@@ -4959,7 +4989,7 @@ impl<'a> Gen<'a> {
                 self.unsupported("a lazy member the names walk did not number (its handle has no lookup)");
             }
         } else {
-            self.file_module_clinit(&name, &fields);
+            self.file_module_clinit(&fields);
         }
         let mut funs: Vec<FunId> = cx.file_funs[file.0 as usize].iter().copied().filter(|f| reach.funs[f.idx()]).collect();
         funs.sort_by(|&a, &b| crate::emit::layout::compare_syms(syms, cx.input.interner, prog.funs[a.idx()].sym, prog.funs[b.idx()].sym));

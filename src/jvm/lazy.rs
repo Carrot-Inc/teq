@@ -264,14 +264,6 @@ impl<'a> Gen<'a> {
     /// The `VarHandle` lookups of the class's lazy members, first in its `<clinit>`
     /// (`MoveStatics.rebuild` of the handles `addInFront` put first): `MethodHandles.lookup()
     /// .findVarHandle(classOf[C], "x$lzyN", classOf[Object])`, in the handles' order.
-    pub fn var_handle_lookups(&mut self) {
-        let lookups = self.lowering(|g| g.lower_var_handle_lookups());
-        for lookup in lookups {
-            self.write(lookup);
-        }
-    }
-
-    /// `var_handle_lookups` as statements.
     pub(super) fn lower_var_handle_lookups(&mut self) -> Vec<LirId> {
         let owner = self.this_name.clone();
         let lookup_class: Rc<str> = Rc::from("java/lang/invoke/MethodHandles$Lookup");

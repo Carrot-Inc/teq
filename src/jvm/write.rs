@@ -715,20 +715,27 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The part of an object's constructor tree (`Return(Block(statements, Unit))`) a method of
-    /// the class file runs, as dotty's JVM back end places it (`BCodeSkelBuilder.genPlainClass`,
-    /// 175-266, `splitAtSuper`): `<init>` the statements up to the superclass's constructor's
-    /// call, `<clinit>` the rest, the object's body, once `MODULE$` holds the instance its `this`
-    /// is read from (`Gen::begin_module_clinit`). Scala.js and Scala Native keep the body in the
-    /// module class's constructor, as the tree has it.
-    /// The fields the object declares (`fields`, by the statement each stands before) are
-    /// declared where the `<clinit>` meets them, since a field enters the constant pool as it is
-    /// declared.
-    pub(super) fn write_module_part(&mut self, root: LirId, init: bool, fields: &[Declared]) {
+    /// The statements of an object's constructor tree (`Return(Block(statements, Unit))`) and where its two methods
+    /// part them: the number of those up to the superclass's constructor's call, which the `<init>` runs
+    /// (`Gen::write_module_part`, `Gen::hold_module_part`).
+    pub(super) fn module_statements(&self, root: LirId) -> (Vec<LirId>, usize) {
         let Kind::Return(block) = self.lir.node(root).kind.clone() else { unreachable!("an object's constructor ends in its return") };
         let Kind::Block { stmts, .. } = self.lir.node(block).kind.clone() else { unreachable!("an object's constructor is a block") };
         let all = self.lir.lists[stmts.start as usize..(stmts.start + stmts.len) as usize].to_vec();
         let made = all.iter().position(|&s| matches!(self.lir.node(s).kind, Kind::InitCall { .. })).map_or(0, |i| i + 1);
+        (all, made)
+    }
+
+    /// The part of an object's constructor tree a method of the class file runs, as dotty's JVM back end places it
+    /// (`BCodeSkelBuilder.genPlainClass`, 175-266, `splitAtSuper`): `<init>` the statements up to the superclass's
+    /// constructor's call, `<clinit>` the rest, the object's body, once `MODULE$` holds the instance its `this` is read
+    /// from (the `<clinit>`'s head, `Gen::hold_module_part`). Scala.js and Scala Native keep the body in the module
+    /// class's constructor, as the tree has it.
+    /// The fields the object declares (`fields`, by the statement each stands before) are
+    /// declared where the `<clinit>` meets them, since a field enters the constant pool as it is
+    /// declared.
+    pub(super) fn write_module_part(&mut self, root: LirId, init: bool, fields: &[Declared]) {
+        let (all, made) = self.module_statements(root);
         debug_assert!(fields.iter().all(|f| f.at >= made), "a field declared in the constructor before the instance is made");
         let part = if init { 0..made } else { made..all.len() };
         // Each part writes of the root its statements and its return.

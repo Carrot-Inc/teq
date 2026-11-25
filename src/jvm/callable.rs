@@ -708,15 +708,14 @@ impl<'a> Gen<'a> {
         self.this_class = None;
         self.line_file = info.file;
         self.context = name.clone();
-        self.begin_method(MethodFlags::PUBLIC, "<init>", "()V", true, &[], ErasedType::V, &[]);
+        let method = self.held_context(MethodFlags::PUBLIC, "<init>", "()V", &[], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
-        self.body(|g| {
+        self.hold_tree(method, "main class's constructor", true, |g| {
             let made = g.lir.init(&object_init, &[]);
             let unit = g.lir.unit();
             let done = g.lir.seq(&[made], unit);
             g.lir.ret(done)
         });
-        self.end_method();
         self.entry_main(main, None);
         Some((name, self.finish_writer()))
     }
@@ -754,9 +753,9 @@ impl<'a> Gen<'a> {
         let this = ErasedType::L(name.clone());
         let outer = self.sym_type(tc.ctor_params[0]);
         self.field(FieldFlags { is_final: true, ..FieldFlags::PRIVATE }, "$outer", &outer);
-        self.begin_method(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), true, &[(None, outer.clone())], ErasedType::V, &[]);
+        let method = self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), &[(None, outer.clone())], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
-        self.body(|g| {
+        self.hold_tree(method, "inner companion's constructor", true, |g| {
             let made = g.lir.init(&object_init, &[]);
             let instance = g.lir.this(this.clone());
             let given = g.param(0);
@@ -765,7 +764,6 @@ impl<'a> Gen<'a> {
             let done = g.lir.seq(&[made, kept], unit);
             g.lir.ret(done)
         });
-        self.end_method();
 
         let case_name = self.class_name(c);
         let case_type = ErasedType::L(case_name.clone());
@@ -1055,9 +1053,9 @@ impl<'a> Gen<'a> {
         let outer_name = self.class_name(o);
         let outer = ErasedType::L(outer_name.clone());
         self.field(FieldFlags { is_final: true, synthetic: true, ..FieldFlags::PRIVATE }, "$outer", &outer);
-        self.begin_method(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), true, &[(None, outer.clone())], ErasedType::V, &[]);
+        let method = self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), &[(None, outer.clone())], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
-        self.body(|g| {
+        self.hold_tree(method, "instance companion's constructor", true, |g| {
             let instance = g.lir.this(this.clone());
             let given = g.param(0);
             let kept = g.lir.store(instance, &name, "$outer", given);
@@ -1066,7 +1064,6 @@ impl<'a> Gen<'a> {
             let done = g.lir.seq(&[kept, made], unit);
             g.lir.ret(done)
         });
-        self.end_method();
 
         let tc = &cx.input.prog.classes[idx];
         let case_name = self.class_name(c);
@@ -1328,13 +1325,11 @@ impl<'a> Gen<'a> {
             g.enum_companion_parts(&mut parts, &name, touch.clone(), &values);
             g.returning(parts)
         };
-        self.begin_module_clinit(MethodFlags { visibility: Visibility::Package, is_static: true, ..MethodFlags::PUBLIC }, &name, &[]);
-        self.write_module(false, tree);
-        self.end_method();
+        let clinit = self.held_context(MethodFlags { visibility: Visibility::Package, is_static: true, ..MethodFlags::PUBLIC }, "<clinit>", "()V", &[], ErasedType::V, &[], super::classes::MethodSite::default());
+        self.hold_module_part(clinit, false, tree);
 
-        self.begin_method(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, "<init>", "()V", true, &[], ErasedType::V, &[]);
-        self.write_module(true, |_| unreachable!("the tree its `<clinit>` made"));
-        self.end_method();
+        let init = self.held_context(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, "<init>", "()V", &[], ErasedType::V, &[], super::classes::MethodSite::default());
+        self.hold_module_part(init, true, |_| unreachable!("the tree its `<clinit>` made"));
         name
     }
 

@@ -483,6 +483,10 @@ pub struct MethodCx {
     /// The declared parameters in order, each with its slot.
     pub params: Vec<(u16, ErasedType)>,
     pub this_slot: Option<u16>,
+    /// In an object's `<clinit>`, the temporary its head keeps the instance in: `this` while the method's tree is
+    /// lowered, before the writer gives the temporary the slot `this_slot` then names (`Gen::hold_module_part`). The
+    /// lowering asks of the two through `MethodCx::has_instance` and `MethodCx::instance_is_first_local` alone.
+    pub this_kept: Option<crate::lir::TempId>,
     pub ret: ErasedType,
     pub tail: Option<TailLoop>,
     /// Where the code of a def that loops (`tail`) starts.
@@ -593,6 +597,7 @@ impl Default for MethodCx {
             locals: FxMap::default(),
             params: Vec::new(),
             this_slot: None,
+            this_kept: None,
             ret: ErasedType::V,
             tail: None,
             tail_head: None,
@@ -620,6 +625,22 @@ impl Default for MethodCx {
             at: None,
             repeated: None,
         }
+    }
+}
+
+impl MethodCx {
+    /// Whether the method runs on an instance `this` reads: one in a slot, or the one an object's `<clinit>` keeps
+    /// (`this_kept`).
+    pub fn has_instance(&self) -> bool {
+        self.this_slot.is_some() || self.this_kept.is_some()
+    }
+
+    /// Whether the instance is the method's first local, as `this` is in an instance method. The one an object's
+    /// `<clinit>` keeps is too: the `<clinit>` is static and takes no parameter, and its head, written first
+    /// (`Gen::write_held`), declares no temporary before the one it keeps the instance in (`Gen::lower_module_head`).
+    /// A temporary the head declared before that one would move it.
+    pub fn instance_is_first_local(&self) -> bool {
+        self.this_slot == Some(0) || self.this_kept.is_some()
     }
 }
 
@@ -739,7 +760,7 @@ pub struct Gen<'a> {
     /// The templates read, by their text (`Gen::template`).
     pub(super) templates: FxMap<Box<str>, Rc<super::template::Template>>,
     /// The constructor tree of the object being written, between its two methods
-    /// (`Gen::write_module`).
+    /// (`Gen::hold_module_part`).
     pub(super) module_tree: Option<super::classes::ModuleTree>,
     /// The temporaries of the matches being lowered that hold a value class's primitive
     /// underlying value, with the class and its arguments: a type pattern tests, and a
@@ -4137,7 +4158,9 @@ impl<'a> Gen<'a> {
         if let Some(module) = self.m.this_module.clone() {
             return Some(ThisValue::Module(module));
         }
-        self.m.this_slot?;
+        if !self.m.has_instance() {
+            return None;
+        }
         let t = match (self.m.this_home, self.m.this_underlying.clone(), self.this_class) {
             (Some(home), _, _) => self.class_type(home),
             (None, Some(underlying), _) => underlying,
@@ -4548,7 +4571,7 @@ impl<'a> Gen<'a> {
                 && (info.mods & mods::PRIVATE != 0 && !info.scoped_private || cx.input.syms.class(c).subclasses.is_empty() && (!cx.input.open_world || cx.input.syms.class(c).mods & mods::FINAL != 0)))
             && !cx.is_lazy_member(s)
             && info.kind != SymKind::Def
-            && self.m.this_slot == Some(0)
+            && self.m.instance_is_first_local()
             && self.this_class.map_or(false, |c| *cx.class_names[c.idx()] == *self.this_name)
     }
 
