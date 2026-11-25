@@ -46,22 +46,73 @@
 # another compiler's). Both run
 # from the root of the checkout on the same relative paths (out/identity/: the sources, the jars, the outputs), with
 # COURSIER_CACHE an empty directory, so that nothing of a machine's paths or caches reaches an output; every time is
-# left out (the phase lines of `check` and `build`, the figures of the jar report a failed build prints, an analysis
-# answer's `ms`), the jar cache is left unused (its rows would say which run warmed it), and nothing else is
-# normalised. One run of either mode at a time in a checkout:
+# left out (the phase lines of `check` and `build`, the figures of the jar report a failed build prints and of the
+# report `--time` prints with that report's rows only a measured wait prints, an analysis answer's `ms`), the jar
+# cache is left unused (its rows would say which run warmed it), and nothing else is normalised. One run of either
+# mode at a time in a checkout:
 # each holds out/identity.lock (its pid) until it exits, a second is refused at once, and a lock whose run is gone
 # is taken over. --compare copies the outputs and a report into <out dir>. IDENTITY_PROGRAMS, an extended regular expression, restricts both to the programs whose names it
 # matches whole, for a check of this script. Runs under macOS's bash 3.2; needs GNU timeout and python3 (or python).
 case ${1:-} in --produce | --compare) across=${1#--}; shift ;; --self-test) across=self-test; shift ;; *) across= ;; esac
 absolute() { case $1 in /*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }
 # compare_form <log> <out>: the log without its times: the phase lines of `check` and `build`, the `ms` object of
-# an analysis answer, and in the rows of the jar report a failed build prints (two spaces, a label, columns of
-# figures) the `<n> ms` figures with the padding that aligns the columns to them.
+# an analysis answer, in the rows of the jar report a failed build prints (two spaces, a label, columns of
+# figures) the `<n> ms` figures with the padding that aligns the columns to them, and a `--time` report's figures
+# (time_report_form).
 compare_form() {
-  grep -v -E '^(checked|built|ran) .* in |^  (read|parse|type|reach|emit|write) ' "$1" |
+  grep -v -E '^(checked|built|ran) .* in |^  (read|parse|type|reach|emit|write) ' "$1" | time_report_form |
     sed -E 's/"ms":[{][^}]*[}]/"ms":{}/g; /^  [A-Za-z].*  +[0-9]/{ s/ +[0-9]+\.[0-9]+ ms//g; s/ {2,}/ /g; }' > "$2"
 }
-export -f compare_form
+# The titles of the sections of what `--time` prints (src/report.rs's `Report`: a title, then its rows indented by
+# two spaces and their details by four), as src/measure.rs, src/report.rs and src/typer/loader/mod.rs name them. The
+# self-test holds the list to the sources' own (report_titles_of): a title added to the report alone fails every run.
+TIME_REPORT_TITLES="phases|workers|workers, the attempt that gave way|macro reach|the attempt's macro reach|bodies typed|the attempt's bodies typed|waits and holds|the attempt's waits and holds|the inlining phase's waits and holds|the attempt's inlining phase's waits and holds|types made by the workers|the type store's overlays|reach|emit|after the emit|classpath|Java|library bodies|shape census"
+# time_report_form: stdin with every section of a `--time` report in the form two runs share: in the lines under
+# a title, up to the first line that is neither indented nor a title, each figure is `N` and each run of spaces
+# after the indentation one space (the columns are aligned to the widest figure); what src/measure.rs's
+# `report_workers` prints only for a wait a run measured is left out: the scheduler's run delay, the waits for a
+# category and the kinds of a worker's waits. Every other line is as it was.
+time_report_form() {
+  awk -v titles="$TIME_REPORT_TITLES" '
+    BEGIN { n = split(titles, t, "|"); for (i = 1; i <= n; i++) title[t[i]] = 1 }
+    ($0 in title) { inside = 1; print; next }
+    inside && /^  / {
+      match($0, /^ +/)
+      lead = substr($0, 1, RLENGTH); rest = substr($0, RLENGTH + 1)
+      gsub(/[0-9][0-9,]*(\.[0-9]+)?/, "N", rest)
+      gsub(/  +/, " ", rest)
+      if (rest ~ /^runnable and waiting for a CPU \(the scheduler.s run delay\): / || rest ~ /^waited for .*: N times, /) next
+      if (rest ~ /^worker N: /) sub(/ waited N ms \(.*\), held /, " waited N ms (), held ", rest)
+      print lead rest
+      next
+    }
+    { inside = 0; print }'
+}
+export TIME_REPORT_TITLES
+export -f compare_form time_report_form
+# report_titles_of <src dir>: the string literals of every `.section(` call of the sources' Rust files, a line each:
+# the titles of the report's sections, a call's every branch.
+report_titles_of() {
+  "$(command -v python3 || command -v python)" -c 'import pathlib, re, sys
+titles = set()
+for path in pathlib.Path(sys.argv[1]).rglob("*.rs"):
+    text = path.read_text(encoding="utf-8", errors="replace")
+    for call in re.finditer(r"\.section\(", text):
+        i = j = call.end()
+        depth = 1
+        while depth and j < len(text):
+            if text[j] == "\"":
+                j += 1
+                while text[j] != "\"":
+                    j += 2 if text[j] == "\\" else 1
+            elif text[j] == "(":
+                depth += 1
+            elif text[j] == ")":
+                depth -= 1
+            j += 1
+        titles.update(re.findall(r"\"((?:[^\"\\]|\\.)*)\"", text[i:j - 1]))
+print("\n".join(sorted(titles)))' "$1"
+}
 # jar_entries <jar> <out>: the jar's entries, each its SHA-256 and name, in the names' order; the jar removed.
 jar_entries() {
   "$(command -v python3 || command -v python)" -c 'import hashlib, sys, zipfile
@@ -198,6 +249,54 @@ self_test() {
   plant "a death by a signal on both sides" "$(failed "$(judge js p "$d/c/ref" "$d/c/new" " ref:137 new:137")")"
   good "$d/w/ref"; good "$d/w/new"; printf 'y\n' > "$d/w/new/out.js"
   plant "a wrong byte" "$(failed "$(judge js p "$d/w/ref" "$d/w/new" "")")"
+  # timed <dir> <message> <excerpt's figure> <report's figure> <with a measured wait: yes or no> [<rows left out>]:
+  # the record (compare_form) of a check that <message> stopped under `--time`: the error with an excerpt indented
+  # as a report's detail row is, holding <excerpt's figure>; the report, its figures <report's figure>, with a measured
+  # wait's rows when asked; the same error again after it, as a build that gave way to one worker prints it; without
+  # the lines matching the extended regular expression <rows left out>.
+  timed() {
+    local dir=$1 message=$2 xf=$3 f=$4 wait=$5 without=${6:-} q="'"
+    mkdir -p "$dir"
+    {
+      printf 'x.scala:1:1: error: %s\n    val t = %s ms(2)\n1 error found\nworkers\n' "$message" "$xf"
+      printf '  phase: signatures                %8s ms\n  phase: merge                     %8s ms\n' "$f" "$f"
+      printf 'waits and holds\n  workers%s time  1  %s ms wall summed\n' "$q" "$f"
+      [ "$wait" = no ] || printf '    waited for a body%ss cell: 2 times, %s ms\n' "$q" "$f"
+      printf '    held the loader%ss lock: 6 holds, %s ms\n' "$q" "$f"
+      [ "$wait" = no ] || printf '    runnable and waiting for a CPU (the scheduler%ss run delay): %s ms\n' "$q" "$f"
+      if [ "$wait" = no ]; then
+        printf '    worker 0: 1 items, %s ms wall, waited 0.0 ms (), held %s ms\n' "$f" "$f"
+      else
+        printf '    worker 0: 1 items, %s ms wall, waited %s ms (a body%ss cell %s ms), held %s ms\n' "$f" "$f" "$q" "$f" "$f"
+      fi
+      printf 'x.scala:1:1: error: %s\n    val t = %s ms(2)\n1 error found\nexit 1\n' "$message" "$xf"
+    } | if [ -n "$without" ]; then grep -v -E -e "$without"; else cat; fi > "$dir/log"
+    compare_form "$dir/log" "$dir/log.cmp"
+    rm "$dir/log"
+  }
+  timed "$d/m/ref" "not positive" 1.5 2.67 no; timed "$d/m/new" "not positive" 1.5 211.61 yes
+  [ "$(judge diags p "$d/m/ref" "$d/m/new" "")" = "same p" ] || missed="$missed; the control of a --time report's figures and a measured wait's rows"
+  timed "$d/n/ref" "not positive" 1.5 2.67 no; timed "$d/n/new" "not negative" 1.5 211.61 yes
+  plant "a diagnostic that differs beside a --time report" "$(failed "$(judge diags p "$d/n/ref" "$d/n/new" "")")"
+  timed "$d/o/ref" "not positive" 1.5 2.67 no; timed "$d/o/new" "not positive" 1.5 211.61 yes '^  phase: merge '
+  plant "a --time report's row missing on one side" "$(failed "$(judge diags p "$d/o/ref" "$d/o/new" "")")"
+  timed "$d/q/ref" "not positive" 1.5 2.67 no; timed "$d/q/new" "not positive" 2.5 2.67 no
+  plant "a figure that differs in an excerpt indented as a --time report's rows are" "$(failed "$(judge diags p "$d/q/ref" "$d/q/new" "")")"
+  # titles_unheld <src dir> <titles, |-separated>: the titles that the sources' `.section(` calls and the list do not
+  # share, a line each (`<` the list's alone, `>` the sources' alone).
+  titles_unheld() { diff <(tr '|' '\n' <<< "$2" | LC_ALL=C sort) <(report_titles_of "$1" | LC_ALL=C sort) | grep '^[<>]'; }
+  mkdir -p "$d/s/sub"
+  printf 'let s = report.section(if a { "x (y)" } else { "z" });\n' > "$d/s/one.rs"
+  printf 'let s = report.section(match p {\n    P::A => "w\\"v",\n});\nself.given_section(&mut out, "not a title");\n' > "$d/s/sub/two.rs"
+  [ -z "$(titles_unheld "$d/s" 'x (y)|z|w\"v')" ] || missed="$missed; the control of the report's titles"
+  plant "a report's title the list lacks" "$(titles_unheld "$d/s" 'x (y)|z')"
+  plant "a title the list holds that the report has not" "$(titles_unheld "$d/s" 'x (y)|z|w\"v|gone')"
+  # The checkout's own report against the list; a stand-in's checkout without the sources has nothing to hold it to.
+  if [ -f src/report.rs ]; then
+    local unheld
+    unheld=$(titles_unheld src "$TIME_REPORT_TITLES")
+    [ -z "$unheld" ] || missed="$missed; the --time report's titles of src/ and TIME_REPORT_TITLES: $(tr '\n' ' ' <<< "$unheld")"
+  fi
   mkdir -p "$d/k/ref/p" "$d/k/new/p"
   # exact <what> <the lines the coverage must give, and no other> <inventory> <results>
   exact() {
