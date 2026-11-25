@@ -1771,7 +1771,7 @@ impl<'a> Worker<'a> {
             return false;
         }
         match self.prog.expr(te) {
-            TExpr::Field(r, s) if matches!(self.prog.expr(r), TExpr::Module(_)) => self.ref_purity(s).at_least(Purity::PURE_PATH),
+            TExpr::Field(r, s) if matches!(self.prog.expr(r), TExpr::Module(_)) => self.symbol_purity(s).at_least(Purity::PURE_PATH),
             _ => false,
         }
     }

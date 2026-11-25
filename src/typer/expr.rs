@@ -788,11 +788,10 @@ impl<'a> Worker<'a> {
     /// (an `Apply` to the reference's typer), with `withDiscardWarnable`'s exemption of `this`
     /// (`isThisTypeResult`), and only of a value the source wrote (`told_as_written`).
     fn warnable_pure(&mut self, written: ExprId, te: TExprId) -> bool {
-        use super::elaborate::Purity;
         if matches!(self.prog.expr(te), TExpr::This) || !self.told_as_written(written, te) {
             return false;
         }
-        !self.is_pending_call(te) && self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE)
+        self.is_pure_expr(te)
     }
 
     /// Whether the typed `te` is the value the source wrote at `written`, node for node, which is what the
@@ -939,13 +938,12 @@ impl<'a> Worker<'a> {
     /// stays (the constructor's guard; a case class's `C(1)`, which the reference removes, is evaluated: no
     /// effect either way), and so does whatever the walk does not know: evaluated, the safe side for an effect.
     fn removed_as_written(&mut self, written: ExprId, te: TExprId) -> bool {
-        use super::elaborate::Purity;
         let removable = matches!(
             self.prog.expr(te),
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Null
                 | TExpr::Local(_) | TExpr::This | TExpr::Lambda(..) | TExpr::Module(_)
         );
-        removable && !self.is_pending_call(te) && self.told_as_written(written, te) && self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE)
+        removable && self.told_as_written(written, te) && self.is_pure_expr(te)
     }
 
     /// Marks what `PureStats` removes of the block statement `te`, written `written` (`Program::removed_bits`):
@@ -981,7 +979,6 @@ impl<'a> Worker<'a> {
         // where the copy alone decides: a literal, a local, `this`, a function literal. An object's reference
         // there stays evaluated: how the body wrote it is not the copy's to say.
         if self.prog.is_expansion(te) && self.prog.is_ascribed(te) {
-            use super::elaborate::Purity;
             let value = match self.prog.expr(te) {
                 TExpr::Block(_, res) => res,
                 _ => te,
@@ -990,7 +987,7 @@ impl<'a> Worker<'a> {
                 self.prog.expr(value),
                 TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Lambda(..)
             );
-            if decided && !self.is_pending_call(value) && self.expr_purity_under(value, Purity::IMPURE).at_least(Purity::PURE) {
+            if decided && self.is_pure_expr(value) {
                 self.prog.mark_removed(value);
             }
             return;
@@ -1010,12 +1007,11 @@ impl<'a> Worker<'a> {
     /// const)`; `TreeInfo.constToLiteral`'s `{ pre; v }`): not evaluated where it is pure, judged where the
     /// typed node alone decides: a literal, a local, `this`, a function literal.
     pub(super) fn mark_removed_made(&mut self, te: TExprId) {
-        use super::elaborate::Purity;
         let decided = matches!(
             self.prog.expr(te),
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Lambda(..)
         );
-        if decided && !self.is_pending_call(te) && self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE) {
+        if decided && self.is_pure_expr(te) {
             self.prog.mark_removed(te);
         }
     }
@@ -1039,7 +1035,6 @@ impl<'a> Worker<'a> {
     /// `TermRef`: an `Ident`, whatever the call wrote), unless the argument is ascribed, which the reference
     /// binds to a val (`Inliner.computeParamBindings`: no singleton type).
     pub(super) fn removed_copy(&mut self, from: TExprId, to: TExprId) -> bool {
-        use super::elaborate::Purity;
         // Still an inline parameter (an inline method's body that calls another): its own argument decides.
         if self.inline_param_read(to) {
             return true;
@@ -1051,7 +1046,7 @@ impl<'a> Worker<'a> {
             (_, TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Lambda(..)) => true,
             _ => false,
         };
-        decided && !self.is_pending_call(to) && self.expr_purity_under(to, Purity::IMPURE).at_least(Purity::PURE)
+        decided && self.is_pure_expr(to)
     }
 
     /// Marks the value `te`, written `written`, that the adaptation to `Unit` made the one statement of its

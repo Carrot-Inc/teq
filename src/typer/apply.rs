@@ -7504,8 +7504,7 @@ impl<'a> Worker<'a> {
     /// inline call still pending is impure whatever it expands to, as the reference's `Apply` of an inline method
     /// is before the inlining; a transparent call is expanded by its typing there too and is its expansion.
     pub(crate) fn lifted_as_impure(&mut self, te: TExprId) -> bool {
-        use super::elaborate::Purity;
-        self.is_pending_call(te) || !self.expr_purity_under(te, Purity::IMPURE).at_least(Purity::PURE)
+        !self.is_pure_expr(te)
     }
 
     /// Whether evaluating `te` can do nothing at all: a pure path by the lift's test (`exprPurity` at `PurePath`)
@@ -8029,7 +8028,7 @@ impl<'a> Worker<'a> {
         if !pending.is_empty() {
             self.expand_pending_kept(&pending);
         }
-        if order.iter().all(|&i| self.is_pure_expr(results[i])) {
+        if order.iter().all(|&i| self.order_pure_expr(results[i])) {
             return false;
         }
         let mark = self.hoisted.len();
@@ -8039,7 +8038,7 @@ impl<'a> Worker<'a> {
                 continue;
             }
             done[i] = true;
-            let kept = if defaults { self.is_pure_path(results[i]) } else { self.is_pure_expr(results[i]) };
+            let kept = if defaults { self.order_pure_path(results[i]) } else { self.order_pure_expr(results[i]) };
             if !kept {
                 results[i] = self.hoist(results[i], ANY, span);
             }
@@ -8048,10 +8047,15 @@ impl<'a> Worker<'a> {
         true
     }
 
+
+    // The call order's own reading of an argument, master's before the purity family: `keep_call_order`'s
+    // decisions stand as they were on every tree. It departs from dotty's `noLift` (EtaExpansion.scala 180, 186)
+    // where the family reads as dotty: an object that runs code is a pure path here, a creation asks the class alone.
+
     /// dotty's `isPurePath` (`TreeInfo.exprPurity` at `PurePath`): a literal, `this`, an object,
     /// a reference to a val or a parameter (no `var`, `lazy val` or by-name one), or a val selected
     /// on such a path.
-    fn is_pure_path(&self, e: TExprId) -> bool {
+    fn order_pure_path(&self, e: TExprId) -> bool {
         let pure_ref = |s: SymId| {
             let info = self.syms.sym(s);
             info.kind != SymKind::Var && !info.by_name && info.mods & crate::ast::mods::LAZY == 0
@@ -8063,7 +8067,7 @@ impl<'a> Worker<'a> {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit => true,
             TExpr::This | TExpr::Super(_) | TExpr::Module(_) => true,
             TExpr::Local(s) | TExpr::Static(s) => pure_ref(s),
-            TExpr::Field(q, s) => pure_ref(s) && self.is_pure_path(q),
+            TExpr::Field(q, s) => pure_ref(s) && self.order_pure_path(q),
             _ => false,
         }
     }
@@ -8071,15 +8075,15 @@ impl<'a> Worker<'a> {
     /// dotty's `isPureExpr` (`exprPurity` at `Pure` or above): a pure path, a lambda, or a
     /// construction of pure arguments that `isPureApply` takes as pure, a class's whose instance
     /// runs no initialisation (a case class's synthetic `apply` included, `isNoInitsRealClass`).
-    fn is_pure_expr(&mut self, e: TExprId) -> bool {
-        if self.is_pure_path(e) {
+    fn order_pure_expr(&mut self, e: TExprId) -> bool {
+        if self.order_pure_path(e) {
             return true;
         }
         match self.prog.expr(e) {
             TExpr::Lambda(..) => true,
             TExpr::New(c, args) => {
                 let args = self.prog.expr_list(args).to_vec();
-                self.no_inits_class(c) && args.into_iter().all(|a| self.is_pure_expr(a))
+                self.order_no_inits_class(c) && args.into_iter().all(|a| self.order_pure_expr(a))
             }
             _ => false,
         }
@@ -8088,7 +8092,7 @@ impl<'a> Worker<'a> {
     /// Whether constructing `c` runs no initialisation: a class's constructor that is a stable
     /// member (`setStableConstructor`: `isNoInitsRealClass`); a block's or a value class's is
     /// lifted all the same, as teq's lifting of a call's arguments keeps their own order.
-    fn no_inits_class(&mut self, c: ClassId) -> bool {
+    fn order_no_inits_class(&mut self, c: ClassId) -> bool {
         let info = self.syms.class(c);
         if info.kind != ClassKind::Class || info.owner == Owner::Local || info.value_class {
             return false;

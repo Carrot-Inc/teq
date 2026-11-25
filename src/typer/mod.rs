@@ -49,6 +49,7 @@ pub use reflective::{reflective_proxy_name, Naming, ReflectiveSig};
 mod pat;
 pub mod prep;
 pub mod prims;
+mod purity;
 mod proxies;
 pub mod profile;
 mod quoted;

@@ -2267,7 +2267,7 @@ impl<'a> Worker<'a> {
     /// construction of a class of no initialisers (`TreeInfo.isPureApply` 666–674: the constructor
     /// of a no-inits class is stable) over elideable arguments. Any other cast is the program's
     /// `asInstanceOf` (`Any_asInstanceOf`), never pure.
-    fn elideable_argument(&mut self, e: TExprId) -> bool {
+    pub(super) fn elideable_argument(&mut self, e: TExprId) -> bool {
         match self.prog.expr(e) {
             TExpr::Cast(a, CastOp::Erased, _) => match self.prog.expr(a) {
                 // A module's reference is pure where its class runs no initialiser (`refPurity`).
@@ -2510,7 +2510,7 @@ impl<'a> Worker<'a> {
     /// (`isElideableExpr`, as `elideable_argument` ports it), any creation in it being one a projection drops,
     /// and every reference it evaluates pure by the reference's purity (`elideable_by_purity`).
     fn projection_drops(&mut self, e: TExprId) -> bool {
-        if !self.elideable_argument(e) || !self.elideable_by_purity(e) {
+        if !self.is_elideable(e) {
             return false;
         }
         let made: Vec<ClassId> = self
@@ -2530,7 +2530,7 @@ impl<'a> Worker<'a> {
     /// given and a case class's creation through a companion with an initializer are idempotent and no more
     /// (`refPurity`): their first evaluation runs something, so such an argument is kept where it stands. A
     /// cast that function took is read for its operand, a creation for its arguments.
-    fn elideable_by_purity(&mut self, e: TExprId) -> bool {
+    pub(super) fn elideable_by_purity(&mut self, e: TExprId) -> bool {
         use super::elaborate::Purity;
         match self.prog.expr(e) {
             TExpr::Cast(a, ..) => self.elideable_by_purity(a),
