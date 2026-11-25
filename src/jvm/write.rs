@@ -49,22 +49,8 @@ fn recipe_bytes(text: &str) -> usize {
 }
 
 impl<'a> Gen<'a> {
-    /// A value class's value the old code left on the stack at `t` where the lowering asked another type
-    /// (`Gen::expr_marked`: a method's result under an ascription to a wider type, which the static type is): held
-    /// in a slot and brought to `want` by `Gen::lower_value_class`'s nodes.
-    pub(super) fn write_value_class_left(&mut self, e: crate::tir::TExprId, t: &ErasedType, c: crate::types::ClassId, args: crate::types::TList, null_safe: bool, want: &ErasedType) {
-        let slot = self.store_new(t);
-        let temp = self.lir.temp();
-        self.m.temps.insert(temp, slot);
-        let brought = self.lowering(|g| {
-            let held = g.lir.push(Kind::Temp(temp), t.clone());
-            g.lower_value_class(held, t, c, args, null_safe, want, Some(e))
-        });
-        self.write(brought);
-    }
-
     /// The node's code where code is written after it on its way: an operand's, a statement's, a
-    /// value's the old code writes.
+    /// value's.
     pub(super) fn write(&mut self, id: LirId) {
         self.write_at(id, true)
     }
@@ -87,10 +73,6 @@ impl<'a> Gen<'a> {
         }
         self.code.in_node += 1;
         match kind {
-            Kind::Legacy(e, why) => {
-                self.m.unlowered.push(why);
-                self.expr_legacy(e, &ty)
-            }
             Kind::Int(v) => self.iconst(v),
             Kind::Long(v) => self.lconst(v),
             Kind::Float(v) => self.fconst(v),
@@ -302,12 +284,7 @@ impl<'a> Gen<'a> {
             Kind::InitCall { ctor, args } => {
                 let this = ErasedType::L(self.this_name.clone());
                 self.load(0, &this);
-                // Transitional: the code a `Legacy` node under the arguments runs decides again
-                // how a field of the instance is read before the instance is made
-                // (`FieldRoute::Early`), as their lowering decided it.
-                let was = std::mem::replace(&mut self.m.before_super, true);
                 self.write_arguments(args, None);
-                self.m.before_super = was;
                 self.invoke_mref(&ctor);
             }
             Kind::Typed(value) => self.write(value),
@@ -409,11 +386,7 @@ impl<'a> Gen<'a> {
                 let of = self.lir.ty(value).clone();
                 self.string_value_of(&of);
             }
-            Kind::Underlying { value, operand } => {
-                let outer = self.vc_select.replace(operand);
-                self.write(value);
-                self.vc_select = outer;
-            }
+            Kind::Underlying { value } => self.write(value),
             Kind::Concat { parts } => self.write_concat(parts),
             Kind::Try { body, catch, finalizer, returns } => {
                 self.check_returns(id, returns);
@@ -597,26 +570,12 @@ impl<'a> Gen<'a> {
         (self.line_floor, self.line_hold) = lines;
     }
 
-    /// Whether an expression of the typed IR ends where its code goes nowhere on: a throw, a return (a closure's is
-    /// thrown), a jump of the tail loop, or a block or a conditional that ends so (`Gen::leaves`, a throw and a
-    /// closure's return besides).
-    fn legacy_ends(&self, e: crate::tir::TExprId) -> bool {
-        use crate::tir::TExpr;
-        match self.cx.input.prog.expr(e) {
-            TExpr::Return(_) | TExpr::Throw(..) => true,
-            TExpr::Block(_, res) => self.legacy_ends(res),
-            TExpr::If(_, t, Some(els)) => self.legacy_ends(t) && self.legacy_ends(els),
-            _ => self.leaves(e),
-        }
-    }
-
     /// Whether the code of the node goes on after it, as dotty's `genLoadTo` tells by the destination a tree leaves
     /// to (`generatedDest`, BCodeBodyBuilder.scala 324-503): not after a throw, a return, a jump of the tail loop, a
     /// break or a loop with no condition, nor after a block that ends in one or a conditional whose branches both do.
     fn falls_through(&self, id: LirId) -> bool {
         match &self.lir.node(id).kind {
             Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::Break { .. } | Kind::While { cond: None, .. } => false,
-            Kind::Legacy(e, _) => !self.legacy_ends(*e),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| self.falls_through(self.lir.lists[(stmts.start + i) as usize])) && self.falls_through(*result),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.falls_through(*then) || self.falls_through(*otherwise),
             Kind::Switch { cases, default, .. } => cases.iter().any(|c| self.falls_through(c.body)) || self.falls_through(*default),
@@ -725,19 +684,17 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// A `try`'s or a `synchronized` block's recorded `returns` is the tree's answer wherever no
-    /// escape node inside holds typed IR the tree does not see into (`Body::returns_through`).
+    /// A `try`'s or a `synchronized` block's recorded `returns` is the tree's answer (`Body::returns_through`).
     fn check_returns(&self, id: LirId, returns: bool) {
-        debug_assert!(self.lir.holds_escape(id) || returns == self.lir.returns_through(id, &|_| false), "the recorded `returns` of {id:?}");
+        debug_assert!(returns == self.lir.returns_through(id), "the recorded `returns` of {id:?}");
     }
 
     /// Whether the branch leaves the method or goes round its loop, where a value is wanted: the
     /// loop's jump, a `return` out of the def's own method, alone, as a block's result or in both
-    /// branches of a conditional (`Gen::leaves`, which a node of typed IR asks).
+    /// branches of a conditional.
     fn branch_leaves(&self, id: LirId) -> bool {
         match &self.lir.node(id).kind {
             Kind::Return(_) | Kind::SelfTailCall { .. } => true,
-            Kind::Legacy(e, _) => self.leaves(*e),
             Kind::Block { result, .. } => self.branch_leaves(*result),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.branch_leaves(*then) && self.branch_leaves(*otherwise),
             Kind::Switch { cases, default, .. } => cases.iter().all(|c| self.branch_leaves(c.body)) && self.branch_leaves(*default),

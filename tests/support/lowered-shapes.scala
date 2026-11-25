@@ -32,11 +32,11 @@ final case class Shape(name: String, before: String, expr: String, tpe: String, 
 // parameters, `$S` the statements before.
 final case class Position(name: String, text: String, fits: String = "")
 
-// An escape: a statement the lowering leaves to the generator of the typed IR (a `Kind::Legacy` node, a type test's
-// node, a `try`'s cases the lowering does not take), after which the rest of the method's lowering sees typed IR left
-// (`Gen::analysis_in_order`). `$X` is an operand the escaped tree holds, `topv` where no shape stands there; `operand`
-// whether the tree holds one, `expression` whether it may stand in a field's initialiser or a constructor, `host` the
-// one host whose methods it escapes in where it escapes in no other.
+// An escape: a statement before the shapes that follow it, of a form whose lowering stands apart from an
+// expression's (a `return`, a pattern definition, a type test, a `try`'s cases, a default, a capture): what the shapes
+// after it lower to must not depend on it. `$X` is an operand the statement's tree holds, `topv` where no shape stands
+// there; `operand` whether the tree holds one, `expression` whether it may stand in a field's initialiser or a
+// constructor, `host` the one host whose methods it stands in where it stands in no other.
 final case class Escape(name: String, text: String, operand: Boolean = true, expression: Boolean = true, host: String = "")
 
 object LoweredShapes:

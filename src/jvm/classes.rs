@@ -1,6 +1,6 @@
 //! Classes, traits, objects, enums and the module class of a file's top-level definitions.
 
-use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedFrom, LirId, MethodDef, MethodFlags, MethodRef, Refusal, Relation, TempId, Unlowered, Visibility};
+use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedFrom, LirId, MethodDef, MethodFlags, MethodRef, Refusal, Relation, TempId, Visibility};
 use super::classfile::*;
 use super::free;
 use super::gen::*;
@@ -134,15 +134,6 @@ impl Underlying {
             Underlying::Param(i) => g.param(i),
         }
     }
-}
-
-/// Whether a build prints, for each method it writes, why parts of it were left to the old
-/// generator (`TEQ_LIR_STATS` set): one line `LIRGAPS<TAB><class>.<name><desc><TAB><reasons of
-/// its nodes><TAB><reasons of its code outside nodes><TAB><instructions outside nodes>`, the
-/// reasons the names of `lir::Unlowered`, `-` for none.
-fn lir_stats() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("TEQ_LIR_STATS").is_some())
 }
 
 /// An object's constructor tree, kept from the first of the class file's two methods written
@@ -430,16 +421,6 @@ impl<'a> Gen<'a> {
             return;
         }
         let m = self.plan.methods.last().expect("a method was begun");
-        if lir_stats() {
-            let named = |why: &mut Vec<Unlowered>| {
-                why.sort_unstable();
-                why.dedup();
-                let names: Vec<String> = why.iter().map(|why| format!("{:?}", why)).collect();
-                if names.is_empty() { "-".to_string() } else { names.join(",") }
-            };
-            let (nodes, outside) = (named(&mut self.m.unlowered), named(&mut self.m.outside));
-            self.gaps_lines.push(format!("LIRGAPS\t{}.{}{}\t{}\t{}\t{}", self.this_name, m.name, m.desc, nodes, outside, code.outside));
-        }
         let reached = !self.cw.overflow;
         self.cw.method(method_access(m.flags), &m.name, &m.desc, Some(code));
         if reached && self.cw.overflow {
@@ -452,8 +433,7 @@ impl<'a> Gen<'a> {
     /// of the plan's places: an inner body before the one around it, as `LambdaLift.liftDef` appends a definition
     /// after what it holds and the back end writes the class's members in their order. Every queued body is lowered
     /// first, and the bodies its tree asks for are queued and lowered too, before any is written. A body only a
-    /// writer asks for (a `Legacy` node's code, a local default's getter at its call) is queued while its container is
-    /// written, and comes in the next round.
+    /// writer asks for is queued while its container is written, and comes in the next round.
     pub fn drain_pending(&mut self) {
         loop {
             let mut held = Vec::new();
@@ -1410,18 +1390,17 @@ impl<'a> Gen<'a> {
         self.method_body(fun.sym, &fun.params, body);
         self.end_method();
         self.begin_method_at(MethodFlags::PUBLIC, &m.name, &m.desc, false, params, m.ret.clone(), &[], site);
-        self.outside(Unlowered::ValueClassForwarder);
         let this = self.class_type(c);
-        self.load(0, &this);
-        self.vc_unbox(c, &u);
-        let mut slot = 1;
-        for (_, t) in params {
-            self.load(slot, t);
-            slot += if t.wide() { 2 } else { 1 };
-        }
-        let owner = self.this_name.clone();
-        self.invoke_desc(Invoke::Static, &owner, false, &ext_name, &ext_desc, ext_types.len(), &m.ret);
-        self.return_value(&m.ret);
+        let extension = method_ref(Invoke::Static, &self.this_name.clone(), false, &ext_name, &ext_types, &m.ret);
+        self.body(|g| {
+            let instance = g.lir.this(this);
+            let mut args = vec![g.lower_vc_unbox(c, instance, &u)];
+            for i in 0..params.len() {
+                args.push(g.param(i));
+            }
+            let result = g.lir.static_call(&extension, &args);
+            g.lir.ret(result)
+        });
         self.end_method();
     }
 
@@ -1920,7 +1899,7 @@ impl<'a> Gen<'a> {
                 self.ctor_default_getters_of(k);
             }
             if let Some(v) = info.companion.filter(|&v| is_object && cx.has_value_companion(v)) {
-                self.extension_copies(v);
+                self.extension_bodies(v);
             }
             if let Some(e) = info.companion.filter(|&e| (is_object || instance_enum_companion) && syms.class(e).kind == ClassKind::Enum) {
                 self.enum_companion_members(e, c);

@@ -2,7 +2,7 @@
 //! bytecode, reflection and the `java` launcher. A case class's companion with `apply`,
 //! `unapply` and `fromProduct`, the case class's `copy`.
 
-use crate::lir::{Catch, Caught, ClassFlags, Comparing, ErasedType, ExceptionHandler, FieldFlags, Invoke, Kind, LirId, MethodDef, MethodFlags, MethodRef, Relation, SwitchCase, TempId, Unlowered, Visibility};
+use crate::lir::{Catch, Caught, ClassFlags, Comparing, ErasedType, ExceptionHandler, FieldFlags, Invoke, Kind, LirId, MethodDef, MethodFlags, MethodRef, Relation, SwitchCase, TempId, Visibility};
 use super::classfile::*;
 use super::gen::*;
 use super::names::*;
@@ -1233,7 +1233,7 @@ impl<'a> Gen<'a> {
     /// extension methods.
     pub fn emit_value_companion(&mut self, c: ClassId) -> (String, Vec<u8>) {
         let name = self.begin_module(c, &[]);
-        self.extension_copies(c);
+        self.extension_bodies(c);
         if self.cx.ctor_defaults_on_companion(c) {
             self.ctor_default_getters_of(c);
         }
@@ -1304,46 +1304,7 @@ impl<'a> Gen<'a> {
     /// layout, whose static forwarders the class takes. For a case class, scalac's erased
     /// family beside them: `copy$extension(u, x)`, `copy$default$1$extension(u)` and
     /// `_1$extension(u)`, each the underlying value.
-    pub fn extension_copies(&mut self, c: ClassId) {
-        let cx = self.cx;
-        if !cx.input.syms.class(c).value_class {
-            return;
-        }
-        if cx.vc_on_companion(c) {
-            self.extension_bodies(c);
-            return;
-        }
-        let class = self.class_name(c);
-        let u = self.vc_underlying(c);
-        let funs: Vec<crate::tir::FunId> = cx.input.prog.classes[cx.tclass_of[c.idx()] as usize].methods.clone();
-        for f in funs {
-            let fun = &cx.input.prog.funs[f.idx()];
-            if !cx.input.reach.funs[f.idx()] || fun.body.is_none() {
-                continue;
-            }
-            let m = self.mref(fun.sym);
-            let mut types = vec![u.clone()];
-            types.extend(m.params.iter().cloned());
-            let name = format!("{}$extension", m.name);
-            let desc = method_desc(&types, &m.ret);
-            if self.plan.has_method(&name, &desc) {
-                continue;
-            }
-            let params: Vec<(Option<SymId>, ErasedType)> = types.iter().map(|t| (None, t.clone())).collect();
-            self.begin_method(MethodFlags::PUBLIC, &name, &desc, false, &params, m.ret.clone(), &[]);
-            self.outside(Unlowered::ValueClassForwarder);
-            let mut slot = 1u16;
-            for t in &types {
-                self.load(slot, t);
-                slot += if t.wide() { 2 } else { 1 };
-            }
-            self.invoke_desc(Invoke::Static, &class, false, &name, &desc, types.len(), &m.ret);
-            self.return_value(&m.ret);
-            self.end_method();
-        }
-    }
-
-    fn extension_bodies(&mut self, c: ClassId) {
+    pub fn extension_bodies(&mut self, c: ClassId) {
         let cx = self.cx;
         let u = self.vc_underlying(c);
         // The lifted methods so far are the module's own; those of the bodies below read `this`
@@ -1550,7 +1511,9 @@ impl<'a> Gen<'a> {
             self.end_method();
         }
 
-        self.extension_copies(c);
+        if cx.vc_on_companion(c) {
+            self.extension_bodies(c);
+        }
         // The `toString` `Desugar.classDef` gives the companion it makes.
         if object.map_or(true, |o| syms.class(o).synthetic_companion) {
             let string = ErasedType::L(Rc::from(STRING));

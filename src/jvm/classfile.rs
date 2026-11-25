@@ -460,11 +460,9 @@ pub struct Code {
     /// A lowering runs (`Gen::lowering`): nothing may be written, since what a lowering decides
     /// must not depend on what is written, nor the output on the order of the lowerings.
     pub frozen: bool,
-    /// The nodes being written around the next instruction (`Gen::write`).
+    /// The nodes being written around the next instruction (`Gen::write`): every instruction is a node's, which a debug
+    /// build checks as it is written.
     pub in_node: u32,
-    /// The instructions written with no node around them: what the statistics hold a method's
-    /// recorded reasons against (`Gen::end_method`).
-    pub outside: u32,
 }
 
 impl Code {
@@ -491,7 +489,6 @@ impl Code {
             misreserved: false,
             frozen: false,
             in_node: 0,
-            outside: 0,
         }
     }
 
@@ -683,9 +680,7 @@ impl Code {
 
     fn before_insn(&mut self) {
         self.writing();
-        if self.in_node == 0 {
-            self.outside += 1;
-        }
+        debug_assert!(self.in_node > 0, "an instruction written outside a node");
         if !self.reachable {
             self.reachable = true;
             let offset = self.pc();
@@ -1614,6 +1609,14 @@ mod tests {
     use super::{op, switch_layout, Code, ConstPool, Handler, SwitchLayout, VT};
 
     /// The code of a `finish`ed method: its bytes, and whether it was refused.
+    /// A code these tests write instructions into bare, as no node's: it opens inside the node scope every instruction
+    /// is written in (`Code::before_insn`).
+    fn bare(locals: Vec<VT>) -> Code {
+        let mut c = Code::new(locals);
+        c.in_node = 1;
+        c
+    }
+
     fn code_of(c: Code) -> (Vec<u8>, bool) {
         let (out, overflow) = c.finish(&mut ConstPool::new());
         let len = u32::from_be_bytes([out[4], out[5], out[6], out[7]]) as usize;
@@ -1628,7 +1631,7 @@ mod tests {
 
     /// `iload_0; if<cond> L; nop * gap; L: return`, the jump's offset 3 + gap.
     fn forward(gap: usize, relax: bool) -> (Vec<u8>, bool) {
-        let mut c = Code::new(vec![VT::Int]);
+        let mut c = bare(vec![VT::Int]);
         c.relax = relax;
         let l = c.new_label();
         c.var_insn(op::ILOAD, op::ILOAD_0, 0);
@@ -1666,7 +1669,7 @@ mod tests {
 
     /// `L: nop * gap; goto L; return`, the jump's offset -gap.
     fn backward(gap: usize) -> Vec<u8> {
-        let mut c = Code::new(vec![]);
+        let mut c = bare(vec![]);
         c.relax = true;
         let l = c.new_label();
         c.bind(l);
@@ -1688,7 +1691,7 @@ mod tests {
     /// span push its target out of reach, and one whose span no wide jump is in stays narrow.
     #[test]
     fn a_jump_is_widened_where_the_widened_ones_push_it_out_of_reach() {
-        let mut c = Code::new(vec![VT::Int]);
+        let mut c = bare(vec![VT::Int]);
         c.relax = true;
         let (near, far, after) = (c.new_label(), c.new_label(), c.new_label());
         c.var_insn(op::ILOAD, op::ILOAD_0, 0);
@@ -1718,7 +1721,7 @@ mod tests {
     /// through with.
     #[test]
     fn every_offset_follows_the_widened_layout() {
-        let mut c = Code::new(vec![VT::Int]);
+        let mut c = bare(vec![VT::Int]);
         c.relax = true;
         let (skip, start, end, handler) = (c.new_label(), c.new_label(), c.new_label(), c.new_label());
         c.var_insn(op::ILOAD, op::ILOAD_0, 0);
@@ -1862,7 +1865,7 @@ mod tests {
         let word = |b: &[u8], at: usize| i32::from_be_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]]);
         for phase in 0..4usize {
             for table in [true, false] {
-                let mut code = Code::new(Vec::new());
+                let mut code = bare(Vec::new());
                 for _ in 0..phase {
                     code.op(op::NOP);
                 }
@@ -1906,7 +1909,7 @@ mod tests {
     /// the jump at 1 grows by 5, the switch moves from 5 to 10 and its padding from 2 bytes to 1.
     #[test]
     fn a_switch_after_a_widened_jump_is_padded_and_aimed_by_the_final_layout() {
-        let mut c = Code::new(vec![VT::Int]);
+        let mut c = bare(vec![VT::Int]);
         c.relax = true;
         let (far, a, b, d) = (c.new_label(), c.new_label(), c.new_label(), c.new_label());
         c.var_insn(op::ILOAD, op::ILOAD_0, 0);

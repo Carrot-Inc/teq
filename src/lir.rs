@@ -2,8 +2,7 @@
 //! (erasure, boxing, the choice of each member's reference), as a tree of nodes that leave
 //! values of erased types, and the erased names it speaks in: types, and the references to
 //! classes and members that stand where an erased symbol table would. The JVM back end writes
-//! bytecode from it; a node the lowering does not make yet is `Legacy`, which the JVM back
-//! end generates from the typed IR as it did before (docs/LIR.md).
+//! bytecode from it (docs/LIR.md).
 
 use crate::source::FileId;
 use crate::tir::{StrRef, TExprId};
@@ -252,22 +251,8 @@ pub struct Node {
     pub of: Option<TExprId>,
 }
 
-/// Why a form of the typed IR is not lowered yet: what an escape node (`Kind::Legacy`) carries, so that the forms
-/// the old generator still writes are this list (docs/LIR.md, "How the extraction goes").
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub enum Unlowered {
-    /// A lambda, a local def's call, a local lazy val's read, `new` or a default of a class that
-    /// captures, or a local trait's member call, after an earlier part of the method was left to
-    /// the old generator: what it captures is asked in the order the code is written.
-    AfterEscape,
-    /// A value class's method forwarding to its `m$extension`, and the copies of extension methods.
-    ValueClassForwarder,
-}
-
 #[derive(Clone)]
 pub enum Kind {
-    /// An expression of the typed IR brought to the node's type, not lowered yet, and why.
-    Legacy(TExprId, Unlowered),
     Int(i32),
     Long(i64),
     Float(f32),
@@ -363,10 +348,8 @@ pub enum Kind {
     /// the super calls of its code (`Gen::super_call_place`); a NIR writer reads none.
     SuperCall { method: Rc<MethodRef>, receiver: LirId, args: List, order: Option<Rc<[usize]>>, place: Option<(FileId, u32)> },
     /// A value class's underlying value selected on a value of the class: `value`, which the
-    /// lowering brought to the underlying type. `operand` is the expression of the typed IR
-    /// selected on: while it may be `Legacy`, its generator is told through it that the box is
-    /// opened with no null test (`Gen::fit`). Transitional until no such operand is `Legacy`.
-    Underlying { value: LirId, operand: TExprId },
+    /// lowering brought to the underlying type.
+    Underlying { value: LirId },
     /// A new instance of the class `ctor` is the constructor of, the constructor run on it over
     /// the arguments, each a value its parameter takes: at the parameter's type, or as the scope
     /// holds it (what a lifted class captures, an inner class's enclosing instance), at a type
@@ -418,8 +401,7 @@ pub enum Kind {
     /// `try`: the body; where it throws, the cases (`Catch`); the finalizer, which runs on every
     /// way out. `returns`: whether a `return` of the method leaves through the finalizer
     /// (`Body::returns_through`), which the JVM writer must know before the `try` to make the
-    /// method's early-return slot (dotty's `shouldEmitCleanup`). Recorded by the lowering, which
-    /// sees into the typed IR of the escape nodes inside.
+    /// method's early-return slot (dotty's `shouldEmitCleanup`). Recorded by the lowering.
     Try { body: LirId, catch: Option<Catch>, finalizer: Option<LirId>, returns: bool },
     /// The body's value, evaluated holding the monitor of the object `lock`, which is evaluated
     /// first; the monitor is released on every way out of the body, a throw and a `return`
@@ -596,32 +578,6 @@ impl Refusal {
     }
 }
 
-impl Kind {
-    /// Whether the node leaves typed IR to the generator that writes it where the node stands
-    /// (`Body::typed_ir_left`). Every kind is listed, so that a new one is classified.
-    fn leaves_typed_ir(&self) -> bool {
-        match self {
-            Kind::Legacy(..) => true,
-            Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => false,
-            Kind::Local(_) | Kind::Param(_) | Kind::Block { .. } | Kind::Val { .. } | Kind::Assign { .. } | Kind::Module(_) | Kind::ClassOf(_) | Kind::This => false,
-            Kind::Field { .. } | Kind::Binary { .. } | Kind::Neg(_) | Kind::Not(_) | Kind::And(..) | Kind::Or(..) | Kind::Compare { .. } => false,
-            Kind::Helper { .. } | Kind::If { .. } | Kind::While { .. } | Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::Synchronized { .. } => false,
-            Kind::Try { .. } => false,
-            Kind::FieldStore { .. } | Kind::StaticField { .. } | Kind::Call { .. } | Kind::SuperCall { .. } | Kind::New { .. } | Kind::InitCall { .. } | Kind::StaticCall { .. } => false,
-            Kind::StaticFieldStore { .. } | Kind::StaticFieldSet { .. } => false,
-            Kind::ArrayOf { .. } | Kind::ArrayLoad { .. } | Kind::Cast { .. } | Kind::StringOf { .. } | Kind::Concat { .. } => false,
-            Kind::ArrayStore { .. } | Kind::ArrayLength(_) | Kind::ArrayClone(_) | Kind::NewArray { .. } => false,
-            Kind::Adapt { .. } | Kind::Typed(_) => false,
-            // Its operand is a node of its own, which says whether it leaves any.
-            Kind::Underlying { .. } => false,
-            // The body is queued, and the definition named: neither is written where the node stands.
-            Kind::Closure { .. } | Kind::LiftedCall { .. } | Kind::ReturnKey | Kind::LazyKey(_) | Kind::GivenInstance(_) => false,
-            Kind::Let { .. } | Kind::SetTemp { .. } | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Temp(_) | Kind::Is { .. } | Kind::Labeled { .. } | Kind::Break { .. } => false,
-            Kind::Refused(_) | Kind::LazyCas { .. } | Kind::Switch { .. } => false,
-        }
-    }
-}
-
 /// A case of a `Switch`: its keys, one or more, and its body.
 #[derive(Clone)]
 pub struct SwitchCase {
@@ -664,10 +620,6 @@ pub enum Caught {
 pub struct Body {
     pub nodes: Vec<Node>,
     pub lists: Vec<LirId>,
-    /// Whether the lowering that runs has left typed IR to the generator that writes it
-    /// (`Kind::leaves_typed_ir`): what that generator asks and names, it asks and names where
-    /// the node is written, after everything lowered before it and before everything after.
-    pub typed_ir_left: bool,
     temps: u32,
     labels: u32,
 }
@@ -676,7 +628,6 @@ impl Body {
     pub fn clear(&mut self) {
         self.nodes.clear();
         self.lists.clear();
-        self.typed_ir_left = false;
         self.temps = 0;
         self.labels = 0;
     }
@@ -698,7 +649,6 @@ impl Body {
     }
 
     pub fn push(&mut self, kind: Kind, ty: ErasedType) -> LirId {
-        self.typed_ir_left |= kind.leaves_typed_ir();
         self.nodes.push(Node { kind, ty, of: None });
         LirId(self.nodes.len() as u32 - 1)
     }
@@ -721,7 +671,6 @@ impl Body {
     pub fn operands(&self, id: LirId) -> Vec<LirId> {
         let mut out = Vec::new();
         match &self.node(id).kind {
-            Kind::Legacy(..) => {}
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => {}
             Kind::Local(_) | Kind::Param(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This | Kind::StaticField { .. } => {}
             Kind::ReturnKey | Kind::LazyKey(_) | Kind::GivenInstance(_) | Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
@@ -732,7 +681,7 @@ impl Body {
             Kind::Val { init: value, .. } | Kind::Assign { value, .. } | Kind::StaticFieldStore { value, .. } | Kind::Let { init: value, .. } | Kind::SetTemp { value, .. } => out.push(*value),
             Kind::StaticFieldSet { value, .. } => out.push(*value),
             Kind::Field { receiver: value, .. } | Kind::Neg(value) | Kind::Not(value) | Kind::Throw(value) | Kind::Return(value) => out.push(*value),
-            Kind::Underlying { value, .. } | Kind::Typed(value) | Kind::ArrayLength(value) | Kind::ArrayClone(value) | Kind::NewArray { length: value } => out.push(*value),
+            Kind::Underlying { value } | Kind::Typed(value) | Kind::ArrayLength(value) | Kind::ArrayClone(value) | Kind::NewArray { length: value } => out.push(*value),
             Kind::Cast { value, .. } | Kind::StringOf { value } | Kind::Adapt { value, .. } | Kind::Is { value, .. } => out.push(*value),
             Kind::LazyCas { object, expected, new, .. } => out.extend([*object, *expected, *new]),
             Kind::Labeled { body, .. } => out.push(*body),
@@ -780,14 +729,9 @@ impl Body {
     }
 
     /// Whether a `return` of the method stands in the node's code, from where it leaves through
-    /// every finalizer and monitor exit around it. An escape node's typed IR is not the tree's to
-    /// see into: `escaped` answers for it.
-    pub fn holds_return(&self, id: LirId, escaped: &dyn Fn(TExprId) -> bool) -> bool {
-        match &self.node(id).kind {
-            Kind::Return(_) => true,
-            Kind::Legacy(e, _) => escaped(*e),
-            _ => self.operands(id).into_iter().any(|o| self.holds_return(o, escaped)),
-        }
+    /// every finalizer and monitor exit around it.
+    pub fn holds_return(&self, id: LirId) -> bool {
+        matches!(self.node(id).kind, Kind::Return(_)) || self.operands(id).into_iter().any(|o| self.holds_return(o))
     }
 
     /// Whether a `return` of the method leaves through the node: a `try` with a finalizer whose
@@ -798,19 +742,14 @@ impl Body {
         matches!(self.node(id).kind, Kind::Try { .. }) || self.operands(id).into_iter().any(|o| self.holds_try(o))
     }
 
-    pub fn returns_through(&self, id: LirId, escaped: &dyn Fn(TExprId) -> bool) -> bool {
+    pub fn returns_through(&self, id: LirId) -> bool {
         match &self.node(id).kind {
             Kind::Try { body, catch, finalizer: Some(_), .. } => {
-                self.holds_return(*body, escaped) || catch.iter().flat_map(|c| c.handlers.iter()).any(|h| self.holds_return(h.body, escaped))
+                self.holds_return(*body) || catch.iter().flat_map(|c| c.handlers.iter()).any(|h| self.holds_return(h.body))
             }
-            Kind::Synchronized { body, .. } => self.holds_return(*body, escaped),
+            Kind::Synchronized { body, .. } => self.holds_return(*body),
             _ => false,
         }
-    }
-
-    /// Whether the node's code holds an escape node, whose typed IR the tree does not see into.
-    pub fn holds_escape(&self, id: LirId) -> bool {
-        matches!(self.node(id).kind, Kind::Legacy(..)) || self.operands(id).into_iter().any(|o| self.holds_escape(o))
     }
 }
 

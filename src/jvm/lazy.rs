@@ -167,14 +167,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// A read of the local lazy val `s` the lowering left to the writer (`Gen::lower_lazy_read`):
-    /// written from its node where it stands.
-    pub fn lazy_read(&mut self, s: SymId) -> ErasedType {
-        let call = self.lowering(|g| g.lower_lazy_call(s, false));
-        self.write(call);
-        self.lir.ty(call).clone()
-    }
-
     /// The tree of the accessor of `s`, its holder in `slot` (`PendingBody::LazyAccessor`): `if
     /// x$lzy.initialized() then x$lzy.value() else x$lzyINIT()`, each returned.
     pub fn lazy_accessor_tree(&mut self, s: SymId, slot: u16) -> LirId {
