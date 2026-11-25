@@ -396,8 +396,7 @@ impl<'a> Gen<'a> {
     /// identity among the class's methods. The code of a method the class holds already (`Gen::enter_plan`'s repeat) is
     /// dropped, after it was written
     /// for all that writing it leaves in the class: the constants and the bootstrap methods its
-    /// instructions name, the names it takes and the lifted bodies it asks for (a closure's copy, a thunk:
-    /// `defer`, the memos of what is lifted), the interfaces its `super` calls go to
+    /// instructions name, the interfaces its `super` calls go to
     /// (`super_targets`), the function arities it names and what it reports. It asks for no
     /// second writing of the class with wide jumps (`overflow`).
     fn end_method(&mut self, m: MethodDef, entered: bool) {
@@ -426,8 +425,8 @@ impl<'a> Gen<'a> {
     /// The lifted methods that the methods emitted so far asked for, and the ones those ask for, written in the order
     /// of the plan's places: an inner body before the one around it, as `LambdaLift.liftDef` appends a definition
     /// after what it holds and the back end writes the class's members in their order. Every queued body is lowered
-    /// first, and the bodies its tree asks for are queued and lowered too, before any is written. A body only a
-    /// writer asks for is queued while its container is written, and comes in the next round.
+    /// first, and the bodies its tree asks for are queued and lowered too, before any is written. A default getter's
+    /// body asked for while a round is lowered comes in the next round (`Gen::pending_next`).
     pub fn drain_pending(&mut self) {
         loop {
             let mut held = Vec::new();
@@ -713,8 +712,9 @@ impl<'a> Gen<'a> {
     /// A member of the class whose body is the tree `compose` lowers, held and written at once where a writer would
     /// have begun it: its context made at the class file's gate (`Gen::method_cx`, `site` where the member is
     /// defined), the tree lowered while no method is open, then opened, written and ended (`Gen::write_held`). `what`
-    /// names the member kind in a refusal. The closures and local defs its tree names enter the class's lifted table
-    /// as it is held (`Gen::ask_lifted`), in the order the writer meets them.
+    /// names the member kind in a refusal. The closures and local defs its tree names are named by the class's lifted
+    /// table where they are lowered, and their bodies queued as it is held (`Gen::ask_lifted`), in the order the
+    /// writer meets them.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn hold_member(&mut self, flags: MethodFlags, name: &str, desc: &str, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId], site: MethodSite, what: &'static str, compose: impl FnOnce(&mut Self) -> LirId) {
         let method = self.held_context(flags, name, desc, params, ret, roots, site);

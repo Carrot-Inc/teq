@@ -379,7 +379,7 @@ pub struct Lifted {
     pub desc: String,
     /// Whether it takes `this`: the shape's `instance` is some.
     pub this: bool,
-    /// The writer's, as `LiftedBody` has them: the local each capture is in the body.
+    /// As `LiftedBody` has them: the local each capture is in the body.
     pub captures: Vec<Capture>,
     /// Where `this` is the instance of a class other than the one being written: a class's copy of a
     /// local def or lazy val declared in that class's code (`Gen::copy_home`), and what it lifts.
@@ -792,8 +792,9 @@ pub struct Gen<'a> {
     /// Inside an argument the typer made, whose line holds through it (`mark_line`).
     pub line_hold: bool,
     pub pending: Vec<Pending>,
-    /// The bodies a hold asks for while a round of the class's lifted bodies is lowered (`Gen::drain_pending`): they
-    /// belong to the next round, as the writer's deferral of them did, so that no round's set changes while it is popped.
+    /// The default getters' bodies a hold asks for while a round of the class's lifted bodies is lowered
+    /// (`Gen::drain_pending`, `Gen::ask_lifted`): they belong to the next round, so that no round's set changes while it
+    /// is popped.
     pub(super) pending_next: Vec<Pending>,
     /// Whether a round of `Gen::drain_pending` is lowering its bodies.
     pub(super) draining: bool,

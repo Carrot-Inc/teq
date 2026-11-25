@@ -158,7 +158,8 @@ pub enum Adaptation {
 /// A method the lowering makes of a closure's body or of a local definition (lambda lifting): a
 /// method of the class that takes no receiver and, in this order, the instance its code runs
 /// on, the key of the non-local returns of the def around it, the captured values, then its own
-/// parameters. It has no name here: a writer names it.
+/// parameters. Its name is not here but on the node that names the method (a closure's `target`,
+/// a lifted call's `method`).
 #[derive(PartialEq)]
 pub struct LiftedShape {
     /// The type the instance is taken at, where the code names it.
