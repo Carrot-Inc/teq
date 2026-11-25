@@ -1565,6 +1565,7 @@ cases/inline_val_expansion_check	pass	-
 cases/inline_val_pure_path	pass	-	
 cases/inner_class_creators	pass	-	
 cases/inner_class_creators_receiver	pass	-	
+cases/inner_class_outer_null_check_jvm	pass	-	
 cases/inserted_apply_value	pass	-	
 cases/inst_direction_bounds	pass	-	
 cases/int_remainder_negative_zero	pass	-	
@@ -1835,6 +1836,7 @@ cases/local_case_class_equals_outer	pass	-
 cases/local_case_classes	pass	-	
 cases/local_case_companion	pass	-	
 cases/local_class_capture_body	pass	-	
+cases/local_class_captures_user_outer_named_local	pass	-	
 cases/local_class_companion_defaults	pass	-	
 cases/local_class_defaults	pass	-	
 cases/local_class_nested_members	pass	-	

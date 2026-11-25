@@ -109,6 +109,7 @@ inline_outer_private_member	unsupported
 inline_outer_this_in_local_class	unsupported
 inline_outer_through_block_class	unsupported
 inline_parameter_path_pattern	unsupported; queued: a typed pattern of a path-named class in an inline method whose prefix is its parameter
+inner_class_outer_null_check_jvm	exception
 intrinsic_call_records	compile
 intrinsic_call_reflection	compile
 jar_case_class_selectors	unsupported

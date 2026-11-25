@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- On the JVM an inner class made through a `null` outer throws `NullPointerException`, and a superclass's constructor
+  sees the captures it reads through an override, as scalac (it read `null` or `0`).
+- On the JVM an enum's body reading its case's parameter (`val y = x * 2` for `case C(x: Int)`) sees it, as scalac.
 - An import in a block that selects on a given with clauses (`given h(using DummyImplicit): AnyRef with ...; import
   h.{f}`) is refused in scalac's words ("h is not a valid import prefix, since it is not an immutable path"), as one
   over all its members was, where it was taken and failed at run ("the local h is not in scope").

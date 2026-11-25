@@ -12,7 +12,6 @@ Pouring.scala	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodErro
 PrivateAnd.scala	PrivateAnd.scala:4:38: type mismatch: found Int => Int, required Int
 Providers.scala	Providers.scala:55:41: no given instance of type Select[(Int, String, List[Int]), Int] was found for parameter x
 Signals.scala	Signals.scala:12:28: covariant type T occurs in contravariant position in type (Signal[Any]) ?=> T of parameter expr
-Signals2.scala	run: exit 1: Exception in thread "main" java.lang.NullPointerException: Cannot invoke "scala.Function1.apply(Object)" because "this.expr$c0" is null
 Tuple-fromProduct.scala	run: exit 1: Exception in thread "main" java.lang.AbstractMethodError: Receiver class MyProduct$loywqj_1820 does not define or inherit an implementation of the resolved method 'abstract java.lang.Object productElement(int)' of interface sca
 Typeable.scala	Typeable.scala:45:29: expected '=>', found '['
 annotation-info-not-erased	java source: teq reads none

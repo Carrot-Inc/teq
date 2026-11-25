@@ -47,7 +47,7 @@ ReplacementMatching.scala	pass	interp:fail
 ReverseSeqView.scala	pass	interp:pass	
 Signals.scala	fail	interp:fail	Signals.scala:12:28: covariant type T occurs in contravariant position in type (Signal[Any]) ?=> T of parameter expr
 Signals1.scala	pass	interp:pass	
-Signals2.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.NullPointerException: Cannot invoke "scala.Function1.apply(Object)" because "this.expr$c0" is null
+Signals2.scala	pass	interp:pass	
 StackMap.scala	pass	interp:pass	
 StringConcat.scala	pass	interp:fail	
 Tuple-fromArray.scala	pass	interp:pass	

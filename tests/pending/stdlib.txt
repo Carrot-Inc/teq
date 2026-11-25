@@ -165,6 +165,7 @@ inline_parameter_path_pattern	the run over scala-library dies (o$2 is not define
 inline_phase_wire_siblings	error: cannot resolve import: softwaremill not found
 inline_substitution_classes	RangeError: Maximum call stack size exceeded
 inline_substitution_local_classes	RangeError: Maximum call stack size exceeded
+inner_class_outer_null_check_jvm	TypeError: Cannot read properties of null (reading 'k')
 interpolate_forcing_boundaries	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
 interpolators	throw NotImplementedError.$new1();
 intrinsic_call_records	error: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)

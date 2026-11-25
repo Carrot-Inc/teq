@@ -155,13 +155,11 @@ struct PrimaryCtor<'t> {
     tc: &'t TClass,
     fields: &'t [FieldDef],
     super_name: &'t str,
-    fields_first: bool,
     is_value_case: bool,
     is_object: bool,
     is_anon: bool,
     /// It passes its name and ordinal up to `java.lang.Enum`.
     java_enum: bool,
-    n_captures: usize,
     /// The position among the parameters of a value of an enum's name, its ordinal after it.
     name_param: usize,
     /// The position of the first parameter an anonymous class passes its superclass.
@@ -1127,7 +1125,7 @@ impl<'a> Gen<'a> {
             self.field(FieldFlags::PRIVATE, &field, &ErasedType::object());
         }
         // Decided before an object's `<clinit>` is written, which writes its constructor's body.
-        let primary = (!is_trait).then(|| self.primary_ctor(tc, &fields, &super_name, enum_class.or(superclass), superclass.is_some(), is_value_case, is_object || given_module, is_anon));
+        let primary = (!is_trait).then(|| self.primary_ctor(tc, &fields, &super_name, enum_class.or(superclass), is_value_case, is_object || given_module, is_anon));
         if is_object {
             // An object nested in this one is a module val of it, a term member that is no method,
             // so a static final field of its module class (dotty's `addClassFields`), which nothing
@@ -1913,7 +1911,6 @@ impl<'a> Gen<'a> {
         fields: &'t [FieldDef],
         super_name: &'t str,
         enum_class: Option<ClassId>,
-        fields_first: bool,
         is_value_case: bool,
         is_object: bool,
         is_anon: bool,
@@ -1948,7 +1945,7 @@ impl<'a> Gen<'a> {
             params.push((Some(p), t));
         }
         let route = self.super_call_route(tc, enum_class, anon_super.map(|(_, _, types)| types), at_creation);
-        (params, PrimaryCtor { tc, fields, super_name, fields_first, is_value_case, is_object, is_anon, java_enum, n_captures, name_param, first_super_arg, route })
+        (params, PrimaryCtor { tc, fields, super_name, is_value_case, is_object, is_anon, java_enum, name_param, first_super_arg, route })
     }
 
     fn constructor(&mut self, params: &[(Option<SymId>, ErasedType)], k: &PrimaryCtor) {
@@ -2116,31 +2113,32 @@ impl<'a> Gen<'a> {
             }
         }
         // Scala sets the fields a class takes as parameters before the constructor of its
-        // superclass runs, whose body may read them through an overridden member.
-        if k.fields_first && !k.is_anon {
+        // superclass runs, whose body may read them through an overridden member: in the
+        // parameters' order, the enclosing instance last, checked for null first (dotty's
+        // `Constructors`: `copyParams ::: mappedSuperCalls`, the outer moved last).
+        let (outer, held) = self.held_fields();
+        for (i, field) in &held {
+            self.part(parts, |g| {
+                let instance = g.lir.this(this.clone());
+                let value = g.param(*i);
+                g.lir.store(instance, &owner, field, value)
+            });
+        }
+        if !k.is_anon {
             self.param_fields(parts, tc, k.fields);
+        }
+        if let Some((i, field)) = &outer {
+            self.part(parts, |g| g.lower_outer_null_check(*i));
+            self.part(parts, |g| {
+                let instance = g.lir.this(this.clone());
+                let value = g.param(*i);
+                g.lir.store(instance, &owner, field, value)
+            });
         }
         self.prelude(parts, &prog.stmts[tc.parent_prelude.range()]);
         self.super_call(parts, k);
         if let SuperCall::Refused = k.route {
             return;
-        }
-        if k.n_captures > 0 {
-            // What the class captures, then the instances and the keys its copies of local defs
-            // and lazy vals read, from the parameters that lead.
-            let mut held: Vec<String> = self.class_captures.iter().map(|c| c.1.clone()).collect();
-            held.extend(self.class_homes.iter().map(|h| h.1.clone()));
-            held.extend(self.class_keys.iter().map(|x| x.1.clone()));
-            for (i, field) in held.iter().enumerate() {
-                self.part(parts, |g| {
-                    let instance = g.lir.this(this.clone());
-                    let value = g.param(i);
-                    g.lir.store(instance, &owner, field, value)
-                });
-            }
-        }
-        if !k.is_anon && !k.fields_first {
-            self.param_fields(parts, tc, k.fields);
         }
         // An object's body is its constructor's, which the class file runs in the `<clinit>`
         // (`Gen::write_module_part`); a constructor written in place leaves it to the `<clinit>`
@@ -2151,6 +2149,75 @@ impl<'a> Gen<'a> {
             }
             self.class_body(parts, tc, k.fields, &this);
         }
+    }
+
+    /// The fields of what the class captures, then of the instances and the keys its copies of
+    /// local defs and lazy vals read, each with the parameter that holds it (they lead the
+    /// parameters), and apart the class's outer, which is set last (`direct_outer`).
+    fn held_fields(&self) -> (Option<(usize, String)>, Vec<(usize, String)>) {
+        let outer = self.direct_outer();
+        let mut held: Vec<(usize, String)> = self.class_captures.iter().enumerate().filter(|&(i, _)| Some(i) != outer).map(|(i, c)| (i, c.1.clone())).collect();
+        let extras = self.class_homes.iter().map(|h| h.1.clone()).chain(self.class_keys.iter().map(|x| x.1.clone()));
+        held.extend(extras.enumerate().map(|(j, field)| (self.class_captures.len() + j, field)));
+        (outer.map(|i| (i, self.class_captures[i].1.clone())), held)
+    }
+
+    /// Which capture is the class's outer, scalac's one `$outer`: the instance of the innermost
+    /// class it is defined in among those whose instances it captures, the one every other lies
+    /// outside of (`lies_in`). dotty reaches the classes further out through that one, where teq's
+    /// class may capture their instances too.
+    fn direct_outer(&self) -> Option<usize> {
+        let outers: Vec<(usize, ClassId)> =
+            self.class_captures.iter().enumerate().filter_map(|(i, c)| Some((i, self.enclosing_instance_of(c.0)?))).collect();
+        outers.iter().find(|&&(_, c)| outers.iter().all(|&(_, o)| o == c || self.lies_in(c, o))).map(|&(i, _)| i)
+    }
+
+    /// Whether the class `c` is defined inside the class `o`: a member of it or of a class inside
+    /// it, or a class that captures the instance of `o` or of a class inside it (a local class
+    /// sees the instances of the classes it is defined in alone).
+    fn lies_in(&self, c: ClassId, o: ClassId) -> bool {
+        let cx = self.cx;
+        let mut seen: Vec<ClassId> = Vec::new();
+        let mut todo = vec![c];
+        while let Some(k) = todo.pop() {
+            if seen.contains(&k) {
+                continue;
+            }
+            seen.push(k);
+            if let Owner::Class(p) = cx.input.syms.class(k).owner {
+                todo.push(p);
+            }
+            let idx = cx.tclass_of[k.idx()];
+            if idx != u32::MAX {
+                let captured = &cx.input.prog.classes[idx as usize].ctor_params[..self.capture_count(k)];
+                todo.extend(captured.iter().filter_map(|&s| self.enclosing_instance_of(s)));
+            }
+            if todo.contains(&o) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// The class whose instance the captured `s` is, where it is the local the typer made to read
+    /// `C.this` through in the classes nested in `C` (`Input::outer_this`): that symbol itself, not
+    /// a local of the program typed `C.this` whatever its name.
+    fn enclosing_instance_of(&self, s: SymId) -> Option<ClassId> {
+        let input = &self.cx.input;
+        let Type::This(c) = input.types.get(input.syms.sym(s).sig.as_ref()?.ret) else { return None };
+        (input.outer_this.get(&c) == Some(&s)).then_some(c)
+    }
+
+    /// `if (outer == null) throw new NullPointerException()` of the enclosing instance in the
+    /// parameter `i`: the test dotty's `Constructors` puts before `$outer` is set.
+    fn lower_outer_null_check(&mut self, i: usize) -> LirId {
+        let outer = self.param(i);
+        let null = self.lir.push(Kind::Null, ErasedType::object());
+        let is_null = self.lir.compare(Relation::Eq, Comparing::Identity, outer, null);
+        let init = method_ref(Invoke::Special, &Rc::from("java/lang/NullPointerException"), false, "<init>", &[], &ErasedType::V);
+        let made = self.lir.make(&init, &[]);
+        let thrown = self.lir.throw(made, ErasedType::V);
+        self.lir.when(is_null, thrown)
     }
 
     /// The fields of the class's own constructor parameters set from them.

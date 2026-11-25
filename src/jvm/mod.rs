@@ -92,6 +92,9 @@ pub struct Input<'a> {
     /// The classes whose class files' names the caller asks for (`Output::names`), written or not:
     /// a module's products record the shared classes a source uses (`products::Entry::uses`).
     pub named: &'a [ClassId],
+    /// The local the typer reads `C.this` through in the classes nested in `C`, by `C`
+    /// (`Worker::outer_this_sym`): what makes a captured local an enclosing instance.
+    pub outer_this: &'a crate::arena::Layered<ClassId, SymId>,
 }
 
 /// Link mode (`Worker::link_mode`), the JVM's one mode: the output runs beside the jars of the

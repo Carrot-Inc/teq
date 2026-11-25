@@ -1580,6 +1580,7 @@ inline_val_expansion_check	pass	-
 inline_val_pure_path	pass	-	
 inner_class_creators	pass	-	
 inner_class_creators_receiver	pass	-	
+inner_class_outer_null_check_jvm	cannot run	-	the JVM's platform
 inserted_apply_value	pass	-	
 inst_direction_bounds	pass	-	
 int_remainder_negative_zero	pass	-	
@@ -1870,6 +1871,7 @@ local_case_class_equals_outer	pass	-
 local_case_classes	pass	-	
 local_case_companion	pass	-	
 local_class_capture_body	pass	-	
+local_class_captures_user_outer_named_local	pass	-	
 local_class_companion_defaults	pass	-	
 local_class_defaults	pass	-	
 local_class_nested_members	cannot run	-	the JVM's platform
