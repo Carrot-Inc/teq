@@ -728,6 +728,9 @@ impl<T> std::ops::DerefMut for Phased<T> {
 /// The class's writes begin (`entering` true) or end; the class's checks start again (`Gen::begin_class`,
 /// `Gen::reset_class`) where neither is given.
 pub fn write_phase(entering: Option<bool>) {
+    if !cfg!(debug_assertions) {
+        return;
+    }
     PHASE.with(|p| {
         let (depth, written, read) = p.get();
         p.set(match entering {
