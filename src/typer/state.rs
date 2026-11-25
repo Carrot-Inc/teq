@@ -1862,7 +1862,7 @@ impl<'a> Worker<'a> {
                 log.push(super::inlining::Prior::Expr(te, prior));
             }
         }
-        self.prog.exprs[te.idx()] = value;
+        self.prog.rewrite(te, value);
     }
 
     /// Records the type of an existing node `te` as `ty` in place, its prior type journaled while
@@ -2159,7 +2159,7 @@ impl<'a> Worker<'a> {
                 match r {
                     Rewrite::Expr(te, prior) => {
                         rewrites.push(Rewrite::Expr(te, self.prog.expr(te)));
-                        self.prog.exprs[te.idx()] = prior;
+                        self.prog.rewrite(te, prior);
                     }
                     Rewrite::Type(te, prior) => {
                         rewrites.push(Rewrite::Type(te, self.prog.type_or_aside(te)));

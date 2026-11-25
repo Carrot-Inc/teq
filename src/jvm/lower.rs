@@ -117,7 +117,10 @@ impl<'a> Gen<'a> {
         match prog.expr(e) {
             TExpr::Block(stmts, res) => self.lower_block(stmts, res, want),
             TExpr::If(c, t, els) => self.lower_if(c, t, els, want),
-            TExpr::Match(scrut, cases) => self.lower_match(scrut, cases, Some(want)),
+            TExpr::Match(scrut, _) => {
+                crate::tir::matcher::check(prog, crate::tir::matcher::Owner::Match(e), "jvm match");
+                self.lower_match(scrut, crate::tir::matcher::Owner::Match(e), Some(want))
+            }
             TExpr::Throw(inner, _) => {
                 let value = self.lower_expr(inner, &ErasedType::L(Rc::from(THROWABLE)));
                 self.lir.push(Kind::Throw(value), want.clone())
@@ -127,6 +130,7 @@ impl<'a> Gen<'a> {
             // (363, 504-507); where a value is wanted, Erasure's `typedTry` has adapted each branch to it
             // (Erasure.scala 865-866). One of type `Nothing` leaves nothing to drop.
             TExpr::Try(index) => {
+                crate::tir::matcher::check(prog, crate::tir::matcher::Owner::Try(index), "jvm try");
                 let nothing = self.recorded_type(e).map(|t| self.cx.input.types.canonical(t)) == Some(NOTHING);
                 let own = match self.recorded(e) {
                     Some(own) if *want == ErasedType::V && !nothing => own,
@@ -134,7 +138,7 @@ impl<'a> Gen<'a> {
                 };
                 let t = &prog.tries[index as usize];
                 let body = self.lower_expr(t.body, &own);
-                let catch = (!t.cases.is_empty()).then(|| self.lower_catch(t.cases, &own));
+                let catch = (!t.cases.is_empty()).then(|| self.lower_catch(index, &own));
                 let finalizer = t.finalizer.map(|f| self.lower_expr(f, &ErasedType::V));
                 let node = self.push_protected(Kind::Try { body, catch, finalizer, returns: false }, own.clone());
                 self.lower_adapt(node, &own, want)
@@ -682,8 +686,9 @@ impl<'a> Gen<'a> {
                 let stmts = self.lir.list(&nodes);
                 Kind::Block { stmts, result }
             }
-            TExpr::Match(scrut, cases) if !boxed_whole => {
-                let id = self.lower_match(scrut, cases, None);
+            TExpr::Match(scrut, _) if !boxed_whole => {
+                crate::tir::matcher::check(prog, crate::tir::matcher::Owner::Match(e), "jvm match");
+                let id = self.lower_match(scrut, crate::tir::matcher::Owner::Match(e), None);
                 self.lir.nodes[id.0 as usize].of = Some(e);
                 return id;
             }
@@ -786,6 +791,9 @@ impl<'a> Gen<'a> {
     pub(super) fn lower_statement(&mut self, s: TStmt, nodes: &mut Vec<LirId>) {
         let cx = self.cx;
         let prog = cx.input.prog;
+        if let TStmt::Pat(pat, ..) = s {
+            crate::tir::matcher::check(prog, crate::tir::matcher::Owner::PatDef(pat), "jvm pattern definition");
+        }
         match s {
             TStmt::Expr(x) if prog.is_removed(x) => {}
             TStmt::Expr(x) => nodes.push(self.lower_expr(x, &ErasedType::V)),

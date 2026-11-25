@@ -1353,7 +1353,7 @@ impl<'a> Worker<'a> {
                     TExpr::NewVia(s, args) if self.syms.sym(s).owner == crate::symbols::Owner::Class(c) => TExpr::NewVia(s, insert(self, args)),
                     _ => continue,
                 };
-                self.prog.exprs[e.idx()] = rewritten;
+                self.prog.rewrite(e, rewritten);
                 if let Some(k) = owner.filter(|&k| k != c && !changed.contains(&k)) {
                     changed.push(k);
                 }
@@ -2492,7 +2492,7 @@ impl<'a> Worker<'a> {
     fn roll_back(&mut self, c: Checkpoint) {
         for prior in self.inlining.rewrite_log.take().unwrap_or_default().into_iter().rev() {
             match prior {
-                Prior::Expr(te, value) => self.prog.exprs[te.idx()] = value,
+                Prior::Expr(te, value) => self.prog.rewrite(te, value),
                 Prior::Type(te, ty) => self.prog.restore_type(te, ty),
             }
         }

@@ -1440,6 +1440,8 @@ fn finish_jvm(
     let owned = crate::owned_files(opts, &all_sources);
     let stackable = crate::stackable_overrides(t, reach);
     let product_inits = t.loaded.as_ref().map(|l| l.get_mut().cp.product_inits.clone()).unwrap_or_default();
+    // The writers' match plans, made from the patterns once reach and every other typing are done (`tir::matcher::prepare`).
+    crate::tir::matcher::prepare(&mut t.prog);
     let before_emit = t_emit.elapsed();
     let output = crate::typer::thread::run(|| {
         let Worker { prog, syms, types, tvars, interner, file_pkgs, loaded, entry_points, jvm_volatile, jvm_thread_unsafe, getters, outer_this, .. } = &mut *t;
@@ -1477,6 +1479,8 @@ fn finish_jvm(
         };
         jvm::emit(input, cp, jvm::kept::wanted().then_some(&mut state.kept))
     });
+    // The table released: the next build's pass makes it again, so a resident session holds no plan between builds.
+    crate::tir::matcher::release(&mut t.prog);
     report.ms.emit = t_emit.elapsed();
     crate::measure::part(crate::measure::Pass::Emit, "sources, overrides and inits", 0, before_emit);
     if let (Some(path), Some(_)) = (std::env::var_os("TEQ_KEPT_LOG"), scope) {
@@ -1965,7 +1969,11 @@ fn finish_build(
     t.rank_files();
     let split = emit::Split { files: sources.as_slice(), file_pkgs: t.file_pkgs.own(), module_per_file: &opts.module_per_file, hot: opts.hot };
     let options = emit::Options { release: opts.release, size_report: None, outline: !opts.no_outline };
+    // The writers' match plans, made from the patterns once reach and every other typing are done (`tir::matcher::prepare`).
+    crate::tir::matcher::prepare(&mut t.prog);
     let (output, _) = emit::emit(&t.prog, &t.syms, &t.types, t.interner, array_seq, reach, Some(split), options, Some(cache));
+    // The table released: the next build's pass makes it again, so a resident session holds no plan between builds.
+    crate::tir::matcher::release(&mut t.prog);
     report.ms.emit = t_emit.elapsed();
     note_parts(report, Duration::ZERO, true);
     let emit::Output::Modules(mut modules) = output else { unreachable!() };
@@ -2030,7 +2038,11 @@ fn finish_file(t: &mut Worker, sources: &Sources, file: &str, opts: &Options, re
     // demanded among them), so that the one file is written alike.
     t.rank_files();
     let options = emit::Options { release: opts.release, size_report: None, outline: !opts.no_outline };
+    // The writers' match plans, made from the patterns once reach and every other typing are done (`tir::matcher::prepare`).
+    crate::tir::matcher::prepare(&mut t.prog);
     let (output, _) = emit::emit(&t.prog, &t.syms, &t.types, t.interner, array_seq, reach, None, options, None);
+    // The table released: the next build's pass makes it again, so a resident session holds no plan between builds.
+    crate::tir::matcher::release(&mut t.prog);
     report.ms.emit = t_emit.elapsed();
     note_parts(report, Duration::ZERO, true);
     let emit::Output::Script(text) = output else { unreachable!("one file without a split") };

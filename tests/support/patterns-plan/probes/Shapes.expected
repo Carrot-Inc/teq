@@ -1,0 +1,23 @@
+-- null pure wildcard
+null.unapply
+1
+-- eager get selectors
+get.unapply
+isEmpty
+get
+_1
+_2
+0
+-- sequence failed prefix
+seq.unapply
+lengthCompare 1
+apply 0
+0
+-- sequence star
+seq.unapply
+toSeq
+2
+-- product sequence failed prefix
+prodseq.unapply
+prefix
+0

@@ -2148,6 +2148,7 @@ impl<'a> Worker<'a> {
                     continue;
                 }
             };
+            crate::tir::matcher::rewriting(None, Some(p), "a copy's specialisation");
             self.prog.pats[p.idx()] = specialised;
         }
         for b in binders {

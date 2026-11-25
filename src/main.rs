@@ -2333,6 +2333,8 @@ fn compile() -> i32 {
         std::process::exit(1);
     }
     let all_sources = typer.all_sources();
+    // The writers' match plans, made from the patterns once reach and every other typing are done (`tir::matcher::prepare`).
+    tir::matcher::prepare(&mut typer.w.prog);
     let typer::Worker { prog, syms, file_pkgs, types, .. } = typer.w;
     let split = opts
         .split
@@ -2677,6 +2679,8 @@ fn with_jvm_input<R>(
     class_sites: &[(source::FileId, types::ClassId)],
     f: impl FnOnce(jvm::Input, &mut classpath::Classpath) -> R,
 ) -> R {
+    // The writers' match plans, made from the patterns once reach and every other typing are done (`tir::matcher::prepare`).
+    tir::matcher::prepare(&mut typer.prog);
     let owned = owned_files(opts, all_sources);
     let stackable = stackable_overrides(typer, reach);
     let mut named: Vec<types::ClassId> = class_sites.iter().map(|&(_, c)| c).collect();

@@ -1,0 +1,8 @@
+Programs whose matches the pattern plan must keep (tests/support/patterns_baseline.py measures them with
+`--extra tests/support/patterns-plan/probes`, as it measures tests/cases).
+
+probes/<Name>.scala   each prints its extractors' calls in the order they are made;
+probes/<Name>.expected  what scalac 3.8.4 prints for it (`scala-cli run -S 3.8.4`; Irrefutable with -Werror).
+
+Where teq prints otherwise today, the difference is one the plan's later steps turn (an extractor called again by
+consecutive cases or by an alternative; `unapply` called on a null input); the baseline holds what teq prints.

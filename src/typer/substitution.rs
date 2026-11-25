@@ -1379,6 +1379,8 @@ impl<'a> Worker<'a> {
                 _ => self.reduce_inline_match(w, e),
             },
             TExpr::Match(scrut, cases) => {
+                // The copy's patterns are rewritten in place below: no plan of it may be held (the plans' checker).
+                crate::tir::matcher::rewriting(Some(crate::tir::matcher::Owner::Match(e)), None, "substitution's walk of a match");
                 let s2 = self.walk(w, scrut);
                 if s2 != scrut {
                     self.prog.exprs[e.idx()] = TExpr::Match(s2, cases);
@@ -1391,6 +1393,7 @@ impl<'a> Worker<'a> {
                     }
                 }
                 self.walk_cases(w, cases);
+                crate::tir::matcher::rewriting(Some(crate::tir::matcher::Owner::Match(e)), None, "substitution's walk of a match");
                 e
             }
             TExpr::While(c, b) => {
@@ -1446,7 +1449,8 @@ impl<'a> Worker<'a> {
                                 if call == a2 {
                                     return a2;
                                 }
-                                self.prog.exprs[e.idx()] = self.prog.expr(call);
+                                let called = self.prog.expr(call);
+                                self.prog.rewrite(e, called);
                                 return e;
                             }
                             Some(kind) => {
@@ -1476,7 +1480,9 @@ impl<'a> Worker<'a> {
                     (t.body, t.cases, t.finalizer)
                 };
                 let b2 = self.walk(w, body);
+                crate::tir::matcher::rewriting(Some(crate::tir::matcher::Owner::Try(i)), None, "substitution's walk of a try");
                 self.walk_cases(w, cases);
+                crate::tir::matcher::rewriting(Some(crate::tir::matcher::Owner::Try(i)), None, "substitution's walk of a try");
                 let f2 = finalizer.map(|f| self.walk(w, f));
                 let t = &mut self.prog.tries[i as usize];
                 t.body = b2;

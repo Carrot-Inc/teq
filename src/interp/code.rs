@@ -939,6 +939,8 @@ impl<'a, 't> Interp<'a, 't> {
     /// After a retype: the units are counted, laid out and lowered again, since a function's
     /// record may stand for another body (`incremental.rs`).
     pub(super) fn forget_units(&mut self) {
+        self.held_plans.clear();
+        self.tuple_ranges.clear();
         self.units.clear();
         self.proxy_units.clear();
         self.lambda_units.clear();
@@ -1053,7 +1055,8 @@ enum Op {
     BindDef(FunId),
     Bind(SymId),
     BindLazy { sym: SymId, init: TExprId },
-    BindPat(TPatId),
+    /// A pattern definition's plan, of `Code::case_plans`.
+    BindPat(u32),
     PopFrame { scope: u32 },
     /// An assignment of a local at its address, checked as `Local` reads it.
     StoreLocal { e: TExprId, sym: SymId, depth: u16, slot: u16, scope: u16 },
@@ -1079,8 +1082,9 @@ enum Op {
     TailCall { argc: u32, recv: bool },
     Try(u32),
     /// A case of a match over the scrutinee on top: on to `next` when its pattern does not match,
-    /// in a frame of its binders when it binds (its descriptor's, of `cap` bindings).
-    Case { pat: TPatId, binds: bool, next: u32, scope: u32, cap: u16 },
+    /// in a frame of its binders when it binds (its descriptor's, of `cap` bindings). Its pattern is
+    /// what the quick test reads; its steps and its frame's descriptor are of `Code::case_plans`.
+    Case { pat: TPatId, binds: bool, next: u32, cap: u16, plan: u32 },
     /// A case's guard on top: on to `next` when false.
     Guard { binds: bool, next: u32 },
     /// A case's body done: its frame left, the scrutinee under the result dropped.
@@ -1116,6 +1120,8 @@ enum Op {
 /// its own ending in `End` (`Interp::run_try`), and where the code goes on after it.
 struct TryPlan {
     body: u32,
+    /// The try's plan of its cases (`tir::matcher`).
+    plan: Option<Rc<crate::tir::matcher::MatchPlan>>,
     cases: Box<[CasePlan]>,
     finalizer: Option<u32>,
     wraps: bool,
@@ -1134,6 +1140,8 @@ struct CasePlan {
 /// (`eval_tuple_match`'s reading of the sub-patterns).
 struct TupleCasePlan {
     comps: Box<[Comp]>,
+    /// The match's plan, whose steps the components' ranges index (`tir::matcher`).
+    plan: Rc<crate::tir::matcher::MatchPlan>,
     /// The descriptor of the case's frame of binders, when it binds, and how many it binds.
     scope: u32,
     cap: u16,
@@ -1144,10 +1152,20 @@ enum Comp {
     Wildcard,
     /// A binder of the component alone.
     Bind(SymId),
-    /// A literal the component is compared with (`TPat::Equals`), its sub-pattern.
-    Literal(TPatId),
-    /// Any other sub-pattern.
-    Other(TPatId),
+    /// A literal the component is compared with (`TPat::Equals`): its sub-pattern, and its steps' range in the plan.
+    Literal(TPatId, u32, u32),
+    /// Any other sub-pattern, and its steps' range in the plan.
+    Other(TPatId, u32, u32),
+}
+
+/// The steps an `Op::Case` or an `Op::BindPat` walks (`tir::matcher`): its plan, and the range of the plan's steps
+/// that are the pattern's, made at lowering (a case's guard's test left out, `MatchPlan::pattern_of`); and for a case
+/// that binds, the descriptor of its frame of binders, which only a case its pattern's quick test passes reads.
+struct CaseSteps {
+    plan: Rc<crate::tir::matcher::MatchPlan>,
+    start: u32,
+    end: u32,
+    scope: u32,
 }
 
 /// A unit's lowered code.
@@ -1155,6 +1173,8 @@ pub(super) struct Code {
     ins: Box<[Ins]>,
     tries: Box<[TryPlan]>,
     tuple_cases: Box<[TupleCasePlan]>,
+    /// Each `Op::Case`'s and `Op::BindPat`'s steps.
+    case_plans: Box<[CaseSteps]>,
     /// The descriptors of the frames the unit opens (`Layout`), which the instructions that open
     /// them name.
     scopes: Box<[Rc<ScopeDesc>]>,
@@ -1204,6 +1224,7 @@ impl Code {
 
     fn bytes(&self) -> usize {
         std::mem::size_of::<Code>() + self.scopes.iter().map(|d| std::mem::size_of::<ScopeDesc>() + d.syms.len() * 4).sum::<usize>() + self.ins.len() * std::mem::size_of::<Ins>() + self.tries.iter().map(|t| std::mem::size_of::<TryPlan>() + t.cases.len() * std::mem::size_of::<CasePlan>()).sum::<usize>() + self.tuple_cases.iter().map(|t| std::mem::size_of::<TupleCasePlan>() + t.comps.len() * std::mem::size_of::<Comp>()).sum::<usize>()
+            + self.case_plans.len() * std::mem::size_of::<CaseSteps>()
     }
 }
 
@@ -1212,6 +1233,7 @@ struct Lowering {
     ins: Vec<Ins>,
     tries: Vec<TryPlan>,
     tuple_cases: Vec<TupleCasePlan>,
+    case_plans: Vec<CaseSteps>,
     /// The layout's descriptors and what opened each.
     scopes: Vec<Rc<ScopeDesc>>,
     openers: FxMap<Opener, u32>,
@@ -1373,7 +1395,7 @@ impl<'a, 't> Interp<'a, 't> {
     fn lowering(&self, layout: Layout, tail: Option<(SymId, u32)>) -> Lowering {
         let addrs = layout.addrs.iter().filter_map(|&(e, d, s, o)| Some((e, (d, s, u16::try_from(*layout.openers.get(&o)?).ok()?)))).collect();
         let kinds_now = !self.typer.types.overlays_on();
-        Lowering { ins: Vec::new(), tries: Vec::new(), tuple_cases: Vec::new(), scopes: layout.scopes, openers: layout.openers, pending: 0, addrs, tail, kinds_now, target: 0, declined: None, nodes: 0 }
+        Lowering { ins: Vec::new(), tries: Vec::new(), tuple_cases: Vec::new(), case_plans: Vec::new(), scopes: layout.scopes, openers: layout.openers, pending: 0, addrs, tail, kinds_now, target: 0, declined: None, nodes: 0 }
     }
 
     /// The code of a lowering, unless the preflight declined it.
@@ -1385,7 +1407,7 @@ impl<'a, 't> Interp<'a, 't> {
         let shifts = self.prog().shifts;
         let first_id = self.descs.register(&b.scopes);
         let entry_id = if entry == NO_ENTRY { 0 } else { first_id + entry };
-        let code = Code { ins: b.ins.into_boxed_slice(), tries: b.tries.into_boxed_slice(), tuple_cases: b.tuple_cases.into_boxed_slice(), scopes: b.scopes.into_boxed_slice(), body, shifts, absent, proxies, first_id, entry_id, exits, tail, kind };
+        let code = Code { ins: b.ins.into_boxed_slice(), tries: b.tries.into_boxed_slice(), tuple_cases: b.tuple_cases.into_boxed_slice(), case_plans: b.case_plans.into_boxed_slice(), scopes: b.scopes.into_boxed_slice(), body, shifts, absent, proxies, first_id, entry_id, exits, tail, kind };
         if self.code_stats {
             count(&COUNTERS.lowered[kind as usize], 1);
             count(&COUNTERS.nodes, b.nodes as u64);
@@ -1551,7 +1573,7 @@ impl<'a, 't> Interp<'a, 't> {
             TExpr::If(c, t, els) => self.lower_if(b, c, t, els, false),
             TExpr::While(c, body) => self.lower_while(b, c, body),
             TExpr::Block(stmts, res) => match self.tuple_match_shape(e, stmts, res).filter(|_| !stmts.is_empty()) {
-                Some((c, args, cases)) => self.lower_tuple_match(b, c, args, cases, false),
+                Some((c, args, _)) => self.lower_tuple_match(b, c, args, crate::tir::matcher::Owner::Match(res), false),
                 None => self.lower_block(b, stmts, res, false),
             },
             TExpr::Assign(target, value) => {
@@ -1578,9 +1600,9 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 b.emit(Op::Unit);
             }
-            TExpr::Match(scrut, cases) => {
+            TExpr::Match(scrut, _) => {
                 self.lower(b, scrut);
-                self.lower_cases(b, cases, false);
+                self.lower_cases(b, crate::tir::matcher::Owner::Match(e), false);
             }
             TExpr::Prim(op @ (PrimOp::BoolAnd | PrimOp::BoolOr), x, y) => self.lower_logic(b, op, x, y, false),
             TExpr::Prim(op, x, y) => {
@@ -1642,7 +1664,9 @@ impl<'a, 't> Interp<'a, 't> {
                 self.lower(b, inner);
                 b.emit(Op::Throw);
             }
-            TExpr::Try(i) => self.lower_try(b, i, false),
+            TExpr::Try(i) => {
+                self.lower_try(b, i, false)
+            }
             TExpr::Splice(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) | TExpr::Spread(_) => unreachable!("a node the walker takes"),
         }
         self.lower_adapt(b, e);
@@ -1672,7 +1696,7 @@ impl<'a, 't> Interp<'a, 't> {
                 b.nodes += 1;
                 b.pending += 1;
                 match self.tuple_match_shape(e, stmts, res).filter(|_| !stmts.is_empty()) {
-                    Some((c, args, cases)) => self.lower_tuple_match(b, c, args, cases, true),
+                    Some((c, args, _)) => self.lower_tuple_match(b, c, args, crate::tir::matcher::Owner::Match(res), true),
                     None => self.lower_block(b, stmts, res, true),
                 }
             }
@@ -1681,11 +1705,11 @@ impl<'a, 't> Interp<'a, 't> {
                 b.pending += 1;
                 self.lower_if(b, c, t, els, true);
             }
-            TExpr::Match(scrut, cases) => {
+            TExpr::Match(scrut, _) => {
                 b.nodes += 1;
                 b.pending += 1;
                 self.lower(b, scrut);
-                self.lower_cases(b, cases, true);
+                self.lower_cases(b, crate::tir::matcher::Owner::Match(e), true);
             }
             TExpr::Try(i) if self.prog().tries[i as usize].finalizer.is_none() => {
                 b.nodes += 1;
@@ -1823,7 +1847,10 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 TStmt::Pat(pat, init, _) => {
                     self.lower(b, init);
-                    b.emit(Op::BindPat(pat));
+                    let plan = self.held_plan(crate::tir::matcher::Owner::PatDef(pat));
+                    let end = plan.steps.len() as u32;
+                    b.case_plans.push(CaseSteps { plan, start: 0, end, scope: u32::MAX });
+                    b.emit(Op::BindPat((b.case_plans.len() - 1) as u32));
                 }
             }
         }
@@ -1877,10 +1904,12 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     /// The cases of a match over the scrutinee on the stack (`eval_match`).
-    fn lower_cases(&mut self, b: &mut Lowering, cases: ListRef, tail: bool) {
+    fn lower_cases(&mut self, b: &mut Lowering, owner: crate::tir::matcher::Owner, tail: bool) {
         let mut misses: Vec<usize> = Vec::new();
         let mut done: Vec<usize> = Vec::new();
-        for i in cases.range() {
+        let plan = self.held_plan(owner);
+        for k in 0..plan.cases.len() {
+            let i = plan.cases[k].case.expect("a case of a match") as usize;
             let case = self.prog().cases[i];
             let to = b.here();
             for m in misses.drain(..) {
@@ -1888,7 +1917,11 @@ impl<'a, 't> Interp<'a, 't> {
             }
             let binds = self.pat_binds_cached(case.pat);
             let scope = if binds { b.scope(Opener::Case(i as u32)) } else { u32::MAX };
-            misses.push(b.emit(Op::Case { pat: case.pat, binds, next: 0, scope, cap: b.cap(scope) }));
+            let start = plan.cases[k].start;
+            let end = start + plan.pattern_of(k).len() as u32;
+            b.case_plans.push(CaseSteps { plan: plan.clone(), start, end, scope });
+            let at = (b.case_plans.len() - 1) as u32;
+            misses.push(b.emit(Op::Case { pat: case.pat, binds, next: 0, cap: b.cap(scope), plan: at }));
             if let Some(g) = case.guard {
                 self.lower(b, g);
                 misses.push(b.emit(Op::Guard { binds, next: 0 }));
@@ -1911,13 +1944,16 @@ impl<'a, 't> Interp<'a, 't> {
     /// A case lambda's match over the tuple of its parameters (`eval_tuple_match`): the components
     /// evaluated without the tuple, the steps of the block's node alone (the tuple's creation, the
     /// match and its scrutinee are no nodes the walker evaluates), each case over the components.
-    fn lower_tuple_match(&mut self, b: &mut Lowering, c: ClassId, args: ListRef, cases: ListRef, tail: bool) {
+    fn lower_tuple_match(&mut self, b: &mut Lowering, c: ClassId, args: ListRef, owner: crate::tir::matcher::Owner, tail: bool) {
         self.lower_list(b, args);
         let n = args.len;
         let mut misses: Vec<usize> = Vec::new();
         let mut done: Vec<usize> = Vec::new();
-        for i in cases.range() {
+        let plan = self.held_plan(owner);
+        for k in 0..plan.cases.len() {
+            let i = plan.cases[k].case.expect("a case of a match") as usize;
             let case = self.prog().cases[i];
+            let ranges = crate::tir::matcher::component_ranges(&plan, k, n as usize);
             let to = b.here();
             for m in misses.drain(..) {
                 b.patch(m, to);
@@ -1926,13 +1962,15 @@ impl<'a, 't> Interp<'a, 't> {
             let comps: Box<[Comp]> = match self.prog().pats[case.pat.idx()] {
                 TPat::Class(_, _, _, subs) => subs
                     .range()
-                    .map(|i| {
+                    .enumerate()
+                    .map(|(m, i)| {
                         let sub = self.prog().pat_lists[i];
+                        let (start, end) = ranges[m];
                         match self.prog().pats[sub.idx()] {
                             TPat::Wildcard => Comp::Wildcard,
                             TPat::Bind(sym, None) => Comp::Bind(sym),
-                            TPat::Equals(..) => Comp::Literal(sub),
-                            _ => Comp::Other(sub),
+                            TPat::Equals(..) => Comp::Literal(sub, start, end),
+                            _ => Comp::Other(sub, start, end),
                         }
                     })
                     .collect(),
@@ -1942,7 +1980,7 @@ impl<'a, 't> Interp<'a, 't> {
             };
             debug_assert_eq!(comps.len(), n as usize);
             let scope = if binds { b.scope(Opener::Case(i as u32)) } else { u32::MAX };
-            b.tuple_cases.push(TupleCasePlan { comps, scope, cap: b.cap(scope) });
+            b.tuple_cases.push(TupleCasePlan { comps, plan: plan.clone(), scope, cap: b.cap(scope) });
             let k = (b.tuple_cases.len() - 1) as u32;
             misses.push(b.emit(Op::TupleCase { case: k, binds, next: 0 }));
             if let Some(g) = case.guard {
@@ -1972,7 +2010,8 @@ impl<'a, 't> Interp<'a, 't> {
             (t.body, t.cases, t.finalizer, t.wraps)
         };
         let k = b.tries.len();
-        b.tries.push(TryPlan { body: 0, cases: Box::new([]), finalizer: None, wraps, end: 0 });
+        let plan = Some(self.held_plan(crate::tir::matcher::Owner::Try(i)));
+        b.tries.push(TryPlan { body: 0, plan: None, cases: Box::new([]), finalizer: None, wraps, end: 0 });
         b.emit(Op::Try(k as u32));
         let body_at = b.here();
         self.lower(b, body);
@@ -1998,7 +2037,7 @@ impl<'a, 't> Interp<'a, 't> {
             at
         });
         let end = b.here();
-        b.tries[k] = TryPlan { body: body_at, cases: plans.into_boxed_slice(), finalizer, wraps, end };
+        b.tries[k] = TryPlan { body: body_at, plan, cases: plans.into_boxed_slice(), finalizer, wraps, end };
     }
 
     // ---- the dispatcher ----
@@ -2302,9 +2341,13 @@ impl<'a, 't> Interp<'a, 't> {
                     let v = Value::Fun(Rc::new(Closure { kind: ClosureKind::Lazy(init), env: cur.clone(), this: cx.this.clone(), def_key: cx.def_key, class: cx.class, hash: Cell::new(0) }));
                     cur.bind(sym, v);
                 }
-                Op::BindPat(pat) => {
+                Op::BindPat(at) => {
                     let v = st.pop().expect("an operand");
-                    if !self.match_pat(pat, &v, cur, cx)? {
+                    let side = &code.case_plans[at as usize];
+                    if self.check_plans {
+                        crate::tir::matcher::check_held(self.prog(), &side.plan, "interp code held");
+                    }
+                    if !self.match_steps(&side.plan.steps, &v, cur, cx)? {
                         return self.match_error(v);
                     }
                 }
@@ -2410,20 +2453,24 @@ impl<'a, 't> Interp<'a, 't> {
                     st.push(self.run_try(code, k, cur, cx)?);
                     pc = code.tries[k as usize].end as usize;
                 }
-                Op::Case { pat, binds, next, scope, cap } => {
-                    debug_assert!(!binds || code.scopes[scope as usize].syms.len().min(u16::MAX as usize) == cap as usize, "a case's frame sized off its descriptor");
+                Op::Case { pat, binds, next, cap, plan } => {
                     let v = st.last().expect("the scrutinee");
                     if self.quick_reject(pat, v, cur) {
                         pc = next as usize;
                         continue;
                     }
+                    let side = &code.case_plans[plan as usize];
+                    if self.check_plans {
+                        crate::tir::matcher::check_held(self.prog(), &side.plan, "interp code held");
+                    }
+                    debug_assert!(!binds || code.scopes[side.scope as usize].syms.len().min(u16::MAX as usize) == cap as usize, "a case's frame sized off its descriptor");
                     if binds {
                         self.prof_alloc(|a| a.frames += 1);
-                        let inner = self.take_frame_as(Some(cur.clone()), cap as usize, code.frame_id(scope));
+                        let inner = self.take_frame_as(Some(cur.clone()), cap as usize, code.frame_id(side.scope));
                         *cur = inner;
                     }
                     let v = st.last().expect("the scrutinee");
-                    if !self.match_pat(pat, v, cur, cx)? {
+                    if !self.match_steps(&side.plan.steps[side.start as usize..side.end as usize], v, cur, cx)? {
                         if binds {
                             self.leave_case(cur);
                         }
@@ -2604,14 +2651,14 @@ impl<'a, 't> Interp<'a, 't> {
         let vals = &st[st.len() - plan.comps.len()..];
         // The literal components first, then the others (a wildcard's and a binder's reject nothing).
         for (comp, v) in plan.comps.iter().zip(vals) {
-            if let Comp::Literal(sub) = *comp {
+            if let Comp::Literal(sub, ..) = *comp {
                 if self.quick_reject(sub, v, cur) {
                     return Ok(false);
                 }
             }
         }
         for (comp, v) in plan.comps.iter().zip(vals) {
-            if let Comp::Other(sub) = *comp {
+            if let Comp::Other(sub, ..) = *comp {
                 if self.quick_reject(sub, v, cur) {
                     return Ok(false);
                 }
@@ -2622,12 +2669,17 @@ impl<'a, 't> Interp<'a, 't> {
             let inner = self.take_frame_as(Some(cur.clone()), plan.cap as usize, code.frame_id(plan.scope));
             *cur = inner;
         }
+        // The plan's steps, read where its quick tests have passed.
+        if self.check_plans {
+            crate::tir::matcher::check_held(self.prog(), &plan.plan, "interp code held");
+        }
+        let steps = &plan.plan.steps;
         for (comp, v) in plan.comps.iter().zip(vals) {
             match *comp {
                 Comp::Wildcard => {}
                 Comp::Bind(sym) => cur.bind(sym, v.clone()),
-                Comp::Literal(sub) | Comp::Other(sub) => {
-                    if !self.match_pat(sub, v, cur, cx)? {
+                Comp::Literal(_, start, end) | Comp::Other(_, start, end) => {
+                    if !self.match_steps(&steps[start as usize..end as usize], v, cur, cx)? {
                         if binds {
                             self.leave_case(cur);
                         }
@@ -2767,9 +2819,14 @@ impl<'a, 't> Interp<'a, 't> {
     #[inline(never)]
     fn run_try(&mut self, code: &Code, k: u32, cur: &Rc<Frame>, cx: &Ctx) -> R {
         let plan = &code.tries[k as usize];
+        if let Some(held) = &plan.plan {
+            if self.check_plans {
+                crate::tir::matcher::check_held(self.prog(), held, "interp code held");
+            }
+        }
         // Each catch case's frame carries its descriptor, as the frames the code opens do.
         let pats: Vec<CatchCase> = plan.cases.iter().map(|c| (c.pat, c.guard.is_some(), code.frame_id(c.scope))).collect();
-        self.try_protocol(&pats, plan.wraps, plan.finalizer.is_some(), cur, cx, &mut |it, part, scope| {
+        self.try_protocol(&pats, plan.plan.as_deref(), plan.wraps, plan.finalizer.is_some(), cur, cx, &mut |it, part, scope| {
             let at = match part {
                 TryPart::Body => plan.body,
                 TryPart::Guard(i) => plan.cases[i].guard.expect("a guard"),

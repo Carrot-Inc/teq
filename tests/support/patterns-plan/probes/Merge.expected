@@ -1,0 +1,53 @@
+-- guard
+E.init
+E.unapply 2
+empty
+get
+guard
+2
+-- literal
+E.unapply 2
+empty
+get
+2
+-- gap
+E.unapply 2
+empty
+get
+E.unapply 2
+empty
+get
+2
+-- alternatives
+E.unapply 2
+empty
+get
+2
+-- nested
+E.unapply 2
+empty
+get
+N.init
+N.unapply 2
+empty
+get
+2
+-- val
+V.unapply 2
+empty
+get
+2
+-- different scrutinees
+E.unapply 2
+empty
+get
+E.unapply 3
+empty
+get
+3
+-- capture
+E.unapply 2
+empty
+get
+closure 2
+2

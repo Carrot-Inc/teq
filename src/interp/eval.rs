@@ -267,8 +267,8 @@ impl<'a, 't> Interp<'a, 't> {
                 if stmts.is_empty() {
                     return self.eval(res, fr, cx);
                 }
-                if let Some((c, args, cases)) = self.tuple_match_shape(e, stmts, res) {
-                    return self.eval_tuple_match(c, args, cases, fr, cx, false);
+                if let Some((c, args, _)) = self.tuple_match_shape(e, stmts, res) {
+                    return self.eval_tuple_match(c, args, matcher::Owner::Match(res), fr, cx, false);
                 }
                 let inner = self.block_frame(stmts, fr, cx)?;
                 // The pure result of an ascribed block that is a statement is not evaluated.
@@ -286,9 +286,9 @@ impl<'a, 't> Interp<'a, 't> {
                 self.assign(target, v, fr, cx)?;
                 Ok(Value::Unit)
             }
-            TExpr::Match(scrut, cases) => {
+            TExpr::Match(scrut, _) => {
                 let v = self.eval(scrut, fr, cx)?;
-                self.eval_match(v, cases, fr, cx, false)
+                self.eval_match(v, matcher::Owner::Match(e), fr, cx, false)
             }
             TExpr::Prim(op, a, b) => self.eval_prim(op, a, b, fr, cx),
             TExpr::Unary(op, a) => {
@@ -336,7 +336,9 @@ impl<'a, 't> Interp<'a, 't> {
                 let v = self.eval(inner, fr, cx)?;
                 self.throw_value(v)
             }
-            TExpr::Try(i) => self.eval_try(i, fr, cx, false),
+            TExpr::Try(i) => {
+                self.eval_try(i, fr, cx, false)
+            }
             TExpr::Splice(_) => self.unsupported("a splice of an inline body typed at its definition runs at an expansion"),
             TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) | TExpr::Spread(_) => {
                 self.unsupported("JavaScript interop is not executable by the interpreter")
@@ -1122,7 +1124,8 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 TStmt::Pat(pat, init, _) => {
                     let v = self.eval(init, &inner, cx)?;
-                    if !self.match_pat(pat, &v, &inner, cx)? {
+                    let plan = self.held_plan(matcher::Owner::PatDef(pat));
+                    if !self.match_steps(&plan.steps, &v, &inner, cx)? {
                         return self.match_error(v);
                     }
                 }
@@ -1795,8 +1798,8 @@ impl<'a, 't> Interp<'a, 't> {
                 if stmts.is_empty() {
                     return self.eval_tail(res, fr, cx);
                 }
-                if let Some((c, args, cases)) = self.tuple_match_shape(e, stmts, res) {
-                    return self.eval_tuple_match(c, args, cases, fr, cx, true);
+                if let Some((c, args, _)) = self.tuple_match_shape(e, stmts, res) {
+                    return self.eval_tuple_match(c, args, matcher::Owner::Match(res), fr, cx, true);
                 }
                 let inner = self.block_frame(stmts, fr, cx)?;
                 let r = if self.prog().is_removed(res) { Ok(Value::Unit) } else { self.eval_tail(res, &inner, cx) };
@@ -1814,10 +1817,10 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                 }
             }
-            TExpr::Match(scrut, cases) => {
+            TExpr::Match(scrut, _) => {
                 self.step()?;
                 let v = self.eval(scrut, fr, cx)?;
-                self.eval_match(v, cases, fr, cx, true)
+                self.eval_match(v, matcher::Owner::Match(e), fr, cx, true)
             }
             TExpr::Try(i) if self.prog().tries[i as usize].finalizer.is_none() => {
                 self.step()?;
@@ -1862,9 +1865,12 @@ impl<'a, 't> Interp<'a, 't> {
 
     // ---- match ----
 
-    fn eval_match(&mut self, v: Value, cases: ListRef, fr: &Rc<Frame>, cx: &Ctx, tail: bool) -> R {
-        for i in cases.range() {
-            let case = self.prog().cases[i];
+    /// The cases of `owner`'s plan in turn against `v` (`tir::matcher`); a case whose pattern and guard hold gives its
+    /// body's value.
+    fn eval_match(&mut self, v: Value, owner: matcher::Owner, fr: &Rc<Frame>, cx: &Ctx, tail: bool) -> R {
+        let plan = self.held_plan(owner);
+        for k in 0..plan.cases.len() {
+            let case = self.prog().cases[plan.cases[k].case.expect("a case of a match") as usize];
             if self.quick_reject(case.pat, &v, fr) {
                 continue;
             }
@@ -1873,7 +1879,7 @@ impl<'a, 't> Interp<'a, 't> {
                 self.prof_alloc(|a| a.frames += 1);
             }
             let inner = if binds { self.take_frame(Some(fr.clone()), 2) } else { fr.clone() };
-            if !self.match_pat(case.pat, &v, &inner, cx)? {
+            if !self.match_steps(plan.pattern_of(k), &v, &inner, cx)? {
                 if binds {
                     self.release_frame(inner);
                 }
@@ -1899,15 +1905,18 @@ impl<'a, 't> Interp<'a, 't> {
     /// The match of a case lambda over the tuple of its parameters, matched component by
     /// component against the values themselves: the tuple is built only for the `MatchError`
     /// when no case takes them.
-    fn eval_tuple_match(&mut self, c: ClassId, args: ListRef, cases: ListRef, fr: &Rc<Frame>, cx: &Ctx, tail: bool) -> R {
+    fn eval_tuple_match(&mut self, c: ClassId, args: ListRef, owner: matcher::Owner, fr: &Rc<Frame>, cx: &Ctx, tail: bool) -> R {
         let n = args.len as usize;
         let mut vals = self.take_vec(n);
         for i in 0..n {
             let a = self.prog().expr_lists[args.start as usize + i];
             vals.push(self.eval(a, fr, cx)?);
         }
-        'cases: for i in cases.range() {
-            let case = self.prog().cases[i];
+        let plan = self.held_plan(owner);
+        let matcher::Owner::Match(at) = owner else { unreachable!("a tuple match's owner") };
+        let ranges = self.held_tuple_ranges(at, &plan, n);
+        'cases: for kk in 0..plan.cases.len() {
+            let case = self.prog().cases[plan.cases[kk].case.expect("a case of a match") as usize];
             let TPat::Class(_, _, _, subs) = self.prog().pats[case.pat.idx()] else { break };
             // The literal components reject a case before anything is destructured.
             for pass in 0..2 {
@@ -1935,7 +1944,8 @@ impl<'a, 't> Interp<'a, 't> {
                         inner.bind(sym, v);
                     }
                     _ => {
-                        if !self.match_pat(sub, &vals[k], &inner, cx)? {
+                        let (start, end) = ranges[kk * n + k];
+                        if !self.match_steps(&plan.steps[start as usize..end as usize], &vals[k], &inner, cx)? {
                             if binds {
                                 self.release_frame(inner);
                             }
@@ -1974,86 +1984,141 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    pub(super) fn match_pat(&mut self, pat: TPatId, v: &Value, fr: &Rc<Frame>, cx: &Ctx) -> R<bool> {
-        match self.prog().pats[pat.idx()] {
-            TPat::Wildcard => Ok(true),
-            TPat::Bind(sym, inner) => {
-                fr.bind(sym, v.clone());
-                match inner {
-                    Some(i) => self.match_pat(i, v, fr, cx),
-                    None => Ok(true),
-                }
+    /// The plan of `owner` as the interpreter holds it: made from the owner's patterns at its first use
+    /// (`matcher::build`, by the records this worker can read), the program holding no plan while it types, and
+    /// checked under the plans' checker, wherever it is used after, against the patterns as they are then.
+    pub(super) fn held_plan(&mut self, owner: matcher::Owner) -> Rc<matcher::MatchPlan> {
+        if self.plans_epoch != self.prog().plans_epoch {
+            // A match written over in place while this run went on (`Program::rewrite`).
+            self.held_plans.clear();
+            self.tuple_ranges.clear();
+            self.plans_epoch = self.prog().plans_epoch;
+        }
+        if let Some(plan) = self.held_plans.get(&owner) {
+            let plan = plan.clone();
+            if self.check_plans {
+                matcher::check_held(self.prog(), &plan, "interp held");
             }
-            TPat::Test(test, _, inner) => {
+            return plan;
+        }
+        let plan = Rc::new(matcher::build(self.prog(), owner).unwrap_or_else(|| panic!("no plan of {:?}: no match, try or pattern definition the interpreter can read (tir::matcher)", owner)));
+        if self.check_plans {
+            matcher::note_held(&plan);
+        }
+        self.held_plans.insert(owner, plan.clone());
+        plan
+    }
+
+    /// A tuple match's components' step ranges, `n` a case and case after case (`matcher::component_ranges`), made at
+    /// its first use.
+    pub(super) fn held_tuple_ranges(&mut self, e: TExprId, plan: &matcher::MatchPlan, n: usize) -> Rc<[(u32, u32)]> {
+        if let Some(r) = self.tuple_ranges.get(&e) {
+            return r.clone();
+        }
+        let r: Rc<[(u32, u32)]> = (0..plan.cases.len()).flat_map(|k| matcher::component_ranges(plan, k, n)).collect();
+        self.tuple_ranges.insert(e, r.clone());
+        r
+    }
+
+    /// `case v` against `v`: the literal's value, or the expression's, by `===` where `strict`, else by equality.
+    fn match_equals(&mut self, e: TExprId, strict: bool, v: &Value, fr: &Rc<Frame>, cx: &Ctx) -> R<bool> {
+        let other = match self.prog().expr(e) {
+            TExpr::Int(i) => Value::Int(i),
+            TExpr::Char(c) => Value::Char(c),
+            TExpr::Bool(b) => Value::Bool(b),
+            TExpr::Str(s) => Value::Str(self.string_lit(s)),
+            _ => self.eval(e, fr, cx)?,
+        };
+        if strict { Ok(other.same(v)) } else { self.equal(&other, v) }
+    }
+
+    /// A case's pattern steps (`tir::matcher`), each with its continuation, against `v`, as `match_pat` matches the
+    /// patterns they come from: a binder bound before its pattern's own steps, a class's fields read in turn, an
+    /// extractor's argument bound before its call.
+    // Out of line, as the pattern walk before the plans was: the compiled code's loop (`run`) calls it at its case,
+    // its pattern definition and its tuple case, and its own code then does not move with the walk's.
+    #[inline(never)]
+    pub(super) fn match_steps(&mut self, steps: &[matcher::Step], v: &Value, fr: &Rc<Frame>, cx: &Ctx) -> R<bool> {
+        let mut i = 0;
+        while let Some(step) = steps.get(i) {
+            let end = i + 1 + step.scope();
+            if !self.match_step(step, &steps[i + 1..end], v, fr, cx)? {
+                return Ok(false);
+            }
+            i = end;
+        }
+        Ok(true)
+    }
+
+    /// A step against `v`, `then` its continuation.
+    fn match_step(&mut self, step: &matcher::Step, then: &[matcher::Step], v: &Value, fr: &Rc<Frame>, cx: &Ctx) -> R<bool> {
+        use matcher::{Bound, Rhs, Role, Step, TestKind};
+        match *step {
+            Step::Let { bound: Bound::Sym(sym), rhs: Rhs::Alias(_), role: Role::Own, .. } => {
+                fr.bind(sym, v.clone());
+                self.match_steps(then, v, fr, cx)
+            }
+            Step::Test { kind: TestKind::Type(test), .. } => {
                 if !self.type_test(v, test, fr, cx)? {
                     return Ok(false);
                 }
-                self.match_pat(inner, v, fr, cx)
+                self.match_steps(then, v, fr, cx)
             }
-            TPat::Equals(e, strict) => {
-                let other = match self.prog().expr(e) {
-                    TExpr::Int(i) => Value::Int(i),
-                    TExpr::Char(c) => Value::Char(c),
-                    TExpr::Bool(b) => Value::Bool(b),
-                    TExpr::Str(s) => Value::Str(self.string_lit(s)),
-                    _ => self.eval(e, fr, cx)?,
-                };
-                if strict { Ok(other.same(v)) } else { self.equal(&other, v) }
-            }
-            TPat::Class(c, _, fields, subs) => {
+            Step::Test { kind: TestKind::Equal(e, strict), .. } => self.match_equals(e, strict, v, fr, cx),
+            Step::Test { kind: TestKind::Class(c), origin, .. } => {
                 let Value::Obj(o) = v else { return Ok(false) };
                 if !self.is_subclass(o.class, c) {
                     return Ok(false);
                 }
-                for i in 0..fields.len as usize {
-                    let f = self.prog().sym_lists[fields.start as usize + i];
-                    let sub = self.prog().pat_lists[subs.start as usize + i];
-                    match self.prog().pats[sub.idx()] {
-                        TPat::Wildcard => {}
-                        TPat::Bind(sym, None) => {
-                            let field = self.pat_field(subs.start as usize + i, v, o, f)?;
-                            fr.bind(sym, field);
-                        }
-                        _ => {
-                            let field = self.pat_field(subs.start as usize + i, v, o, f)?;
-                            if !self.match_pat(sub, &field, fr, cx)? {
+                let TPat::Class(_, _, _, subs) = self.prog().pats[origin.idx()] else { unreachable!("a class test's pattern") };
+                let mut j = 0;
+                while j < then.len() {
+                    let Step::Let { rhs: Rhs::Field(_, f), role: Role::Field(k), .. } = then[j] else { unreachable!("a class pattern's field") };
+                    let end = j + 1 + then[j].scope();
+                    let field = self.pat_field(subs.start as usize + k as usize, v, o, f)?;
+                    match &then[j + 1..end] {
+                        // A binder of the field alone takes the field itself, as master's `match_pat` bound it.
+                        [Step::Let { bound: Bound::Sym(sym), rhs: Rhs::Alias(_), role: Role::Own, scope: 0, .. }] => fr.bind(*sym, field),
+                        rest => {
+                            if !self.match_steps(rest, &field, fr, cx)? {
                                 return Ok(false);
                             }
                         }
                     }
+                    j = end;
                 }
                 Ok(true)
             }
-            TPat::Alt(alts) => {
-                for i in alts.range() {
-                    let a = self.prog().pat_lists[i];
-                    if self.match_pat(a, v, fr, cx)? {
+            Step::Let { bound: Bound::Sym(sym), rhs: Rhs::Alias(_), role: Role::UnapplyArg, .. } => {
+                fr.bind(sym, v.clone());
+                let Step::Let { rhs: Rhs::Call(call), .. } = then[0] else { unreachable!("an extractor's call") };
+                let result = self.eval(call, fr, cx)?;
+                self.match_steps(&then[1..], &result, fr, cx)
+            }
+            Step::Alts { ref alts, .. } => {
+                for alt in alts {
+                    if self.match_steps(alt, v, fr, cx)? {
                         return Ok(true);
                     }
                 }
                 Ok(false)
             }
-            TPat::Unapply(sym, call, inner) => {
-                fr.bind(sym, v.clone());
-                let result = self.eval(call, fr, cx)?;
-                self.match_pat(inner, &result, fr, cx)
-            }
-            TPat::Seq(items, rest) => {
-                let n = items.len as usize;
-                let Some(parts) = self.seq_pattern(v, n, rest.is_some())? else { return Ok(false) };
-                for i in 0..n {
-                    let sub = self.prog().pat_lists[items.start as usize + i];
-                    if !self.match_pat(sub, &parts[i], fr, cx)? {
+            Step::Let { rhs: Rhs::SeqHelper { items, rest, .. }, .. } => {
+                let Some(parts) = self.seq_pattern(v, items as usize, rest)? else { return Ok(false) };
+                // The helper's result tested; its continuation is the elements'.
+                let elements = &then[1..1 + then[0].scope()];
+                let mut j = 0;
+                while j < elements.len() {
+                    let Step::Let { rhs: Rhs::Elem(_, k), .. } = elements[j] else { unreachable!("a sequence pattern's element") };
+                    let end = j + 1 + elements[j].scope();
+                    if !self.match_steps(&elements[j + 1..end], &parts[k as usize], fr, cx)? {
                         return Ok(false);
                     }
-                }
-                if let Some(r) = rest {
-                    if !self.match_pat(r, &parts[n], fr, cx)? {
-                        return Ok(false);
-                    }
+                    j = end;
                 }
                 Ok(true)
             }
+            ref other => unreachable!("a step its parent's step matches: {:?}", other),
         }
     }
 
@@ -2063,7 +2128,8 @@ impl<'a, 't> Interp<'a, 't> {
         let t = &self.prog().tries[i as usize];
         let (body, cases, finalizer, wraps) = (t.body, t.cases, t.finalizer, t.wraps);
         let pats: Vec<CatchCase> = self.prog().case_list(cases).iter().map(|c| (c.pat, c.guard.is_some(), 0)).collect();
-        self.try_protocol(&pats, wraps, finalizer.is_some(), fr, cx, &mut |it, part, scope| match part {
+        let plan = Some(self.held_plan(matcher::Owner::Try(i)));
+        self.try_protocol(&pats, plan.as_deref(), wraps, finalizer.is_some(), fr, cx, &mut |it, part, scope| match part {
             TryPart::Body => it.eval(body, scope, cx),
             TryPart::Guard(k) => {
                 let g = it.prog().cases[cases.start as usize + k].guard.expect("a guard");
@@ -2086,9 +2152,10 @@ impl<'a, 't> Interp<'a, 't> {
     /// return replacing the exit pending. dotty protects the handlers with the finaliser as it does
     /// the protected expression (`BCodeSyncAndTry.genLoadTry`, the cleanup registered around each
     /// case handler).
-    pub(super) fn try_protocol(&mut self, cases: &[CatchCase], wraps: bool, finalizer: bool, fr: &Rc<Frame>, cx: &Ctx, run: &mut dyn FnMut(&mut Self, TryPart, &Rc<Frame>) -> R) -> R {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn try_protocol(&mut self, cases: &[CatchCase], plan: Option<&matcher::MatchPlan>, wraps: bool, finalizer: bool, fr: &Rc<Frame>, cx: &Ctx, run: &mut dyn FnMut(&mut Self, TryPart, &Rc<Frame>) -> R) -> R {
         let result = match run(self, TryPart::Body, fr) {
-            Err(Control::Throw(raw)) if !cases.is_empty() => self.catch_cases(raw, cases, wraps, fr, cx, run),
+            Err(Control::Throw(raw)) if !cases.is_empty() => self.catch_cases(raw, cases, plan.expect("a try's plan (tir::matcher)"), wraps, fr, cx, run),
             other => other,
         };
         if finalizer && !matches!(result, Err(Control::Fail(_))) {
@@ -2099,12 +2166,13 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// The catch cases of a `try` over the value `raw` its protected expression threw: the exit
     /// of the case that takes it, of a pattern or a guard on the way, or `raw` thrown again.
-    fn catch_cases(&mut self, raw: Value, cases: &[CatchCase], wraps: bool, fr: &Rc<Frame>, cx: &Ctx, run: &mut dyn FnMut(&mut Self, TryPart, &Rc<Frame>) -> R) -> R {
+    #[allow(clippy::too_many_arguments)]
+    fn catch_cases(&mut self, raw: Value, cases: &[CatchCase], plan: &matcher::MatchPlan, wraps: bool, fr: &Rc<Frame>, cx: &Ctx, run: &mut dyn FnMut(&mut Self, TryPart, &Rc<Frame>) -> R) -> R {
         let caught = if wraps { self.wrap_thrown(raw.clone())? } else { raw.clone() };
-        for (k, (pat, guarded, desc)) in cases.iter().enumerate() {
-            let (pat, guarded) = (*pat, *guarded);
+        for (k, (_, guarded, desc)) in cases.iter().enumerate() {
+            let guarded = *guarded;
             let inner = Frame::made_as(Some(fr.clone()), Vec::new(), *desc);
-            if !self.match_pat(pat, &caught, &inner, cx)? {
+            if !self.match_steps(plan.pattern_of(k), &caught, &inner, cx)? {
                 continue;
             }
             if guarded {

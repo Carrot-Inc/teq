@@ -84,6 +84,8 @@ impl Frame {
         }
     }
 
+    // In its callers' code wherever they bind: the pattern walk binds a binder at each field it reads.
+    #[inline(always)]
     pub fn bind(self: &Rc<Self>, sym: SymId, v: Value) {
         written(self.born.get(), self.made.get(), || Some(Node::Frame(self.clone())), |other| format!("a local of a frame{}", if other { " another run opened" } else { "" }));
         self.vals.borrow_mut().push((sym, v));
@@ -787,6 +789,7 @@ pub fn keep_caches(caches: Option<Box<InterpCaches>>) {
 /// workers' merge) or the program is replaced.
 pub fn drop_caches() {
     CACHES.with(|c| *c.borrow_mut() = [None, None]);
+    crate::tir::matcher::forget_held_notes();
 }
 
 /// Keeps this thread's caches apart by view from here, or no more (a worker's work with the
@@ -1185,6 +1188,11 @@ pub struct InterpCaches {
     pat_slots: crate::arena::Dense<(u32, u32)>,
     block_facts: crate::arena::Dense<u8>,
     ctor_plans: crate::arena::Dense<Option<Option<Rc<[u32]>>>>,
+    /// The match plans the interpreter holds, copies of the typer's (`tir::matcher`) made at their first use, by their
+    /// owners; and a tuple match's components' step ranges by its node, case after case. Few of a program's matches
+    /// run in the interpreter, so the tables are maps, not dense by node.
+    held_plans: FxMap<crate::tir::matcher::Owner, Rc<crate::tir::matcher::MatchPlan>>,
+    tuple_ranges: FxMap<TExprId, Rc<[(u32, u32)]>>,
     units: crate::arena::Dense<u64>,
     proxy_units: FxMap<(FunId, u64), u64>,
     lambda_units: crate::arena::Dense<u64>,
@@ -1212,6 +1220,8 @@ pub struct InterpCaches {
     prof_state: Option<Box<profile::ProfState>>,
     /// `Program::shifts` when the caches were put away.
     shifts: u32,
+    /// `Program::plans_epoch` the lowered units and the held plans are of (`Interp::units_epoch`).
+    plans_epoch: u32,
     /// `Program::runs` then.
     runs: u32,
     /// How many holders the last walk of the cacheable state marked: the size the next
@@ -1272,6 +1282,8 @@ impl InterpCaches {
             pat_slots: _,
             block_facts: _,
             ctor_plans: _,
+            held_plans: _,
+            tuple_ranges: _,
             units: _,
             proxy_units: _,
             lambda_units: _,
@@ -1297,6 +1309,7 @@ impl InterpCaches {
             rec_binders: _,
             prof_state: _,
             shifts: _,
+            plans_epoch: _,
             runs: _,
             walk_hint: _,
         } = self;
@@ -1420,6 +1433,8 @@ pub struct Interp<'a, 't> {
     /// Per call expression the entry of `site_entries` it resolved to last (`fast.rs`).
     call_sites: crate::arena::Dense<u32>,
     site_entries: Vec<(ClassId, Name, Member)>,
+    /// Whether the plans' checker is on (`tir::matcher::checking_on`), read once.
+    check_plans: bool,
     /// Per pattern whether it binds: `0` unknown, `1` no, `2` yes.
     pat_facts: crate::arena::Dense<u8>,
     /// Per sub-pattern of a class pattern the class of the last object and the slot of its field.
@@ -1429,6 +1444,16 @@ pub struct Interp<'a, 't> {
     block_facts: crate::arena::Dense<u8>,
     /// Per class the slots of a plain constructor, `Some(None)` where the constructor runs code.
     ctor_plans: crate::arena::Dense<Option<Option<Rc<[u32]>>>>,
+    /// The match plans the interpreter holds, copies of the typer's (`tir::matcher`) made at their first use, by their
+    /// owners; and a tuple match's components' step ranges by its node, case after case. Few of a program's matches
+    /// run in the interpreter, so the tables are maps, not dense by node.
+    held_plans: FxMap<crate::tir::matcher::Owner, Rc<crate::tir::matcher::MatchPlan>>,
+    tuple_ranges: FxMap<TExprId, Rc<[(u32, u32)]>>,
+    /// `Program::plans_epoch` the held plans are of: where it moved, a match they were made of was written over.
+    plans_epoch: u32,
+    /// `Program::plans_epoch` the lowered units are of, the run's start: a match written over during the run leaves
+    /// the units lowered before it stale until the next run's `restore` drops them, which this tells it.
+    units_epoch: u32,
     /// Per function the state of its execution unit (`code.rs`): the calls counted towards its
     /// promotion, and whether its layout is applied.
     units: crate::arena::Dense<u64>,
@@ -1488,6 +1513,7 @@ type ClassValueRef = value::ClassValue;
 
 impl<'a, 't> Interp<'a, 't> {
     pub fn new(typer: &'a mut Worker<'t>, limits: Limits) -> Interp<'a, 't> {
+        let plans_epoch = typer.prog.plans_epoch;
         let array_seq = typer.array_seq_class();
         let withheld_seen = typer.withheld_met;
         Interp {
@@ -1540,6 +1566,7 @@ impl<'a, 't> Interp<'a, 't> {
             out_redirect: None,
             process_out0: None,
             console_bound: false,
+            check_plans: crate::tir::matcher::checking_on(),
             bound_kept: None,
             stream: false,
             pure: false,
@@ -1557,6 +1584,10 @@ impl<'a, 't> Interp<'a, 't> {
             pat_slots: crate::arena::Dense::new((u32::MAX, 0)),
             block_facts: crate::arena::Dense::new(0),
             ctor_plans: crate::arena::Dense::new(None),
+            held_plans: FxMap::default(),
+            tuple_ranges: FxMap::default(),
+            plans_epoch,
+            units_epoch: plans_epoch,
             units: crate::arena::Dense::new(0),
             proxy_units: FxMap::default(),
             lambda_units: crate::arena::Dense::new(0),
@@ -1634,6 +1665,8 @@ impl<'a, 't> Interp<'a, 't> {
             pat_slots: self.pat_slots,
             block_facts: self.block_facts,
             ctor_plans: self.ctor_plans,
+            held_plans: self.held_plans,
+            tuple_ranges: self.tuple_ranges,
             units: self.units,
             proxy_units: self.proxy_units,
             lambda_units: self.lambda_units,
@@ -1659,6 +1692,7 @@ impl<'a, 't> Interp<'a, 't> {
             names: self.names,
             prof_state: self.prof_state,
             shifts: self.typer.prog.shifts,
+            plans_epoch: self.units_epoch,
             runs: self.typer.prog.runs,
             walk_hint: self.walk_hint,
         }
@@ -1706,6 +1740,8 @@ impl<'a, 't> Interp<'a, 't> {
         self.pat_slots = c.pat_slots;
         self.block_facts = c.block_facts;
         self.ctor_plans = c.ctor_plans;
+        self.held_plans = c.held_plans;
+        self.tuple_ranges = c.tuple_ranges;
         self.units = c.units;
         self.proxy_units = c.proxy_units;
         self.lambda_units = c.lambda_units;
@@ -1734,7 +1770,13 @@ impl<'a, 't> Interp<'a, 't> {
         if c.shifts != self.typer.prog.shifts {
             self.forget_units();
             self.forget_positions();
+        } else if c.plans_epoch != self.typer.prog.plans_epoch {
+            // A match written over in place since the caches were put away: the plans held of it and the units
+            // lowered with them go.
+            self.forget_units();
         }
+        self.plans_epoch = self.typer.prog.plans_epoch;
+        self.units_epoch = self.plans_epoch;
         if c.shifts < self.typer.prog.build_start {
             self.records.next_build();
             self.forget_made();

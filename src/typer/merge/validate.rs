@@ -149,8 +149,10 @@ impl<'a> Worker<'a> {
             quote_pats: _, expansions: _, block_classes: _, expansion_bits: _, chain_end_bits: _,
             taken_then_bits: _, taken_else_bits: _, widened_bits: _, opaque_bits: _, by_name_arg_bits: _, spread_bits: _,
             ascribed_bits: _, inlined_null_bits: _, cast_bits: _, written_cast_bits: _, apply_creation_bits: _, setter_assign_bits: _, removed_bits: _, tuple_index_bits: _, kept_bits: _, leaf_bits: _,
-            leaf_tests: _, in_place_operands: _, stored_tests: _, stored_pats: _, shifts: _, build_start: _, runs: _, lifted_funs: _,
+            leaf_tests: _, in_place_operands: _, stored_tests: _, stored_pats: _, shifts: _, build_start: _, plans_epoch: _, runs: _, lifted_funs: _,
             block_class_traits: _, forward: _,
+            // The merge drops the workers' plans and builds the merged program's again from its patterns.
+            matchers: _,
         } = &self.prog;
         // A local enum's name is kept by its class, a class of a block: renumbered with the program.
         v.field("the local enums' names (Program::local_enum_names)", |v| {

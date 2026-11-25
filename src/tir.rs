@@ -10,6 +10,7 @@ use crate::types::{ClassId, SymId, TParamId, TypeId};
 use crate::symbols::{Owner, SymKind, Symbols};
 
 pub mod capture;
+pub mod matcher;
 
 macro_rules! id_type {
     ($($name:ident),*) => {$(
@@ -1331,6 +1332,10 @@ pub struct Program {
     pub block_classes: FxMap<TExprId, Vec<ClassId>>,
     /// The places the forward-reference check tells its errors at (`typer::forward`).
     pub forward: ForwardNotes,
+    /// The match plans the writers read, by their owners (`matcher`): made by `matcher::prepare` from the typed
+    /// patterns once reach has typed everything and before a writer runs; empty while typing, where the interpreter
+    /// makes its own at first use.
+    pub matchers: FxMap<matcher::Owner, matcher::MatchPlan>,
     /// What an inline method's call gave, as bits by expression, on every target: the keys of
     /// `expansions` on JavaScript, which a walk tests at every node. Where a chain of `+` ends
     /// is `chain_end_bits`' to say, which a transparent method's call does not set.
@@ -1441,6 +1446,9 @@ pub struct Program {
     /// `shifts` where the build under way began (a session's retype, `retype_files`): the shifts
     /// after it are the inlining phase's retypes of the build's own suspended files.
     pub build_start: u32,
+    /// How many times a match node was written over in place (`rewrite`): the plans the interpreter holds from before
+    /// are stale then (`Interp::held_plan`, `Interp::restore`).
+    pub plans_epoch: u32,
     /// The runs the inlining phase made after the build's first (`Worker::inlining_phase`'s rounds):
     /// a macro's first run in a later one makes the program's objects anew, and from the third run
     /// on the classpath's too, as dotty's third and each later run take a macro class loader of
@@ -1780,6 +1788,7 @@ impl Program {
             local_enum_names: Vec::new(),
             shifts: 0,
             build_start: 0,
+            plans_epoch: 0,
             runs: 0,
             lifted_funs: self.lifted_funs.clone(),
             block_class_traits: self.block_class_traits.clone(),
@@ -1794,6 +1803,7 @@ impl Program {
             block_classes: FxMap::default(),
             // A worker of the inlining phase copies and expands the notes' nodes: it reads the protected references'.
             forward: ForwardNotes { accessors: self.forward.accessors.clone(), ..ForwardNotes::default() },
+            matchers: FxMap::default(),
             expansion_bits: Bits::attach(self.expansion_bits.shared_arc(), worker),
             chain_end_bits: Bits::attach(self.chain_end_bits.shared_arc(), worker),
             taken_then_bits: Bits::attach(self.taken_then_bits.shared_arc(), worker),
@@ -1909,6 +1919,7 @@ impl Default for Program {
             local_enum_names: Vec::new(),
             shifts: 0,
             build_start: 0,
+            plans_epoch: 0,
             runs: 0,
             lifted_funs: Default::default(),
             block_class_traits: Default::default(),
@@ -1922,6 +1933,7 @@ impl Default for Program {
             expansions: FxMap::default(),
             block_classes: FxMap::default(),
             forward: ForwardNotes::default(),
+            matchers: Default::default(),
             expansion_bits: Bits::default(),
             chain_end_bits: Bits::default(),
             taken_then_bits: Bits::default(),
@@ -1986,6 +1998,15 @@ impl Program {
     #[inline]
     pub fn add(&mut self, e: TExpr) -> TExprId {
         TExprId(self.exprs.push(e))
+    }
+    /// Writes `node` in place of `e`'s. Where a match stood, the plans the interpreter made of it are stale, which
+    /// `plans_epoch` counts; a node made a match here is a new owner, whose plan is made at its first use.
+    #[inline]
+    pub fn rewrite(&mut self, e: TExprId, node: TExpr) {
+        if matches!(self.exprs[e.idx()], TExpr::Match(..)) {
+            self.plans_epoch += 1;
+        }
+        self.exprs[e.idx()] = node;
     }
     #[inline]
     pub fn set_type(&mut self, e: TExprId, ty: TypeId) {

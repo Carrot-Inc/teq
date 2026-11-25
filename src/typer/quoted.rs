@@ -2263,7 +2263,7 @@ impl<'a> Worker<'a> {
             self.inline.site_at_end = false;
             if let Some((expanded, ty)) = expanded {
                 let node = self.prog.expr(expanded);
-                self.prog.exprs[e.idx()] = node;
+                self.prog.rewrite(e, node);
                 self.prog.set_type(e, ty);
                 self.prog.copy_chain_marks(expanded, e);
                 self.move_declared(expanded, e);
@@ -2947,7 +2947,8 @@ impl<'c> Copier<'c> {
                 let this_nodes: Vec<TExprId> = t.prog.descendants(copied).filter(|&e| matches!(t.prog.expr(e), TExpr::This)).collect();
                 for node in this_nodes {
                     let id = self.expr(t, receiver);
-                    t.prog.exprs[node.idx()] = t.prog.expr(id);
+                    let copied = t.prog.expr(id);
+                    t.prog.rewrite(node, copied);
                     if let Some(ty) = t.prog.type_of(id) {
                         t.prog.set_type(node, ty);
                     }

@@ -1852,7 +1852,11 @@ impl<'a> Emitter<'a> {
                     self.emit_local_val(sym, init);
                     self.note_val_init(sym, init);
                 }
-                TStmt::Pat(pat, init, _) => self.emit_pattern_val(pat, init),
+                TStmt::Pat(pat, init, _) => {
+                    crate::tir::matcher::check(self.prog, crate::tir::matcher::Owner::PatDef(pat), "js pattern definition");
+                    let steps = &self.plan_of(matcher::Owner::PatDef(pat)).steps;
+                    self.emit_pattern_val(pat, steps, init)
+                }
             }
         }
     }
@@ -1944,7 +1948,10 @@ impl<'a> Emitter<'a> {
                     self.emit_stmt(value, &Ctx::Assign(lhs));
                 }
             }
-            TExpr::Match(scrut, cases) => self.emit_match(scrut, cases, ctx),
+            TExpr::Match(scrut, cases) => {
+                crate::tir::matcher::check(prog, crate::tir::matcher::Owner::Match(e), "js match");
+                self.emit_match(scrut, matcher::Owner::Match(e), cases, ctx)
+            }
             TExpr::Return(v) if self.fn_depth == 0 => self.emit_stmt_unbraced(v, &Ctx::Return),
             TExpr::Return(v) => {
                 let key = match &self.nonlocal_return {
@@ -1966,7 +1973,10 @@ impl<'a> Emitter<'a> {
                 self.emit_thrown(inner, unwrap);
                 self.out.push(';');
             }
-            TExpr::Try(i) => self.emit_try(i, ctx),
+            TExpr::Try(i) => {
+                crate::tir::matcher::check(prog, crate::tir::matcher::Owner::Try(i), "js try");
+                self.emit_try(i, ctx)
+            }
             // `a || b` is `if a then true else b`, so a tail call in `b` jumps.
             TExpr::Prim(op @ (PrimOp::BoolAnd | PrimOp::BoolOr), a, b)
                 if matches!(ctx, Ctx::Return) && self.jumps(b) =>
@@ -2053,7 +2063,7 @@ impl<'a> Emitter<'a> {
 
     /// `val (a, b) = (x, y)` binds `a` to `x` and `b` to `y` without making the tuple; any other
     /// pattern is tested and taken apart on the value.
-    fn emit_pattern_val(&mut self, pat: TPatId, init: TExprId) {
+    fn emit_pattern_val(&mut self, pat: TPatId, plan_steps: &'a [matcher::Step], init: TExprId) {
         let prog = self.prog;
         match (prog.pats[pat.idx()], self.peek(init)) {
             (TPat::Bind(sym, None), _) => return self.emit_local_val(sym, init),
@@ -2064,13 +2074,13 @@ impl<'a> Emitter<'a> {
                 return;
             }
             (TPat::Test(test, _, inner), _) if matches!(prog.js_test(test), TypeTest::Always) && self.test_hole(HoleNode::TestPat(pat)).is_none() => {
-                return self.emit_pattern_val(inner, init);
+                return self.emit_pattern_val(inner, &plan_steps[1..1 + plan_steps[0].scope()], init);
             }
             (TPat::Class(c, _, _, subs), TExpr::New(made, args)) if made == c && self.is_tuple_class(c) && subs.len == args.len => {
                 let subs = prog.pat_lists[subs.range()].to_vec();
                 let args = prog.expr_list(args).to_vec();
-                for (sub, arg) in subs.into_iter().zip(args) {
-                    self.emit_pattern_val(sub, arg);
+                for (m, (sub, arg)) in subs.into_iter().zip(args).enumerate() {
+                    self.emit_pattern_val(sub, field_steps(plan_steps, m), arg);
                 }
                 return;
             }
@@ -2088,7 +2098,7 @@ impl<'a> Emitter<'a> {
             self.emit_stmt(init, &Ctx::Assign(tmp.clone()));
         }
         let mut steps = Vec::new();
-        self.pattern_steps(pat, &tmp, &mut steps);
+        self.js_steps(plan_steps, &tmp, &mut steps);
         for step in steps {
             self.line();
             match step {
@@ -2135,32 +2145,47 @@ impl<'a> Emitter<'a> {
         buf
     }
 
-    /// Flattens a pattern into a sequence of tests and bindings against `scrut`.
-    fn pattern_steps(&mut self, pat: TPatId, scrut: &str, out: &mut Vec<Step>) {
+    /// The plan of `owner`, which the typer made with its node (`tir::matcher`).
+    fn plan_of(&self, owner: matcher::Owner) -> &'a matcher::MatchPlan {
+        self.prog.matchers.get(&owner).unwrap_or_else(|| panic!("no plan of {:?} (tir::matcher)", owner))
+    }
+
+    /// A pattern's plan steps (`tir::matcher`), each with its continuation, as tests and bindings against `scrut`.
+    fn js_steps(&mut self, steps: &'a [matcher::Step], scrut: &str, out: &mut Vec<Step>) {
+        let mut i = 0;
+        while i < steps.len() {
+            i = self.js_step(steps, i, scrut, out);
+        }
+    }
+
+    /// The step at `i` and its continuation, as the pattern it comes from is printed: a binder before its pattern's own
+    /// steps, the scrutinee's text read by the tests; the index after them.
+    fn js_step(&mut self, steps: &'a [matcher::Step], i: usize, scrut: &str, out: &mut Vec<Step>) -> usize {
+        use matcher::{Bound, Rhs, Role, Step as P, TestKind};
         let prog = self.prog;
-        match prog.pats[pat.idx()] {
-            TPat::Wildcard => {}
-            TPat::Bind(sym, inner) => {
+        let next = i + 1 + steps[i].scope();
+        let then = &steps[i + 1..next];
+        match steps[i] {
+            P::Let { bound: Bound::Sym(sym), rhs: Rhs::Alias(_), role: Role::Own, .. } => {
                 let n = self.sym_name(sym);
                 out.push(Step::Bind(format!("const {} = {};", n, scrut)));
-                if let Some(i) = inner {
-                    self.pattern_steps(i, scrut, out);
+                self.js_steps(then, scrut, out);
+            }
+            P::Test { kind: TestKind::Type(test), origin, .. } => {
+                if self.test_hole(HoleNode::TestPat(origin)).is_some() {
+                    let n = self.test_hole(HoleNode::TestPat(origin)).unwrap();
+                    out.push(Step::Test(format!("$k{}({})", n, scrut), !scrut.starts_with('$')));
+                } else {
+                    let TPat::Test(_, _, inner) = prog.pats[origin.idx()] else { unreachable!("a type test's pattern") };
+                    let tested_by_inner = matches!((prog.js_test(test), prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
+                    if !matches!(prog.js_test(test), TypeTest::Always) && !tested_by_inner {
+                        let on_scrutinee = !scrut.starts_with('$') && !matches!(prog.js_test(test), TypeTest::Value(_));
+                        out.push(Step::Test(self.test_to_string(test, scrut), on_scrutinee));
+                    }
                 }
+                self.js_steps(then, scrut, out);
             }
-            TPat::Test(_, _, inner) if self.test_hole(HoleNode::TestPat(pat)).is_some() => {
-                let n = self.test_hole(HoleNode::TestPat(pat)).unwrap();
-                out.push(Step::Test(format!("$k{}({})", n, scrut), !scrut.starts_with('$')));
-                self.pattern_steps(inner, scrut, out);
-            }
-            TPat::Test(test, _, inner) => {
-                let tested_by_inner = matches!((prog.js_test(test), prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
-                if !matches!(prog.js_test(test), TypeTest::Always) && !tested_by_inner {
-                    let on_scrutinee = !scrut.starts_with('$') && !matches!(prog.js_test(test), TypeTest::Value(_));
-                    out.push(Step::Test(self.test_to_string(test, scrut), on_scrutinee));
-                }
-                self.pattern_steps(inner, scrut, out);
-            }
-            TPat::Equals(e, strict) => {
+            P::Test { kind: TestKind::Equal(e, strict), .. } => {
                 self.hold_compared(e);
                 let v = self.expr_to_string(e);
                 out.push(Step::Test(
@@ -2168,85 +2193,85 @@ impl<'a> Emitter<'a> {
                     false,
                 ));
             }
-            TPat::Class(c, _, fields, subs) => {
+            P::Test { kind: TestKind::Class(c), .. } => {
                 self.hold(c, Held::Tested);
                 let n = self.class_name(c);
                 out.push(Step::Test(format!("{} instanceof {}", scrut, n), !scrut.starts_with('$')));
-                let fields = prog.sym_list(fields).to_vec();
-                let subs = prog.pat_lists[subs.range()].to_vec();
-                for (f, s) in fields.iter().zip(subs) {
-                    let access = format!("{}.{}", scrut, self.field_name(*f));
-                    match prog.pats[s.idx()] {
-                        TPat::Wildcard => {}
-                        TPat::Bind(_, None) | TPat::Equals(..) => self.pattern_steps(s, &access, out),
-                        _ => {
-                            let tmp = self.fresh("p");
-                            out.push(Step::Bind(format!("const {} = {};", tmp, access)));
-                            self.pattern_steps(s, &tmp, out);
-                        }
-                    }
+                let mut j = 0;
+                while j < then.len() {
+                    let P::Let { rhs: Rhs::Field(_, f), origin: sub, .. } = then[j] else { unreachable!("a class pattern's field") };
+                    let end = j + 1 + then[j].scope();
+                    let access = format!("{}.{}", scrut, self.field_name(f));
+                    self.js_part(sub, &then[j + 1..end], &access, out);
+                    j = end;
                 }
             }
-            TPat::Alt(alts) => {
-                let alts = prog.pat_lists[alts.range()].to_vec();
-                let conds: Vec<String> = alts.iter().map(|&a| self.pattern_cond(a, scrut)).collect();
+            P::Alts { ref alts, .. } => {
+                let conds: Vec<String> = alts.iter().map(|a| self.js_cond(a, scrut)).collect();
                 out.push(Step::Test(conds.join(" || "), false));
             }
-            TPat::Unapply(sym, call, inner) => {
+            P::Let { bound: Bound::Sym(sym), rhs: Rhs::Alias(_), role: Role::UnapplyArg, .. } => {
                 let n = self.sym_name(sym);
                 out.push(Step::Bind(format!("const {} = {};", n, scrut)));
                 let tmp = self.fresh("u");
+                let P::Let { rhs: Rhs::Call(call), .. } = then[0] else { unreachable!("an extractor's call") };
                 let value = self.expr_to_string(call);
                 out.push(Step::Bind(format!("const {} = {};", tmp, value)));
-                self.pattern_steps(inner, &tmp, out);
+                self.js_steps(&then[1..], &tmp, out);
             }
-            TPat::Seq(items, rest) => {
-                let items = prog.pat_lists[items.range()].to_vec();
+            P::Let { rhs: Rhs::SeqHelper { items, rest, .. }, .. } => {
                 let tmp = self.fresh("q");
                 let wrap = match (rest, self.array_seq) {
-                    (Some(_), Some(c)) => format!(", {}", self.class_name(c)),
+                    (true, Some(c)) => format!(", {}", self.class_name(c)),
                     _ => String::new(),
                 };
-                let n = items.len();
-                out.push(Step::Bind(format!("const {} = $seqPat({}, {}, {}{});", tmp, scrut, n, rest.is_some(), wrap)));
+                out.push(Step::Bind(format!("const {} = $seqPat({}, {}, {}{});", tmp, scrut, items, rest, wrap)));
                 out.push(Step::Test(format!("{} !== null", tmp), false));
-                for (i, s) in items.iter().chain(rest.iter()).enumerate() {
-                    let access = format!("{}[{}]", tmp, i);
-                    match prog.pats[s.idx()] {
-                        TPat::Wildcard => {}
-                        TPat::Bind(_, None) | TPat::Equals(..) => self.pattern_steps(*s, &access, out),
-                        _ => {
-                            let elem = self.fresh("p");
-                            out.push(Step::Bind(format!("const {} = {};", elem, access)));
-                            self.pattern_steps(*s, &elem, out);
-                        }
-                    }
+                let elements = &then[1..1 + then[0].scope()];
+                let mut j = 0;
+                while j < elements.len() {
+                    let P::Let { rhs: Rhs::Elem(_, k), origin: sub, .. } = elements[j] else { unreachable!("a sequence pattern's element") };
+                    let end = j + 1 + elements[j].scope();
+                    let access = format!("{}[{}]", tmp, k);
+                    self.js_part(sub, &elements[j + 1..end], &access, out);
+                    j = end;
                 }
+            }
+            ref other => unreachable!("a step its parent's step prints: {:?}", other),
+        }
+        next
+    }
+
+    /// A field's or an element's pattern over its `access`: inline into a binder without pattern or a comparison,
+    /// else held in a `const $pN` first.
+    fn js_part(&mut self, sub: TPatId, steps: &'a [matcher::Step], access: &str, out: &mut Vec<Step>) {
+        match self.prog.pats[sub.idx()] {
+            TPat::Bind(_, None) | TPat::Equals(..) => self.js_steps(steps, access, out),
+            _ => {
+                let tmp = self.fresh("p");
+                out.push(Step::Bind(format!("const {} = {};", tmp, access)));
+                self.js_steps(steps, &tmp, out);
             }
         }
     }
 
-    fn pattern_binds(&mut self, pat: TPatId, name: &str) -> bool {
-        let prog = self.prog;
-        match prog.pats[pat.idx()] {
-            TPat::Bind(sym, inner) => {
-                &*self.sym_name(sym) == name || inner.map_or(false, |i| self.pattern_binds(i, name))
+    /// Whether a source binder of the steps is named `name`.
+    fn js_binds(&mut self, steps: &'a [matcher::Step], name: &str) -> bool {
+        use matcher::{Bound, Role, Step as P};
+        for s in steps {
+            match *s {
+                P::Let { bound: Bound::Sym(sym), role: Role::Own, .. } if &*self.sym_name(sym) == name => return true,
+                P::Alts { ref alts, .. } if alts.iter().any(|a| self.js_binds(a, name)) => return true,
+                _ => {}
             }
-            TPat::Test(_, _, inner) | TPat::Unapply(_, _, inner) => self.pattern_binds(inner, name),
-            TPat::Class(_, _, _, subs) | TPat::Alt(subs) => {
-                prog.pat_lists[subs.range()].iter().any(|&s| self.pattern_binds(s, name))
-            }
-            TPat::Seq(items, rest) => {
-                prog.pat_lists[items.range()].iter().chain(rest.iter()).any(|&s| self.pattern_binds(s, name))
-            }
-            TPat::Wildcard | TPat::Equals(..) => false,
         }
+        false
     }
 
     /// A single boolean expression for a pattern without bindings.
-    fn pattern_cond(&mut self, pat: TPatId, scrut: &str) -> String {
+    fn js_cond(&mut self, plan_steps: &'a [matcher::Step], scrut: &str) -> String {
         let mut steps = Vec::new();
-        self.pattern_steps(pat, scrut, &mut steps);
+        self.js_steps(plan_steps, scrut, &mut steps);
         let mut conds: Vec<String> = Vec::new();
         let mut substitutions: Vec<(String, String)> = Vec::new();
         for s in steps {
@@ -2327,7 +2352,7 @@ impl<'a> Emitter<'a> {
                 raw.clone()
             };
             let miss = format!("throw {};", raw);
-            self.emit_cases(&scrut, t.cases, ctx, &miss);
+            self.emit_cases(&scrut, matcher::Owner::Try(i), t.cases, ctx, &miss);
             self.leave_scope();
             self.close("}");
         }
@@ -2341,7 +2366,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn emit_match(&mut self, scrut: TExprId, cases: ListRef, ctx: &Ctx) {
+    fn emit_match(&mut self, scrut: TExprId, owner: matcher::Owner, cases: ListRef, ctx: &Ctx) {
         let prog = self.prog;
         let clauses = &prog.cases[cases.range()];
         let named = match self.peek(scrut) {
@@ -2352,13 +2377,13 @@ impl<'a> Emitter<'a> {
         // `x match { case x: T => .. }` declares another `x`, which would hide the scrutinee.
         let returns = matches!(ctx, Ctx::Return);
         let binds = |this: &mut Self, n: &str| {
-            let blocks = this.case_blocks(n, cases);
+            let blocks = this.case_blocks(n, owner, cases);
             (0..clauses.len()).any(|k| {
                 let root = this.case_root(blocks[k], cases.start + k as u32, cases, !returns);
                 if let Some(r) = root {
                     this.enter_pending(r);
                 }
-                let binds = this.pattern_binds(clauses[k].pat, n);
+                let binds = this.js_binds(this.plan_of(owner).pattern_of(k), n);
                 if root.is_some() {
                     this.leave_pending();
                 }
@@ -2383,14 +2408,14 @@ impl<'a> Emitter<'a> {
             }
         };
         let miss = format!("$matchError({});", scrut_name);
-        self.emit_cases(&scrut_name, cases, ctx, &miss);
+        self.emit_cases(&scrut_name, owner, cases, ctx, &miss);
     }
 
     /// The cases against the value in `scrut_name` as a sequence of `if`s, each ending in a
     /// return or a break out of the labelled block that stands in for the match in statement
     /// position, then the statement `miss` when none of them takes the value; a last case that
     /// always applies is written flat, without a test or the `miss` that would follow it.
-    fn emit_cases(&mut self, scrut_name: &str, list: ListRef, ctx: &Ctx, miss: &str) {
+    fn emit_cases(&mut self, scrut_name: &str, owner: matcher::Owner, list: ListRef, ctx: &Ctx, miss: &str) {
         let prog = self.prog;
         let cases = &prog.cases[list.range()];
         let returns = matches!(ctx, Ctx::Return);
@@ -2403,15 +2428,16 @@ impl<'a> Emitter<'a> {
         }
         self.enter_cond();
         let mut exhausted = false;
-        let blocks = self.case_blocks(scrut_name, list);
+        let blocks = self.case_blocks(scrut_name, owner, list);
+        let plan = self.plan_of(owner);
         let mut steps: Vec<Vec<Step>> = Vec::with_capacity(cases.len());
-        for (k, case) in cases.iter().enumerate() {
+        for k in 0..cases.len() {
             let root = self.case_root(blocks[k], list.start + k as u32, list, false);
             if let Some(r) = root {
                 self.enter_pending(r);
             }
             let mut own = Vec::new();
-            self.pattern_steps(case.pat, scrut_name, &mut own);
+            self.js_steps(plan.pattern_of(k), scrut_name, &mut own);
             if root.is_some() {
                 self.leave_pending();
             }
@@ -2467,9 +2493,10 @@ impl<'a> Emitter<'a> {
     /// as `emit_cases` decides it after: a case of several that open with the same type test of
     /// the scrutinee in the block they share, a last case that tests nothing in the block the
     /// cases are written in, any other in a block of its own.
-    fn case_blocks(&mut self, scrut: &str, list: ListRef) -> Vec<CaseBlock> {
+    fn case_blocks(&mut self, scrut: &str, owner: matcher::Owner, list: ListRef) -> Vec<CaseBlock> {
         let cases = &self.prog.cases[list.range()];
-        let firsts: Vec<Option<String>> = cases.iter().map(|c| self.scrutinee_test(c.pat, scrut)).collect();
+        let plan = self.plan_of(owner);
+        let firsts: Vec<Option<String>> = (0..cases.len()).map(|k| self.js_first_test(plan.pattern_of(k), scrut)).collect();
         let mut blocks = vec![CaseBlock::Own; cases.len()];
         let mut i = 0;
         while i < cases.len() {
@@ -2486,7 +2513,7 @@ impl<'a> Emitter<'a> {
                 i = j;
                 continue;
             }
-            if i == cases.len() - 1 && cases[i].guard.is_none() && !self.pattern_tests(cases[i].pat) {
+            if i == cases.len() - 1 && cases[i].guard.is_none() && !self.js_tests(plan.pattern_of(i)) {
                 blocks[i] = CaseBlock::Enclosing;
             }
             i += 1;
@@ -2505,44 +2532,57 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// The type test of the scrutinee that `pattern_steps` starts the case with, which cases
+    /// The type test of the scrutinee that `js_steps` starts the case with, which cases
     /// next to each other share.
-    fn scrutinee_test(&mut self, pat: TPatId, scrut: &str) -> Option<String> {
+    fn js_first_test(&mut self, steps: &'a [matcher::Step], scrut: &str) -> Option<String> {
+        use matcher::{Step as P, TestKind};
         let prog = self.prog;
         let on_scrutinee = !scrut.starts_with('$');
-        match prog.pats[pat.idx()] {
-            TPat::Test(_, _, _) if self.test_hole(HoleNode::TestPat(pat)).is_some() => {
-                let n = self.test_hole(HoleNode::TestPat(pat)).unwrap();
+        match steps.first() {
+            Some(&P::Test { kind: TestKind::Type(_), origin, .. }) if self.test_hole(HoleNode::TestPat(origin)).is_some() => {
+                let n = self.test_hole(HoleNode::TestPat(origin)).unwrap();
                 on_scrutinee.then(|| format!("$k{}({})", n, scrut))
             }
-            TPat::Test(test, _, inner) => {
+            Some(&P::Test { kind: TestKind::Type(test), origin, .. }) => {
+                let TPat::Test(_, _, inner) = prog.pats[origin.idx()] else { unreachable!("a type test's pattern") };
                 let tested_by_inner = matches!((prog.js_test(test), prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
                 if !matches!(prog.js_test(test), TypeTest::Always) && !tested_by_inner {
                     let value = matches!(prog.js_test(test), TypeTest::Value(_));
                     (on_scrutinee && !value).then(|| self.test_to_string(test, scrut))
                 } else {
-                    self.scrutinee_test(inner, scrut)
+                    self.js_first_test(&steps[1..1 + steps[0].scope()], scrut)
                 }
             }
-            TPat::Class(c, ..) => on_scrutinee.then(|| format!("{} instanceof {}", scrut, self.class_name(c))),
+            Some(&P::Test { kind: TestKind::Class(c), .. }) => on_scrutinee.then(|| format!("{} instanceof {}", scrut, self.class_name(c))),
             _ => None,
         }
     }
 
-    /// Whether `pattern_steps` gives the pattern a test.
-    fn pattern_tests(&self, pat: TPatId) -> bool {
+    /// Whether `js_steps` gives the steps a test.
+    fn js_tests(&self, steps: &[matcher::Step]) -> bool {
+        use matcher::{Rhs, Role, Step as P, TestKind};
         let prog = self.prog;
-        match prog.pats[pat.idx()] {
-            TPat::Wildcard => false,
-            TPat::Bind(_, inner) => inner.map_or(false, |i| self.pattern_tests(i)),
-            TPat::Test(..) if self.test_hole(HoleNode::TestPat(pat)).is_some() => true,
-            TPat::Test(test, _, inner) => {
-                let tested_by_inner = matches!((prog.js_test(test), prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
-                (!matches!(prog.js_test(test), TypeTest::Always) && !tested_by_inner) || self.pattern_tests(inner)
+        let mut i = 0;
+        while i < steps.len() {
+            let then = &steps[i + 1..i + 1 + steps[i].scope()];
+            let tests = match steps[i] {
+                P::Let { rhs: Rhs::Alias(_), role: Role::Own, .. } => self.js_tests(then),
+                P::Test { kind: TestKind::Type(_), origin, .. } if self.test_hole(HoleNode::TestPat(origin)).is_some() => true,
+                P::Test { kind: TestKind::Type(test), origin, .. } => {
+                    let TPat::Test(_, _, inner) = prog.pats[origin.idx()] else { unreachable!("a type test's pattern") };
+                    let tested_by_inner = matches!((prog.js_test(test), prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
+                    (!matches!(prog.js_test(test), TypeTest::Always) && !tested_by_inner) || self.js_tests(then)
+                }
+                // An extractor: its call's continuation is its result's pattern.
+                P::Let { role: Role::UnapplyArg, .. } => self.js_tests(&then[1..]),
+                _ => true,
+            };
+            if tests {
+                return true;
             }
-            TPat::Equals(..) | TPat::Class(..) | TPat::Alt(_) | TPat::Seq(..) => true,
-            TPat::Unapply(_, _, inner) => self.pattern_tests(inner),
+            i += 1 + steps[i].scope();
         }
+        false
     }
 
     /// One case: its tests as one condition, its bindings, its guard and its body. Bindings and
@@ -2611,6 +2651,24 @@ impl<'a> Emitter<'a> {
             self.close("}");
         }
     }
+}
+
+/// The continuation of a class pattern's `m`th field in `steps` (its test first), empty where its pattern leaves the
+/// field (a wildcard's).
+fn field_steps(steps: &[matcher::Step], m: usize) -> &[matcher::Step] {
+    use matcher::{Role, Step as P};
+    let fields = 1 + steps.first().map_or(0, |s| s.scope());
+    let mut j = 1;
+    while j < fields.min(steps.len()) {
+        let end = j + 1 + steps[j].scope();
+        if let P::Let { role: Role::Field(k), .. } = steps[j] {
+            if k as usize == m {
+                return &steps[j + 1..end];
+            }
+        }
+        j = end;
+    }
+    &[]
 }
 
 /// Where the bindings of a case are declared (`Emitter::case_blocks`).

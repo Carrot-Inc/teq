@@ -79,6 +79,7 @@ impl Program {
             expansions,
             block_classes,
             forward,
+            matchers,
             expansion_bits,
             leaf_bits,
             leaf_tests,
@@ -103,6 +104,7 @@ impl Program {
             kept_bits,
             shifts: _,
             build_start: _,
+            plans_epoch: _,
             runs: _,
             lifted_funs: _,
             block_class_traits: _,
@@ -150,6 +152,8 @@ impl Program {
             + table(expansions)
             + table(block_classes)
             + block_classes.values().map(array).sum::<usize>()
+            + table(matchers)
+            + matchers.values().map(|p| array(&p.cases) + array(&p.steps)).sum::<usize>()
             + table(&forward.places)
             + table(&forward.patterns)
             + table(&forward.accessors)

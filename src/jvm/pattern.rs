@@ -5,7 +5,6 @@
 use crate::lir::{Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LabelId, LirId, MethodRef, Relation, TempId};
 use super::gen::{Gen, MAX_TUPLE_ARITY};
 use super::names::*;
-use crate::ast::ListRef;
 use crate::tir::*;
 use crate::types::{ClassId, SymId};
 use std::rc::Rc;
@@ -177,7 +176,7 @@ impl<'a> Gen<'a> {
     /// without a cast to its static type: the patterns test its class, and an unchecked type
     /// argument may have promised too much. A value class's primitive underlying value stays as
     /// it is, and is boxed where a pattern tests it (`Gen::vc_temps`).
-    pub(super) fn lower_match(&mut self, scrut: TExprId, cases: ListRef, want: Option<&ErasedType>) -> LirId {
+    pub(super) fn lower_match(&mut self, scrut: TExprId, owner: matcher::Owner, want: Option<&ErasedType>) -> LirId {
         let t = self.static_type(scrut);
         let t = if t.is_ref() || t == ErasedType::V { ErasedType::object() } else { t };
         let vc = if t.is_ref() { None } else { self.expr_value_class(scrut) };
@@ -188,7 +187,7 @@ impl<'a> Gen<'a> {
             self.vc_temps.insert(s, vc);
         }
         let done = self.lir.label();
-        let nodes = self.lower_cases(cases, s, &t, want.map(|want| (done, want)));
+        let nodes = self.lower_cases(owner, 0, s, &t, want.map(|want| (done, want)));
         let ty = want.cloned().unwrap_or(ErasedType::V);
         let failure = self.lower_match_error(s, &t, &ty);
         self.vc_temps.remove(&s);
@@ -205,23 +204,22 @@ impl<'a> Gen<'a> {
     /// Each case as a labelled block left where a test fails, holding the case's tests over the
     /// value in `temp`, its bindings, its guard and its body: a `Break` to `done` with the body's
     /// value at the type wanted (none for `Unit`), or with no `done` the body in return position.
-    fn lower_cases(&mut self, cases: ListRef, temp: TempId, ty: &ErasedType, done: Option<(LabelId, &ErasedType)>) -> Vec<LirId> {
+    fn lower_cases(&mut self, owner: matcher::Owner, from: usize, temp: TempId, ty: &ErasedType, done: Option<(LabelId, &ErasedType)>) -> Vec<LirId> {
         let prog = self.cx.input.prog;
+        let plan = self.plan_of(owner);
         let mut nodes = Vec::new();
-        for case in &prog.cases[cases.range()] {
+        for c in &plan.cases[from..] {
+            let case = &prog.cases[c.case.expect("a case of a match or a try") as usize];
             let next = self.lir.label();
             let mut stmts = Vec::new();
-            if !self.lower_pattern(case.pat, temp, ty, next, &mut stmts) {
-                // A case the value can never match: its tests alone, with neither guard nor body.
+            // Its pattern's steps, then its guard's. A case the value can never match: its tests alone, with neither
+            // guard nor body.
+            if !self.lower_steps(&plan.steps[c.start as usize..c.end as usize], temp, ty, next, &mut stmts) {
                 let result = self.lir.push(Kind::Unit, ErasedType::V);
                 let stmts = self.lir.list(&stmts);
                 let body = self.lir.push(Kind::Block { stmts, result }, ErasedType::V);
                 nodes.push(self.lir.push(Kind::Labeled { label: next, body }, ErasedType::V));
                 continue;
-            }
-            if let Some(g) = case.guard {
-                let guard = self.lower_cond(g);
-                self.lower_fail_unless(guard, next, &mut stmts);
             }
             let result = match done {
                 None => self.lower_tail(case.body),
@@ -247,8 +245,9 @@ impl<'a> Gen<'a> {
     /// handler for each of the leading cases a handler takes as it stands (`Gen::catch_case`), then, from the first
     /// other case on, one handler of `Throwable` that binds the exception, matches the cases left over it and throws
     /// it again where none matches (`mkFallbackPatterMatchCase`).
-    pub(super) fn lower_catch(&mut self, cases: ListRef, want: &ErasedType) -> Catch {
+    pub(super) fn lower_catch(&mut self, index: u32, want: &ErasedType) -> Catch {
         let prog = self.cx.input.prog;
+        let cases = prog.tries[index as usize].cases;
         let done = self.lir.label();
         let mut handlers = Vec::new();
         for case in &prog.cases[cases.range()] {
@@ -265,13 +264,12 @@ impl<'a> Gen<'a> {
         }
         let taken = handlers.len() as u32;
         if taken < cases.len {
-            let rest = ListRef { start: cases.start + taken, len: cases.len - taken };
             let throwable = ErasedType::L(Rc::from(THROWABLE));
             let (caught, selector, matched) = (self.lir.temp(), self.lir.temp(), self.lir.label());
             let exception = self.lir.push(Kind::Temp(caught), throwable.clone());
             let held = self.lir.keep(selector, exception);
             // The match over the exception, its last case the exception thrown again; its value leaves the `try`.
-            let cases = self.lower_cases(rest, selector, &throwable, Some((matched, want)));
+            let cases = self.lower_cases(matcher::Owner::Try(index), taken as usize, selector, &throwable, Some((matched, want)));
             let exception = self.lir.push(Kind::Temp(caught), throwable.clone());
             let rethrown = self.lir.push(Kind::Throw(exception), ErasedType::V);
             let stmts = self.lir.list(&cases);
@@ -531,7 +529,8 @@ impl<'a> Gen<'a> {
         let fail = self.lir.label();
         let mut tests = Vec::new();
         // A value that can never match leaves the tests for the `MatchError` alone: the variables are unbound.
-        let done = self.lower_pattern(pat, x1, &t, fail, &mut tests).then(|| self.lir.label());
+        let steps = &self.plan_of(matcher::Owner::PatDef(pat)).steps;
+        let done = self.lower_steps(steps, x1, &t, fail, &mut tests).then(|| self.lir.label());
         let result = match done {
             Some(done) => {
                 let mut reads: Vec<LirId> = Vec::with_capacity(n);
@@ -632,7 +631,8 @@ impl<'a> Gen<'a> {
         let fail = self.lir.label();
         let done = self.lir.label();
         let mut tests = Vec::new();
-        self.lower_pattern(pat, x1, &t, fail, &mut tests);
+        let steps = &self.plan_of(matcher::Owner::PatDef(pat)).steps;
+        self.lower_steps(steps, x1, &t, fail, &mut tests);
         let bound = self.lir.temp();
         let whole = self.lir.push(Kind::Temp(x1), t.clone());
         tests.push(self.lir.push(Kind::Let { temp: bound, init: whole }, ErasedType::V));
@@ -829,25 +829,45 @@ impl<'a> Gen<'a> {
     }
 
     /// The statements that test the value in `temp`, of the type `ty`, against the pattern and
-    /// bind its variables, leaving the labelled block `fail` where it does not match; false where
-    /// the value can never match (`ClassInstance::Never`): the statements then end in the jump out
-    /// of `fail`, the variables after it unbound, and nothing that reads them may follow.
-    pub(super) fn lower_pattern(&mut self, pat: TPatId, temp: TempId, ty: &ErasedType, fail: LabelId, out: &mut Vec<LirId>) -> bool {
+    /// bind its variables, leaving the labelled block `fail` where it does not match.
+    /// The plan of `owner`, which the typer made with its node (`tir::matcher`).
+    fn plan_of(&self, owner: matcher::Owner) -> &'a matcher::MatchPlan {
+        self.cx.input.prog.matchers.get(&owner).unwrap_or_else(|| panic!("no plan of {:?} (tir::matcher)", owner))
+    }
+
+    /// A case's steps, each with its continuation, in order, against the value in `temp`; false where the value can
+    /// never match them (a class test's `ClassInstance::Never`): the statements then end in the jump out of `fail`, and
+    /// no step after it is lowered, neither a binder's nor the guard's.
+    pub(super) fn lower_steps(&mut self, steps: &[matcher::Step], temp: TempId, ty: &ErasedType, fail: LabelId, out: &mut Vec<LirId>) -> bool {
+        let mut i = 0;
+        while i < steps.len() {
+            match self.lower_step(steps, i, temp, ty, fail, out) {
+                Some(next) => i = next,
+                None => return false,
+            }
+        }
+        true
+    }
+
+    /// The step at `i` and its continuation (`Step::scope`), as the pattern it comes from is lowered; the index
+    /// after them, none where the value can never match them.
+    fn lower_step(&mut self, steps: &[matcher::Step], i: usize, temp: TempId, ty: &ErasedType, fail: LabelId, out: &mut Vec<LirId>) -> Option<usize> {
+        use matcher::{Bound, Rhs, Role, Step, TestKind};
         let cx = self.cx;
         let prog = cx.input.prog;
         let object = ErasedType::object();
-        match prog.pats[pat.idx()] {
-            TPat::Wildcard => true,
-            TPat::Bind(sym, inner) => {
-                if let Some(i) = inner {
-                    if !self.lower_pattern(i, temp, ty, fail, out) {
-                        return false;
-                    }
+        let next = i + 1 + steps[i].scope();
+        let then = &steps[i + 1..next];
+        match steps[i] {
+            // A binder, declared after its pattern's own steps.
+            Step::Let { bound: Bound::Sym(sym), rhs: Rhs::Alias(_), role: Role::Own, .. } => {
+                if !self.lower_steps(then, temp, ty, fail, out) {
+                    return None;
                 }
                 self.lower_bind(sym, temp, ty, out);
-                true
             }
-            TPat::Test(test, tested, inner) => {
+            Step::Test { kind: TestKind::Type(test), origin, .. } => {
+                let TPat::Test(_, tested, inner) = prog.pats[origin.idx()] else { unreachable!("a type test's pattern") };
                 // A primitive is boxed for the tests that look at its class.
                 let (temp, ty) = if ty.is_ref() {
                     (temp, ty.clone())
@@ -864,186 +884,225 @@ impl<'a> Gen<'a> {
                     let passes = self.lower_test_on(temp, &ty, test, tested);
                     self.lower_fail_unless(passes, fail, out);
                 }
-                self.lower_pattern(inner, temp, &ty, fail, out)
+                if !self.lower_steps(then, temp, &ty, fail, out) {
+                    return None;
+                }
             }
-            TPat::Equals(e, strict) => {
-                let et = self.static_type(e);
-                if strict && ty.is_ref() && et.is_ref() && !et.is_string() && !ty.is_string() {
-                    // `case _: x.type`: the identity of a reference; `case null`, the null constant's.
-                    let expected = match prog.expr(e) {
-                        TExpr::Null => self.lir.push(Kind::Null, ErasedType::object()),
-                        _ => self.lower_expr(e, &et),
-                    };
-                    let value = self.lir.push(Kind::Temp(temp), ty.clone());
-                    // `case null`'s test stands at the pattern's line, which the null it drops would have marked
-                    // (`Gen::write_compare`): the scrutinee's load takes it.
-                    if let TExpr::Null = prog.expr(e) {
-                        self.lir.nodes[value.0 as usize].of = Some(e);
-                    }
-                    let same = self.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Identity, left: expected, right: value }, ErasedType::Z);
-                    self.lower_fail_unless(same, fail, out);
-                    return true;
+            Step::Test { kind: TestKind::Equal(e, strict), .. } => self.lower_equal(e, strict, temp, ty, fail, out),
+            Step::Test { kind: TestKind::Class(c), .. } => {
+                if !self.lower_class_test(c, then, temp, ty, fail, out) {
+                    return None;
                 }
-                // A value class's underlying value compares as its box (`pattern == scrutinee`,
-                // dotty's `EqualTest`, `PatternMatcher.scala` 811-812, the operand boxed by erasure).
-                let vc_temp = self.vc_temps.contains_key(&temp);
-                // So does a value class's instance as the pattern, against a primitive too (`1 match
-                // { case `key` => }` for a `key: V` is `key == 1`, `V`'s box unequal to the number).
-                let vc_pattern = self.recorded_type(e).and_then(|rt| self.value_class_of(rt)).is_some();
-                if !ty.is_ref() && !vc_temp && !vc_pattern && !et.is_ref() && et != ErasedType::V {
-                    use crate::typer::prims::*;
-                    let k = match (ty.numeric_rank(), et.numeric_rank()) {
-                        (Some(a), Some(b)) if a.max(b) == R_DOUBLE => ErasedType::D,
-                        (Some(a), Some(b)) if a.max(b) == R_FLOAT => ErasedType::F,
-                        (Some(a), Some(b)) if a.max(b) == R_LONG => ErasedType::J,
-                        _ => ErasedType::I,
-                    };
-                    let value = self.lir.push(Kind::Temp(temp), ty.clone());
-                    let left = self.lower_adapt(value, ty, &k);
-                    let right = self.lower_expr(e, &k);
-                    let equal = self.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Numbers, left, right }, ErasedType::Z);
-                    self.lower_fail_unless(equal, fail, out);
-                    return true;
-                }
-                let expected = self.lower_expr(e, &object);
-                let value = self.lower_temp_as(temp, ty, &object);
-                let equal = self.lower_helper_test("equal", &[expected, value]);
-                self.lower_fail_unless(equal, fail, out);
-                true
             }
-            TPat::Class(c, _, fields, subs) => {
-                // A value class's pattern on its underlying value, which the typer let through as
-                // the class itself: no test, and its one field is the value.
-                if cx.input.syms.class(c).value_class {
-                    let u = self.vc_underlying(c);
-                    let held = if self.is_vc_mark(&u) { self.is_vc_mark(ty) } else { *ty == u };
-                    if held {
-                        let subs = &prog.pat_lists[subs.range()];
-                        let Some(&sub) = subs.first() else { return true };
-                        // The field's pattern matches the field, the value as itself, not the
-                        // class it is the underlying value of: dotty extracts `x1._1` before
-                        // testing it (`matchArgsPlan`, `PatternMatcher.scala` 253-262, 411-414), so
-                        // `case C(`key`)` compares the `Int` (811-812).
-                        let outer = self.vc_temps.remove(&temp);
-                        let may = self.lower_pattern(sub, temp, ty, fail, out);
-                        if let Some(outer) = outer {
-                            self.vc_temps.insert(temp, outer);
-                        }
-                        return may;
-                    }
-                }
-                let fields = prog.sym_list(fields);
-                let subs = &prog.pat_lists[subs.range()];
-                let cast = !subs.iter().all(|&s| matches!(prog.pats[s.idx()], TPat::Wildcard));
-                let instance = match self.lower_class_instance(c, temp, ty, cast, fail, out) {
-                    ClassInstance::Never => return false,
-                    ClassInstance::Tested => return true,
-                    ClassInstance::Held(instance) => instance,
-                };
-                let class_type = ErasedType::L(self.class_name(c));
-                for (&field, &sub) in fields.iter().zip(subs) {
-                    if matches!(prog.pats[sub.idx()], TPat::Wildcard) {
-                        continue;
-                    }
-                    let m = self.mref(field);
-                    let ft = m.ret.clone();
-                    let receiver = self.lir.push(Kind::Temp(instance), class_type.clone());
-                    let args = self.lir.list(&[]);
-                    let read = self.lir.push(Kind::Call { method: m, at: None, receiver, args, order: None }, ft.clone());
-                    let held = self.lir.temp();
-                    out.push(self.lir.push(Kind::Let { temp: held, init: read }, ErasedType::V));
-                    if !self.lower_pattern(sub, held, &ft, fail, out) {
-                        return false;
-                    }
-                }
-                true
-            }
-            TPat::Unapply(sym, call, inner) => {
+            // An extractor: its argument binder, then its call held and its result's pattern.
+            Step::Let { bound: Bound::Sym(sym), rhs: Rhs::Alias(_), role: Role::UnapplyArg, .. } => {
                 self.lower_bind(sym, temp, ty, out);
+                let Step::Let { rhs: Rhs::Call(call), role: Role::UnapplyCall, .. } = then[0] else { unreachable!("an extractor's call") };
                 let result = self.static_type(call);
                 let init = self.lower_expr(call, &result);
                 let held = self.lir.temp();
                 out.push(self.lir.push(Kind::Let { temp: held, init }, ErasedType::V));
-                self.lower_pattern(inner, held, &result, fail, out)
+                if !self.lower_steps(&then[1..], held, &result, fail, out) {
+                    return None;
+                }
             }
             // Each alternative but the last in a labelled block it leaves where it fails, the
             // match of one leaving the whole. None (a macro's `Alternatives(Nil)`; no source writes it) tests
             // nothing, as master writes it: its labelled block alone, whose label master binds all the same.
-            TPat::Alt(alts) => {
-                let alts = &prog.pat_lists[alts.range()];
+            Step::Alts { ref alts, .. } => {
                 let matched = self.lir.label();
-                let Some((&last, rest)) = alts.split_last() else {
+                let Some((last, rest)) = alts.split_last() else {
                     let result = self.lir.push(Kind::Unit, ErasedType::V);
                     let stmts = self.lir.list(&[]);
                     let body = self.lir.push(Kind::Block { stmts, result }, ErasedType::V);
                     out.push(self.lir.push(Kind::Labeled { label: matched, body }, ErasedType::V));
-                    return true;
+                    return Some(next);
                 };
                 // An alternative binds no variable: one that can never match leaves its block all the same.
                 let mut may = false;
                 let mut nodes = Vec::new();
-                for &alt in rest {
+                for alt in rest {
                     let next = self.lir.label();
                     let mut stmts = Vec::new();
-                    may |= self.lower_pattern(alt, temp, ty, next, &mut stmts);
+                    may |= self.lower_steps(alt, temp, ty, next, &mut stmts);
                     let result = self.lir.push(Kind::Break { label: matched, value: None }, ErasedType::V);
                     let stmts = self.lir.list(&stmts);
                     let body = self.lir.push(Kind::Block { stmts, result }, ErasedType::V);
                     nodes.push(self.lir.push(Kind::Labeled { label: next, body }, ErasedType::V));
                 }
                 let mut stmts = Vec::new();
-                may |= self.lower_pattern(last, temp, ty, fail, &mut stmts);
+                may |= self.lower_steps(last, temp, ty, fail, &mut stmts);
                 let stmts = self.lir.list(&stmts);
                 let result = self.lir.push(Kind::Unit, ErasedType::V);
                 let result = self.lir.push(Kind::Block { stmts, result }, ErasedType::V);
                 let stmts = self.lir.list(&nodes);
                 let body = self.lir.push(Kind::Block { stmts, result }, ErasedType::V);
                 out.push(self.lir.push(Kind::Labeled { label: matched, body }, ErasedType::V));
-                may
+                if !may {
+                    return None;
+                }
             }
-            // The runtime's `seqPattern` gives the elements the pattern names and the rest, behind
-            // a first element, or an empty array where the sequence does not fit.
-            TPat::Seq(items, rest) => {
-                let items = &prog.pat_lists[items.range()];
-                let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
-                let value = self.lir.push(Kind::Temp(temp), ty.clone());
-                let sequence = self.lower_adapt(value, ty, &object);
-                let count = self.lir.push(Kind::Int(items.len() as i32), ErasedType::I);
-                let has_rest = self.lir.push(Kind::Bool(rest.is_some()), ErasedType::Z);
-                let Some(&helper) = cx.helpers.defs.get("seqPattern") else {
-                    self.unsupported("the runtime helper seqPattern is missing");
-                    out.push(self.lir.push(Kind::Break { label: fail, value: None }, ErasedType::V));
-                    return false;
-                };
-                let method = self.mref(helper);
-                let ret = method.ret.clone();
-                let args = self.lir.list(&[sequence, count, has_rest]);
-                let parts = self.lir.push(Kind::Helper { method, args }, ret.clone());
-                let init = self.lower_adapt(parts, &ret, &array);
-                let parts = self.lir.temp();
-                out.push(self.lir.push(Kind::Let { temp: parts, init }, ErasedType::V));
-                let held = self.lir.push(Kind::Temp(parts), array.clone());
-                let length = self.lir.push(Kind::ArrayLength(held), ErasedType::I);
-                let zero = self.lir.push(Kind::Int(0), ErasedType::I);
-                let empty = self.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Sign, left: length, right: zero }, ErasedType::Z);
-                let leave = self.lir.push(Kind::Break { label: fail, value: None }, ErasedType::V);
-                out.push(self.lir.push(Kind::If { cond: empty, then: leave, otherwise: None }, ErasedType::V));
-                for (i, &sub) in items.iter().chain(rest.iter()).enumerate() {
-                    if matches!(prog.pats[sub.idx()], TPat::Wildcard) {
-                        continue;
-                    }
-                    let array_value = self.lir.push(Kind::Temp(parts), array.clone());
-                    let index = self.lir.push(Kind::Int(i as i32 + 1), ErasedType::I);
-                    let init = self.lir.push(Kind::ArrayLoad { array: array_value, index }, object.clone());
-                    let element = self.lir.temp();
-                    out.push(self.lir.push(Kind::Let { temp: element, init }, ErasedType::V));
-                    if !self.lower_pattern(sub, element, &object, fail, out) {
-                        return false;
+            Step::Let { rhs: Rhs::SeqHelper { items, rest, .. }, .. } => {
+                if !self.lower_sequence(items, rest, then, temp, ty, fail, out) {
+                    return None;
+                }
+            }
+            // A case's guard, after its pattern.
+            Step::Test { kind: TestKind::Guard(g), .. } => {
+                let guard = self.lower_cond(g);
+                self.lower_fail_unless(guard, fail, out);
+            }
+            ref other => unreachable!("a step its parent's step lowers: {:?}", other),
+        }
+        Some(next)
+    }
+
+    /// `case v` and `case null` against the value in `temp`: by identity, as numbers, or by runtime equality.
+    fn lower_equal(&mut self, e: TExprId, strict: bool, temp: TempId, ty: &ErasedType, fail: LabelId, out: &mut Vec<LirId>) {
+        let prog = self.cx.input.prog;
+        let object = ErasedType::object();
+        let et = self.static_type(e);
+        if strict && ty.is_ref() && et.is_ref() && !et.is_string() && !ty.is_string() {
+            // `case _: x.type`: the identity of a reference; `case null`, the null constant's.
+            let expected = match prog.expr(e) {
+                TExpr::Null => self.lir.push(Kind::Null, ErasedType::object()),
+                _ => self.lower_expr(e, &et),
+            };
+            let value = self.lir.push(Kind::Temp(temp), ty.clone());
+            // `case null`'s test stands at the pattern's line, which the null it drops would have marked
+            // (`Gen::write_compare`): the scrutinee's load takes it.
+            if let TExpr::Null = prog.expr(e) {
+                self.lir.nodes[value.0 as usize].of = Some(e);
+            }
+            let same = self.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Identity, left: expected, right: value }, ErasedType::Z);
+            return self.lower_fail_unless(same, fail, out);
+        }
+        // A value class's underlying value compares as its box (`pattern == scrutinee`,
+        // dotty's `EqualTest`, `PatternMatcher.scala` 811-812, the operand boxed by erasure).
+        let vc_temp = self.vc_temps.contains_key(&temp);
+        // So does a value class's instance as the pattern, against a primitive too (`1 match
+        // { case `key` => }` for a `key: V` is `key == 1`, `V`'s box unequal to the number).
+        let vc_pattern = self.recorded_type(e).and_then(|rt| self.value_class_of(rt)).is_some();
+        if !ty.is_ref() && !vc_temp && !vc_pattern && !et.is_ref() && et != ErasedType::V {
+            use crate::typer::prims::*;
+            let k = match (ty.numeric_rank(), et.numeric_rank()) {
+                (Some(a), Some(b)) if a.max(b) == R_DOUBLE => ErasedType::D,
+                (Some(a), Some(b)) if a.max(b) == R_FLOAT => ErasedType::F,
+                (Some(a), Some(b)) if a.max(b) == R_LONG => ErasedType::J,
+                _ => ErasedType::I,
+            };
+            let value = self.lir.push(Kind::Temp(temp), ty.clone());
+            let left = self.lower_adapt(value, ty, &k);
+            let right = self.lower_expr(e, &k);
+            let equal = self.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Numbers, left, right }, ErasedType::Z);
+            return self.lower_fail_unless(equal, fail, out);
+        }
+        let expected = self.lower_expr(e, &object);
+        let value = self.lower_temp_as(temp, ty, &object);
+        let equal = self.lower_helper_test("equal", &[expected, value]);
+        self.lower_fail_unless(equal, fail, out);
+    }
+
+    /// A class pattern's test of the value in `temp`, then its fields' steps (`then`: each field's let and its
+    /// continuation); false where the value is never an instance or a field's pattern never matches.
+    fn lower_class_test(&mut self, c: crate::types::ClassId, then: &[matcher::Step], temp: TempId, ty: &ErasedType, fail: LabelId, out: &mut Vec<LirId>) -> bool {
+        use matcher::{Rhs, Step};
+        let cx = self.cx;
+        // A value class's pattern on its underlying value, which the typer let through as
+        // the class itself: no test, and its one field is the value.
+        if cx.input.syms.class(c).value_class {
+            let u = self.vc_underlying(c);
+            let held = if self.is_vc_mark(&u) { self.is_vc_mark(ty) } else { *ty == u };
+            if held {
+                let mut may = true;
+                if let Some(Step::Let { rhs: Rhs::Field(..), .. }) = then.first() {
+                    // The field's pattern matches the field, the value as itself, not the
+                    // class it is the underlying value of: dotty extracts `x1._1` before
+                    // testing it (`matchArgsPlan`, `PatternMatcher.scala` 253-262, 411-414), so
+                    // `case C(`key`)` compares the `Int` (811-812).
+                    let outer = self.vc_temps.remove(&temp);
+                    may = self.lower_steps(&then[1..1 + then[0].scope()], temp, ty, fail, out);
+                    if let Some(outer) = outer {
+                        self.vc_temps.insert(temp, outer);
                     }
                 }
-                true
+                return may;
             }
         }
+        // The test, and the value at the class where a field is read (wildcards only read none).
+        let instance = match self.lower_class_instance(c, temp, ty, !then.is_empty(), fail, out) {
+            ClassInstance::Never => return false,
+            ClassInstance::Tested => return true,
+            ClassInstance::Held(instance) => instance,
+        };
+        let class_type = ErasedType::L(self.class_name(c));
+        let mut j = 0;
+        while j < then.len() {
+            let Step::Let { rhs: Rhs::Field(_, field), .. } = then[j] else { unreachable!("a class pattern's field") };
+            let end = j + 1 + then[j].scope();
+            let m = self.mref(field);
+            let ft = m.ret.clone();
+            let receiver = self.lir.push(Kind::Temp(instance), class_type.clone());
+            let args = self.lir.list(&[]);
+            let read = self.lir.push(Kind::Call { method: m, at: None, receiver, args, order: None }, ft.clone());
+            let held = self.lir.temp();
+            out.push(self.lir.push(Kind::Let { temp: held, init: read }, ErasedType::V));
+            if !self.lower_steps(&then[j + 1..end], held, &ft, fail, out) {
+                return false;
+            }
+            j = end;
+        }
+        true
+    }
+
+    /// The runtime's `seqPattern` gives the elements the pattern names and the rest, behind
+    /// a first element, or an empty array where the sequence does not fit; `then` is the test of its result, whose
+    /// continuation is each element's let and its steps.
+    #[allow(clippy::too_many_arguments)]
+    fn lower_sequence(&mut self, items: u32, rest: bool, then: &[matcher::Step], temp: TempId, ty: &ErasedType, fail: LabelId, out: &mut Vec<LirId>) -> bool {
+        use matcher::{Rhs, Step};
+        let cx = self.cx;
+        let object = ErasedType::object();
+        let array = ErasedType::L(Rc::from(OBJECT_ARRAY));
+        let value = self.lir.push(Kind::Temp(temp), ty.clone());
+        let sequence = self.lower_adapt(value, ty, &object);
+        let count = self.lir.push(Kind::Int(items as i32), ErasedType::I);
+        let has_rest = self.lir.push(Kind::Bool(rest), ErasedType::Z);
+        let Some(&helper) = cx.helpers.defs.get("seqPattern") else {
+            self.unsupported("the runtime helper seqPattern is missing");
+            out.push(self.lir.push(Kind::Break { label: fail, value: None }, ErasedType::V));
+            return false;
+        };
+        let method = self.mref(helper);
+        let ret = method.ret.clone();
+        let args = self.lir.list(&[sequence, count, has_rest]);
+        let parts = self.lir.push(Kind::Helper { method, args }, ret.clone());
+        let init = self.lower_adapt(parts, &ret, &array);
+        let parts = self.lir.temp();
+        out.push(self.lir.push(Kind::Let { temp: parts, init }, ErasedType::V));
+        let held = self.lir.push(Kind::Temp(parts), array.clone());
+        let length = self.lir.push(Kind::ArrayLength(held), ErasedType::I);
+        let zero = self.lir.push(Kind::Int(0), ErasedType::I);
+        let empty = self.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Sign, left: length, right: zero }, ErasedType::Z);
+        let leave = self.lir.push(Kind::Break { label: fail, value: None }, ErasedType::V);
+        out.push(self.lir.push(Kind::If { cond: empty, then: leave, otherwise: None }, ErasedType::V));
+        // The helper's result tested above; its continuation is the elements'.
+        let elements = &then[1..1 + then[0].scope()];
+        let mut j = 0;
+        while j < elements.len() {
+            let Step::Let { rhs: Rhs::Elem(_, i), .. } = elements[j] else { unreachable!("a sequence pattern's element") };
+            let end = j + 1 + elements[j].scope();
+            let array_value = self.lir.push(Kind::Temp(parts), array.clone());
+            let index = self.lir.push(Kind::Int(i as i32 + 1), ErasedType::I);
+            let init = self.lir.push(Kind::ArrayLoad { array: array_value, index }, object.clone());
+            let element = self.lir.temp();
+            out.push(self.lir.push(Kind::Let { temp: element, init }, ErasedType::V));
+            if !self.lower_steps(&elements[j + 1..end], element, &object, fail, out) {
+                return false;
+            }
+            j = end;
+        }
+        true
     }
 
     /// The pattern's variable `sym` declared with the value in `temp`, of the type `ty`: brought
