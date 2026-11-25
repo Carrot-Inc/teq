@@ -2736,6 +2736,22 @@ right_assoc_order_quoted	pass	-
 right_assoc_order_tuple_cons	pass	-	
 right_assoc_order_two_clauses	pass	-	
 right_assoc_order_using	pass	-	
+right_assoc_params_leading_using	pass	-	
+right_assoc_params_method_using_first	pass	-	
+right_assoc_params_trailing_using	pass	-	
+right_assoc_params_two_clauses	pass	-	
+right_assoc_read_inline_written	fail	-	output
+right_assoc_read_leading_using	fail	-	output
+right_assoc_read_mechanics	fail	-	compile
+right_assoc_read_named_later	pass	-	
+right_assoc_read_null_receiver	pass	-	
+right_assoc_read_order_infix	pass	-	
+right_assoc_read_order_written	fail	-	output
+right_assoc_read_poly_export	fail	-	compile
+right_assoc_read_pure_throw	pass	-	
+right_assoc_read_receiver_default	fail	-	compile
+right_assoc_read_repeated	pass	-	
+right_assoc_read_selections	fail	-	compile
 right_assoc_throwing_operand_order	pass	-	
 root_method_calls	pass	-	
 root_method_singleton_chain	pass	-	

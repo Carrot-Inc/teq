@@ -2670,6 +2670,22 @@ cases/right_assoc_order_quoted	pass	-
 cases/right_assoc_order_tuple_cons	pass	-	
 cases/right_assoc_order_two_clauses	pass	-	
 cases/right_assoc_order_using	pass	-	
+cases/right_assoc_params_leading_using	pass	-	
+cases/right_assoc_params_method_using_first	pass	-	
+cases/right_assoc_params_trailing_using	pass	-	
+cases/right_assoc_params_two_clauses	pass	-	
+cases/right_assoc_read_inline_written	pass	-	
+cases/right_assoc_read_leading_using	pass	-	
+cases/right_assoc_read_mechanics	cannot run	-	no leg builds
+cases/right_assoc_read_named_later	pass	-	
+cases/right_assoc_read_null_receiver	pass	-	
+cases/right_assoc_read_order_infix	pass	-	
+cases/right_assoc_read_order_written	pass	-	
+cases/right_assoc_read_poly_export	cannot run	-	no leg builds
+cases/right_assoc_read_pure_throw	pass	-	
+cases/right_assoc_read_receiver_default	cannot run	-	no leg builds
+cases/right_assoc_read_repeated	pass	-	
+cases/right_assoc_read_selections	cannot run	-	no leg builds
 cases/right_assoc_throwing_operand_order	pass	-	
 cases/root_method_calls	pass	-	
 cases/root_method_singleton_chain	pass	-	

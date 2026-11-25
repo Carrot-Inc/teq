@@ -108,7 +108,7 @@ jobs:
             minutes: 40
             jars: true
           - group: libraries
-            suites: init-view classfile nir native-link classpath stdlib std-kinds
+            suites: init-view classfile nir native-link classpath stdlib std-kinds right-assoc right-assoc-readers
             minutes: 35
             jars: true
           # A java.lang class written in full, 863 programs on four legs: some eight minutes on four cores.

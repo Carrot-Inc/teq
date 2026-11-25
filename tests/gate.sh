@@ -236,6 +236,8 @@ machine=(
   "jvm-21 ./tests/run_jvm.sh --java-output-version=21"
   "pairs-twin ./tests/pairs-twin.sh"
   "constants ./tests/constants/run.sh"
+  "right-assoc ./tests/right-assoc/run.sh"
+  "right-assoc-readers python3 tests/right-assoc/readers.py"
   "interp ./tests/run_interp.sh"
   "interp-script ./tests/interp-script.sh"
   "fix ./teq interp tests/fix.scala"

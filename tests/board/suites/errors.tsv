@@ -963,6 +963,11 @@ right_assoc_ext	fail	-	missing '14:15: error: value *: is not a member of Int.'
 right_assoc_extension_calls	pass	-	
 right_assoc_extension_prefix	pass	-	
 right_assoc_extension_selected	pass	-	
+right_assoc_read_default_scope	fail	-	exit code 0
+right_assoc_read_dependent	fail	-	exit code 0
+right_assoc_read_forward_reference	fail	-	missing '2:15: error: right-associative extension method cannot have a forward reference to r'
+right_assoc_read_override	fail	-	missing '6:18: error: error overriding method +: in trait Ordinary of type (r: String)(l: Int): Int;'
+right_assoc_read_single_parameter	pass	-	
 sam_by_name_declared	pass	-	
 sam_context_function_result	pass	-	
 sam_lambda_declared_param	pass	-	

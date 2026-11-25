@@ -74,6 +74,8 @@ modules.1/2 553
 modules.1/2@16 316
 modules.2/2 642
 modules.2/2@16 310
+right-assoc 89
+right-assoc-readers 1
 tasty-exec 74
 # estimated: tasty-exec on sixteen CPUs, from its 57 s on eight by every measured line's ratio 0.89 (17 lines)
 tasty-exec@16 51

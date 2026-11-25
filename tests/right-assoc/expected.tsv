@@ -1,0 +1,679 @@
+# tests/right-assoc/capture.sh writes this file: scalac 3.8.4's line of each cell of tests/right-assoc/gen.py.
+e-rf_gen_quiet_one_infix_impure	run	c_impure b|1|g n1,b
+e-rf_gen_quiet_one_infix_mixed	run	c_mixed b|1|g n1
+e-rf_gen_quiet_one_infix_pure	run	c_pure b|1|g
+e-rf_gen_quiet_one_written_impure	run	c_impure b|1|g b,n1
+e-rf_gen_quiet_one_written_mixed	run	c_mixed b|1|g n1
+e-rf_gen_quiet_one_written_pure	run	c_pure b|1|g
+e-rf_gen_quiet_two_infix_impure	run	c_impure b|1|3|g n1,b
+e-rf_gen_quiet_two_infix_mixed	run	c_mixed b|1|3|g n1
+e-rf_gen_quiet_two_infix_pure	run	c_pure b|1|3|g
+e-rf_gen_quiet_two_written_impure	run	c_impure b|1|3|g b,n1
+e-rf_gen_quiet_two_written_mixed	run	c_mixed b|1|3|g n1
+e-rf_gen_quiet_two_written_pure	run	c_pure b|1|3|g
+e-rf_gen_stmt_one_infix_impure	run	c_impure b|1|g n1,c,b
+e-rf_gen_stmt_one_infix_mixed	run	c_mixed b|1|g n1,c
+e-rf_gen_stmt_one_infix_pure	run	c_pure b|1|g c
+e-rf_gen_stmt_one_written_impure	run	c_impure b|1|g c,b,n1
+e-rf_gen_stmt_one_written_mixed	run	c_mixed b|1|g c,n1
+e-rf_gen_stmt_one_written_pure	run	c_pure b|1|g c
+e-rf_gen_stmt_two_infix_impure	run	c_impure b|1|3|g n1,c,b
+e-rf_gen_stmt_two_infix_mixed	run	c_mixed b|1|3|g n1,c
+e-rf_gen_stmt_two_infix_pure	run	c_pure b|1|3|g c
+e-rf_gen_stmt_two_written_impure	run	c_impure b|1|3|g c,b,n1
+e-rf_gen_stmt_two_written_mixed	run	c_mixed b|1|3|g c,n1
+e-rf_gen_stmt_two_written_pure	run	c_pure b|1|3|g c
+e-rf_int_quiet_one_infix_impure	run	c_impure 2|1|7 n1,n2
+e-rf_int_quiet_one_infix_mixed	run	c_mixed 2|1|7 n1
+e-rf_int_quiet_one_infix_pure	run	c_pure 2|1|7
+e-rf_int_quiet_one_written_impure	run	c_impure 2|1|7 n2,n1
+e-rf_int_quiet_one_written_mixed	run	c_mixed 2|1|7 n1
+e-rf_int_quiet_one_written_pure	run	c_pure 2|1|7
+e-rf_int_quiet_two_infix_impure	run	c_impure 2|1|3|7 n1,n2
+e-rf_int_quiet_two_infix_mixed	run	c_mixed 2|1|3|7 n1
+e-rf_int_quiet_two_infix_pure	run	c_pure 2|1|3|7
+e-rf_int_quiet_two_written_impure	run	c_impure 2|1|3|7 n2,n1
+e-rf_int_quiet_two_written_mixed	run	c_mixed 2|1|3|7 n1
+e-rf_int_quiet_two_written_pure	run	c_pure 2|1|3|7
+e-rf_int_stmt_one_infix_impure	run	c_impure 2|1|7 n1,c,n2
+e-rf_int_stmt_one_infix_mixed	run	c_mixed 2|1|7 n1,c
+e-rf_int_stmt_one_infix_pure	run	c_pure 2|1|7 c
+e-rf_int_stmt_one_written_impure	run	c_impure 2|1|7 c,n2,n1
+e-rf_int_stmt_one_written_mixed	run	c_mixed 2|1|7 c,n1
+e-rf_int_stmt_one_written_pure	run	c_pure 2|1|7 c
+e-rf_int_stmt_two_infix_impure	run	c_impure 2|1|3|7 n1,c,n2
+e-rf_int_stmt_two_infix_mixed	run	c_mixed 2|1|3|7 n1,c
+e-rf_int_stmt_two_infix_pure	run	c_pure 2|1|3|7 c
+e-rf_int_stmt_two_written_impure	run	c_impure 2|1|3|7 c,n2,n1
+e-rf_int_stmt_two_written_mixed	run	c_mixed 2|1|3|7 c,n1
+e-rf_int_stmt_two_written_pure	run	c_pure 2|1|3|7 c
+e-rf_str_quiet_one_infix_impure	run	c_impure b|a|v a,b
+e-rf_str_quiet_one_infix_mixed	run	c_mixed b|a|v a
+e-rf_str_quiet_one_infix_pure	run	c_pure b|a|v
+e-rf_str_quiet_one_written_impure	run	c_impure b|a|v b,a
+e-rf_str_quiet_one_written_mixed	run	c_mixed b|a|v a
+e-rf_str_quiet_one_written_pure	run	c_pure b|a|v
+e-rf_str_quiet_two_infix_impure	run	c_impure b|a|3|v a,b
+e-rf_str_quiet_two_infix_mixed	run	c_mixed b|a|3|v a
+e-rf_str_quiet_two_infix_pure	run	c_pure b|a|3|v
+e-rf_str_quiet_two_written_impure	run	c_impure b|a|3|v b,a
+e-rf_str_quiet_two_written_mixed	run	c_mixed b|a|3|v a
+e-rf_str_quiet_two_written_pure	run	c_pure b|a|3|v
+e-rf_str_stmt_one_infix_impure	run	c_impure b|a|v a,c,b
+e-rf_str_stmt_one_infix_mixed	run	c_mixed b|a|v a,c
+e-rf_str_stmt_one_infix_pure	run	c_pure b|a|v c
+e-rf_str_stmt_one_written_impure	run	c_impure b|a|v c,b,a
+e-rf_str_stmt_one_written_mixed	run	c_mixed b|a|v c,a
+e-rf_str_stmt_one_written_pure	run	c_pure b|a|v c
+e-rf_str_stmt_two_infix_impure	run	c_impure b|a|3|v a,c,b
+e-rf_str_stmt_two_infix_mixed	run	c_mixed b|a|3|v a,c
+e-rf_str_stmt_two_infix_pure	run	c_pure b|a|3|v c
+e-rf_str_stmt_two_written_impure	run	c_impure b|a|3|v c,b,a
+e-rf_str_stmt_two_written_mixed	run	c_mixed b|a|3|v c,a
+e-rf_str_stmt_two_written_pure	run	c_pure b|a|3|v c
+ext-dflt-infix-impure	run	b1 n1,b
+ext-dflt-infix-initpath	run	b6 p,b
+ext-dflt-infix-path	run	b5 b
+ext-dflt-infix-val	run	b0 b
+ext-dflt-written-impure	run	d1 d,n1
+ext-dflt-written-initpath	run	d6 d,p
+ext-dflt-written-path	run	d5 d
+ext-dflt-written-val	run	d0 d
+ext-infix-impure-impure	run	b1 n1,b
+ext-infix-impure-initpath	run	s71 n1,p2
+ext-infix-impure-lit	run	a1 n1
+ext-infix-impure-val	run	v01 n1
+ext-infix-initpath-impure	run	b6 p,b
+ext-infix-initpath-initpath	run	s76 p,p2
+ext-infix-initpath-lit	run	a6 p
+ext-infix-initpath-val	run	v06 p
+ext-infix-path-impure	run	b5 b
+ext-infix-path-initpath	run	s75 p2
+ext-infix-path-lit	run	a5
+ext-infix-path-val	run	v05
+ext-infix-val-impure	run	b0 b
+ext-infix-val-initpath	run	s70 p2
+ext-infix-val-lit	run	a0
+ext-infix-val-val	run	v00
+ext-using-infix-impure	run	b1u n1,b
+ext-using-infix-initpath	run	b6u p,b
+ext-using-infix-path	run	b5u b
+ext-using-infix-val	run	b0u b
+ext-using-written-impure	run	b1u b,n1
+ext-using-written-initpath	run	b6u b,p
+ext-using-written-path	run	b5u b
+ext-using-written-val	run	b0u b
+ext-written-impure-impure	run	b1 b,n1
+ext-written-impure-initpath	run	s71 p2,n1
+ext-written-impure-lit	run	a1 n1
+ext-written-impure-val	run	v01 n1
+ext-written-initpath-impure	run	b6 b,p
+ext-written-initpath-initpath	run	s76 p2,p
+ext-written-initpath-lit	run	a6 p
+ext-written-initpath-val	run	v06 p
+ext-written-path-impure	run	b5 b
+ext-written-path-initpath	run	s75 p2
+ext-written-path-lit	run	a5
+ext-written-path-val	run	v05
+ext-written-val-impure	run	b0 b
+ext-written-val-initpath	run	s70 p2
+ext-written-val-lit	run	a0
+ext-written-val-val	run	v00
+extobj-infix-impure-impure	run	b1 n1,q,b
+extobj-infix-impure-initpath	run	s71 n1,q,p2
+extobj-infix-impure-lit	run	a1 n1,q
+extobj-infix-impure-val	run	v01 n1,q
+extobj-infix-initpath-impure	run	b6 p,q,b
+extobj-infix-initpath-initpath	run	s76 p,q,p2
+extobj-infix-initpath-lit	run	a6 p,q
+extobj-infix-initpath-val	run	v06 p,q
+extobj-infix-path-impure	run	b5 q,b
+extobj-infix-path-initpath	run	s75 q,p2
+extobj-infix-path-lit	run	a5 q
+extobj-infix-path-val	run	v05 q
+extobj-infix-val-impure	run	b0 q,b
+extobj-infix-val-initpath	run	s70 q,p2
+extobj-infix-val-lit	run	a0 q
+extobj-infix-val-val	run	v00 q
+extobj-written-impure-impure	run	b1 q,b,n1
+extobj-written-impure-initpath	run	s71 q,p2,n1
+extobj-written-impure-lit	run	a1 q,n1
+extobj-written-impure-val	run	v01 q,n1
+extobj-written-initpath-impure	run	b6 q,b,p
+extobj-written-initpath-initpath	run	s76 q,p2,p
+extobj-written-initpath-lit	run	a6 q,p
+extobj-written-initpath-val	run	v06 q,p
+extobj-written-path-impure	run	b5 q,b
+extobj-written-path-initpath	run	s75 q,p2
+extobj-written-path-lit	run	a5 q
+extobj-written-path-val	run	v05 q
+extobj-written-val-impure	run	b0 q,b
+extobj-written-val-initpath	run	s70 q,p2
+extobj-written-val-lit	run	a0 q
+extobj-written-val-val	run	v00 q
+f-lt_cap_one_infix	run	c_imp_imp_kept a17 n1,a | c_imp_imp_any a17 n1,a | c_imp_imp_dropped n1,a | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a17 a | c_lit_imp_any a17 a | c_lit_imp_dropped a | c_lit_lit_kept a17 | c_lit_lit_any a17 | c_lit_lit_dropped | c_val_val_kept a17 | c_val_val_any a17 | c_val_val_dropped | c_fld_imp_kept a17 a | c_fld_imp_any a17 a | c_fld_imp_dropped a | c_fld_fld_kept a17 | c_fld_fld_any a17 | c_fld_fld_dropped | c_var_imp_kept a17 a | c_var_imp_any a17 a | c_var_imp_dropped a | c_obj_imp_kept a37 I,a | c_obj_imp_any a37 I,a | c_obj_imp_dropped I,a | c_imp_obj_kept o17 n1,I | c_imp_obj_any o17 n1,I | c_imp_obj_dropped n1,I | c_obj_lit_kept a37 I | c_obj_lit_any a37 I | c_obj_lit_dropped I | c_obj_obj_kept p37 I,J | c_obj_obj_any p37 I,J | c_obj_obj_dropped I,J
+f-lt_cap_one_infix_byname	run	c_imp_imp_kept a17 a,n1 | c_imp_imp_any a17 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a17 a | c_lit_imp_any a17 a | c_lit_imp_dropped a | c_lit_lit_kept a17 | c_lit_lit_any a17 | c_lit_lit_dropped | c_val_val_kept a17 | c_val_val_any a17 | c_val_val_dropped | c_fld_imp_kept a17 a | c_fld_imp_any a17 a | c_fld_imp_dropped a | c_fld_fld_kept a17 | c_fld_fld_any a17 | c_fld_fld_dropped | c_var_imp_kept a17 a | c_var_imp_any a17 a | c_var_imp_dropped a | c_obj_imp_kept a37 a,I | c_obj_imp_any a37 a,I | c_obj_imp_dropped a,I | c_imp_obj_kept o17 I,n1 | c_imp_obj_any o17 I,n1 | c_imp_obj_dropped I,n1 | c_obj_lit_kept a37 I | c_obj_lit_any a37 I | c_obj_lit_dropped I | c_obj_obj_kept p37 J,I | c_obj_obj_any p37 J,I | c_obj_obj_dropped J,I
+f-lt_cap_one_written	run	c_imp_imp_kept a17 a,n1 | c_imp_imp_any a17 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a17 a | c_lit_imp_any a17 a | c_lit_imp_dropped a | c_lit_lit_kept a17 | c_lit_lit_any a17 | c_lit_lit_dropped | c_val_val_kept a17 | c_val_val_any a17 | c_val_val_dropped | c_fld_imp_kept a17 a | c_fld_imp_any a17 a | c_fld_imp_dropped a | c_fld_fld_kept a17 | c_fld_fld_any a17 | c_fld_fld_dropped | c_var_imp_kept a17 a | c_var_imp_any a17 a | c_var_imp_dropped a | c_obj_imp_kept a37 a,I | c_obj_imp_any a37 a,I | c_obj_imp_dropped a,I | c_imp_obj_kept o17 I,n1 | c_imp_obj_any o17 I,n1 | c_imp_obj_dropped I,n1 | c_obj_lit_kept a37 I | c_obj_lit_any a37 I | c_obj_lit_dropped I | c_obj_obj_kept p37 J,I | c_obj_obj_any p37 J,I | c_obj_obj_dropped J,I
+f-lt_cap_one_written_byname	run	c_imp_imp_kept a17 a,n1 | c_imp_imp_any a17 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a17 a | c_lit_imp_any a17 a | c_lit_imp_dropped a | c_lit_lit_kept a17 | c_lit_lit_any a17 | c_lit_lit_dropped | c_val_val_kept a17 | c_val_val_any a17 | c_val_val_dropped | c_fld_imp_kept a17 a | c_fld_imp_any a17 a | c_fld_imp_dropped a | c_fld_fld_kept a17 | c_fld_fld_any a17 | c_fld_fld_dropped | c_var_imp_kept a17 a | c_var_imp_any a17 a | c_var_imp_dropped a | c_obj_imp_kept a37 a,I | c_obj_imp_any a37 a,I | c_obj_imp_dropped a,I | c_imp_obj_kept o17 I,n1 | c_imp_obj_any o17 I,n1 | c_imp_obj_dropped I,n1 | c_obj_lit_kept a37 I | c_obj_lit_any a37 I | c_obj_lit_dropped I | c_obj_obj_kept p37 J,I | c_obj_obj_any p37 J,I | c_obj_obj_dropped J,I
+f-lt_cap_two_infix	run	c_imp_imp_kept a127 n1,a,n2 | c_imp_imp_any a127 n1,a,n2 | c_imp_imp_dropped n1,a,n2 | c_imp_lit_kept a127 n1,n2 | c_imp_lit_any a127 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a127 n1,n2 | c_imp_val_any a127 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a127 a,n2 | c_lit_imp_any a127 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a127 n2 | c_lit_lit_any a127 n2 | c_lit_lit_dropped n2 | c_val_val_kept a127 n2 | c_val_val_any a127 n2 | c_val_val_dropped n2 | c_fld_imp_kept a127 a,n2 | c_fld_imp_any a127 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a127 n2 | c_fld_fld_any a127 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a127 a,n2 | c_var_imp_any a127 a,n2 | c_var_imp_dropped a,n2 | c_obj_imp_kept a327 I,a,n2 | c_obj_imp_any a327 I,a,n2 | c_obj_imp_dropped I,a,n2 | c_imp_obj_kept o127 n1,I,n2 | c_imp_obj_any o127 n1,I,n2 | c_imp_obj_dropped n1,I,n2 | c_obj_lit_kept a327 I,n2 | c_obj_lit_any a327 I,n2 | c_obj_lit_dropped I,n2 | c_obj_obj_kept p327 I,J,n2 | c_obj_obj_any p327 I,J,n2 | c_obj_obj_dropped I,J,n2
+f-lt_cap_two_written	run	c_imp_imp_kept a127 a,n1,n2 | c_imp_imp_any a127 a,n1,n2 | c_imp_imp_dropped a,n1,n2 | c_imp_lit_kept a127 n1,n2 | c_imp_lit_any a127 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a127 n1,n2 | c_imp_val_any a127 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a127 a,n2 | c_lit_imp_any a127 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a127 n2 | c_lit_lit_any a127 n2 | c_lit_lit_dropped n2 | c_val_val_kept a127 n2 | c_val_val_any a127 n2 | c_val_val_dropped n2 | c_fld_imp_kept a127 a,n2 | c_fld_imp_any a127 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a127 n2 | c_fld_fld_any a127 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a127 a,n2 | c_var_imp_any a127 a,n2 | c_var_imp_dropped a,n2 | c_obj_imp_kept a327 a,I,n2 | c_obj_imp_any a327 a,I,n2 | c_obj_imp_dropped a,I,n2 | c_imp_obj_kept o127 I,n1,n2 | c_imp_obj_any o127 I,n1,n2 | c_imp_obj_dropped I,n1,n2 | c_obj_lit_kept a327 I,n2 | c_obj_lit_any a327 I,n2 | c_obj_lit_dropped I,n2 | c_obj_obj_kept p327 J,I,n2 | c_obj_obj_any p327 J,I,n2 | c_obj_obj_dropped J,I,n2
+f-lt_cap_using_infix	run	c_imp_imp_kept a157 n1,a | c_imp_imp_any a157 n1,a | c_imp_imp_dropped n1,a | c_imp_lit_kept a157 n1 | c_imp_lit_any a157 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a157 n1 | c_imp_val_any a157 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a157 a | c_lit_imp_any a157 a | c_lit_imp_dropped a | c_lit_lit_kept a157 | c_lit_lit_any a157 | c_lit_lit_dropped | c_val_val_kept a157 | c_val_val_any a157 | c_val_val_dropped | c_fld_imp_kept a157 a | c_fld_imp_any a157 a | c_fld_imp_dropped a | c_fld_fld_kept a157 | c_fld_fld_any a157 | c_fld_fld_dropped | c_var_imp_kept a157 a | c_var_imp_any a157 a | c_var_imp_dropped a | c_obj_imp_kept a357 I,a | c_obj_imp_any a357 I,a | c_obj_imp_dropped I,a | c_imp_obj_kept o157 n1,I | c_imp_obj_any o157 n1,I | c_imp_obj_dropped n1,I | c_obj_lit_kept a357 I | c_obj_lit_any a357 I | c_obj_lit_dropped I | c_obj_obj_kept p357 I,J | c_obj_obj_any p357 I,J | c_obj_obj_dropped I,J
+f-lt_cap_using_written	run	c_imp_imp_kept a157 a,n1 | c_imp_imp_any a157 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a157 n1 | c_imp_lit_any a157 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a157 n1 | c_imp_val_any a157 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a157 a | c_lit_imp_any a157 a | c_lit_imp_dropped a | c_lit_lit_kept a157 | c_lit_lit_any a157 | c_lit_lit_dropped | c_val_val_kept a157 | c_val_val_any a157 | c_val_val_dropped | c_fld_imp_kept a157 a | c_fld_imp_any a157 a | c_fld_imp_dropped a | c_fld_fld_kept a157 | c_fld_fld_any a157 | c_fld_fld_dropped | c_var_imp_kept a157 a | c_var_imp_any a157 a | c_var_imp_dropped a | c_obj_imp_kept a357 a,I | c_obj_imp_any a357 a,I | c_obj_imp_dropped a,I | c_imp_obj_kept o157 I,n1 | c_imp_obj_any o157 I,n1 | c_imp_obj_dropped I,n1 | c_obj_lit_kept a357 I | c_obj_lit_any a357 I | c_obj_lit_dropped I | c_obj_obj_kept p357 J,I | c_obj_obj_any p357 J,I | c_obj_obj_dropped J,I
+f-lt_nocap_one_infix	run	c_imp_imp_kept a1 n1,a | c_imp_imp_any a1 n1,a | c_imp_imp_dropped n1,a | c_imp_lit_kept a1 n1 | c_imp_lit_any a1 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a1 n1 | c_imp_val_any a1 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a1 a | c_lit_imp_any a1 a | c_lit_imp_dropped a | c_lit_lit_kept a1 | c_lit_lit_any a1 | c_lit_lit_dropped | c_val_val_kept a1 | c_val_val_any a1 | c_val_val_dropped | c_fld_imp_kept a1 a | c_fld_imp_any a1 a | c_fld_imp_dropped a | c_fld_fld_kept a1 | c_fld_fld_any a1 | c_fld_fld_dropped | c_var_imp_kept a1 a | c_var_imp_any a1 a | c_var_imp_dropped a | c_obj_imp_kept a3 I,a | c_obj_imp_any a3 I,a | c_obj_imp_dropped I,a | c_imp_obj_kept o1 n1,I | c_imp_obj_any o1 n1,I | c_imp_obj_dropped n1,I | c_obj_lit_kept a3 I | c_obj_lit_any a3 I | c_obj_lit_dropped I | c_obj_obj_kept p3 I,J | c_obj_obj_any p3 I,J | c_obj_obj_dropped I,J
+f-lt_nocap_one_written	run	c_imp_imp_kept a1 a,n1 | c_imp_imp_any a1 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a1 n1 | c_imp_lit_any a1 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a1 n1 | c_imp_val_any a1 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a1 a | c_lit_imp_any a1 a | c_lit_imp_dropped a | c_lit_lit_kept a1 | c_lit_lit_any a1 | c_lit_lit_dropped | c_val_val_kept a1 | c_val_val_any a1 | c_val_val_dropped | c_fld_imp_kept a1 a | c_fld_imp_any a1 a | c_fld_imp_dropped a | c_fld_fld_kept a1 | c_fld_fld_any a1 | c_fld_fld_dropped | c_var_imp_kept a1 a | c_var_imp_any a1 a | c_var_imp_dropped a | c_obj_imp_kept a3 a,I | c_obj_imp_any a3 a,I | c_obj_imp_dropped a,I | c_imp_obj_kept o1 I,n1 | c_imp_obj_any o1 I,n1 | c_imp_obj_dropped I,n1 | c_obj_lit_kept a3 I | c_obj_lit_any a3 I | c_obj_lit_dropped I | c_obj_obj_kept p3 J,I | c_obj_obj_any p3 J,I | c_obj_obj_dropped J,I
+f-lt_nocap_two_infix	run	c_imp_imp_kept a12 n1,a,n2 | c_imp_imp_any a12 n1,a,n2 | c_imp_imp_dropped n1,a,n2 | c_imp_lit_kept a12 n1,n2 | c_imp_lit_any a12 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a12 n1,n2 | c_imp_val_any a12 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a12 a,n2 | c_lit_imp_any a12 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a12 n2 | c_lit_lit_any a12 n2 | c_lit_lit_dropped n2 | c_val_val_kept a12 n2 | c_val_val_any a12 n2 | c_val_val_dropped n2 | c_fld_imp_kept a12 a,n2 | c_fld_imp_any a12 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a12 n2 | c_fld_fld_any a12 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a12 a,n2 | c_var_imp_any a12 a,n2 | c_var_imp_dropped a,n2 | c_obj_imp_kept a32 I,a,n2 | c_obj_imp_any a32 I,a,n2 | c_obj_imp_dropped I,a,n2 | c_imp_obj_kept o12 n1,I,n2 | c_imp_obj_any o12 n1,I,n2 | c_imp_obj_dropped n1,I,n2 | c_obj_lit_kept a32 I,n2 | c_obj_lit_any a32 I,n2 | c_obj_lit_dropped I,n2 | c_obj_obj_kept p32 I,J,n2 | c_obj_obj_any p32 I,J,n2 | c_obj_obj_dropped I,J,n2
+f-lt_nocap_two_written	run	c_imp_imp_kept a12 a,n1,n2 | c_imp_imp_any a12 a,n1,n2 | c_imp_imp_dropped a,n1,n2 | c_imp_lit_kept a12 n1,n2 | c_imp_lit_any a12 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a12 n1,n2 | c_imp_val_any a12 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a12 a,n2 | c_lit_imp_any a12 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a12 n2 | c_lit_lit_any a12 n2 | c_lit_lit_dropped n2 | c_val_val_kept a12 n2 | c_val_val_any a12 n2 | c_val_val_dropped n2 | c_fld_imp_kept a12 a,n2 | c_fld_imp_any a12 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a12 n2 | c_fld_fld_any a12 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a12 a,n2 | c_var_imp_any a12 a,n2 | c_var_imp_dropped a,n2 | c_obj_imp_kept a32 a,I,n2 | c_obj_imp_any a32 a,I,n2 | c_obj_imp_dropped a,I,n2 | c_imp_obj_kept o12 I,n1,n2 | c_imp_obj_any o12 I,n1,n2 | c_imp_obj_dropped I,n1,n2 | c_obj_lit_kept a32 I,n2 | c_obj_lit_any a32 I,n2 | c_obj_lit_dropped I,n2 | c_obj_obj_kept p32 J,I,n2 | c_obj_obj_any p32 J,I,n2 | c_obj_obj_dropped J,I,n2
+f-lt_nocap_using_infix	run	c_imp_imp_kept a15 n1,a | c_imp_imp_any a15 n1,a | c_imp_imp_dropped n1,a | c_imp_lit_kept a15 n1 | c_imp_lit_any a15 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a15 n1 | c_imp_val_any a15 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a15 a | c_lit_imp_any a15 a | c_lit_imp_dropped a | c_lit_lit_kept a15 | c_lit_lit_any a15 | c_lit_lit_dropped | c_val_val_kept a15 | c_val_val_any a15 | c_val_val_dropped | c_fld_imp_kept a15 a | c_fld_imp_any a15 a | c_fld_imp_dropped a | c_fld_fld_kept a15 | c_fld_fld_any a15 | c_fld_fld_dropped | c_var_imp_kept a15 a | c_var_imp_any a15 a | c_var_imp_dropped a | c_obj_imp_kept a35 I,a | c_obj_imp_any a35 I,a | c_obj_imp_dropped I,a | c_imp_obj_kept o15 n1,I | c_imp_obj_any o15 n1,I | c_imp_obj_dropped n1,I | c_obj_lit_kept a35 I | c_obj_lit_any a35 I | c_obj_lit_dropped I | c_obj_obj_kept p35 I,J | c_obj_obj_any p35 I,J | c_obj_obj_dropped I,J
+f-lt_nocap_using_written	run	c_imp_imp_kept a15 a,n1 | c_imp_imp_any a15 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a15 n1 | c_imp_lit_any a15 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a15 n1 | c_imp_val_any a15 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a15 a | c_lit_imp_any a15 a | c_lit_imp_dropped a | c_lit_lit_kept a15 | c_lit_lit_any a15 | c_lit_lit_dropped | c_val_val_kept a15 | c_val_val_any a15 | c_val_val_dropped | c_fld_imp_kept a15 a | c_fld_imp_any a15 a | c_fld_imp_dropped a | c_fld_fld_kept a15 | c_fld_fld_any a15 | c_fld_fld_dropped | c_var_imp_kept a15 a | c_var_imp_any a15 a | c_var_imp_dropped a | c_obj_imp_kept a35 a,I | c_obj_imp_any a35 a,I | c_obj_imp_dropped a,I | c_imp_obj_kept o15 I,n1 | c_imp_obj_any o15 I,n1 | c_imp_obj_dropped I,n1 | c_obj_lit_kept a35 I | c_obj_lit_any a35 I | c_obj_lit_dropped I | c_obj_obj_kept p35 J,I | c_obj_obj_any p35 J,I | c_obj_obj_dropped J,I
+f-lx_cap_one_default	run	c_default_left d17 d,n1 | c_default_given a17 a,n1 | c_infix_given a17 n1,a
+f-lx_cap_one_infix	run	c_imp_imp_kept a17 n1,a | c_imp_imp_any a17 n1,a | c_imp_imp_dropped n1,a | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a17 a | c_lit_imp_any a17 a | c_lit_imp_dropped a | c_lit_lit_kept a17 | c_lit_lit_any a17 | c_lit_lit_dropped | c_val_val_kept a17 | c_val_val_any a17 | c_val_val_dropped | c_fld_imp_kept a17 a | c_fld_imp_any a17 a | c_fld_imp_dropped a | c_fld_fld_kept a17 | c_fld_fld_any a17 | c_fld_fld_dropped | c_var_imp_kept a17 a | c_var_imp_any a17 a | c_var_imp_dropped a | c_obj_imp_kept a37 I,a | c_obj_imp_any a37 I,a | c_obj_imp_dropped I,a | c_imp_obj_kept o17 n1,I | c_imp_obj_any o17 n1,I | c_imp_obj_dropped n1,I | c_obj_lit_kept a37 I | c_obj_lit_any a37 I | c_obj_lit_dropped I | c_obj_obj_kept p37 I,J | c_obj_obj_any p37 I,J | c_obj_obj_dropped I,J
+f-lx_cap_one_written	run	c_imp_imp_kept a17 a,n1 | c_imp_imp_any a17 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a17 a | c_lit_imp_any a17 a | c_lit_imp_dropped a | c_lit_lit_kept a17 | c_lit_lit_any a17 | c_lit_lit_dropped | c_val_val_kept a17 | c_val_val_any a17 | c_val_val_dropped | c_fld_imp_kept a17 a | c_fld_imp_any a17 a | c_fld_imp_dropped a | c_fld_fld_kept a17 | c_fld_fld_any a17 | c_fld_fld_dropped | c_var_imp_kept a17 a | c_var_imp_any a17 a | c_var_imp_dropped a | c_obj_imp_kept a37 a,I | c_obj_imp_any a37 a,I | c_obj_imp_dropped a,I | c_imp_obj_kept o17 I,n1 | c_imp_obj_any o17 I,n1 | c_imp_obj_dropped I,n1 | c_obj_lit_kept a37 I | c_obj_lit_any a37 I | c_obj_lit_dropped I | c_obj_obj_kept p37 J,I | c_obj_obj_any p37 J,I | c_obj_obj_dropped J,I
+f-lx_cap_two_infix	run	c_imp_imp_kept a127 n1,a,n2 | c_imp_imp_any a127 n1,a,n2 | c_imp_imp_dropped n1,a,n2 | c_imp_lit_kept a127 n1,n2 | c_imp_lit_any a127 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a127 n1,n2 | c_imp_val_any a127 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a127 a,n2 | c_lit_imp_any a127 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a127 n2 | c_lit_lit_any a127 n2 | c_lit_lit_dropped n2 | c_val_val_kept a127 n2 | c_val_val_any a127 n2 | c_val_val_dropped n2 | c_fld_imp_kept a127 a,n2 | c_fld_imp_any a127 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a127 n2 | c_fld_fld_any a127 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a127 a,n2 | c_var_imp_any a127 a,n2 | c_var_imp_dropped a,n2 | c_obj_imp_kept a327 I,a,n2 | c_obj_imp_any a327 I,a,n2 | c_obj_imp_dropped I,a,n2 | c_imp_obj_kept o127 n1,I,n2 | c_imp_obj_any o127 n1,I,n2 | c_imp_obj_dropped n1,I,n2 | c_obj_lit_kept a327 I,n2 | c_obj_lit_any a327 I,n2 | c_obj_lit_dropped I,n2 | c_obj_obj_kept p327 I,J,n2 | c_obj_obj_any p327 I,J,n2 | c_obj_obj_dropped I,J,n2
+f-lx_cap_two_written	run	c_imp_imp_kept a127 a,n1,n2 | c_imp_imp_any a127 a,n1,n2 | c_imp_imp_dropped a,n1,n2 | c_imp_lit_kept a127 n1,n2 | c_imp_lit_any a127 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a127 n1,n2 | c_imp_val_any a127 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a127 a,n2 | c_lit_imp_any a127 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a127 n2 | c_lit_lit_any a127 n2 | c_lit_lit_dropped n2 | c_val_val_kept a127 n2 | c_val_val_any a127 n2 | c_val_val_dropped n2 | c_fld_imp_kept a127 a,n2 | c_fld_imp_any a127 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a127 n2 | c_fld_fld_any a127 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a127 a,n2 | c_var_imp_any a127 a,n2 | c_var_imp_dropped a,n2 | c_obj_imp_kept a327 a,I,n2 | c_obj_imp_any a327 a,I,n2 | c_obj_imp_dropped a,I,n2 | c_imp_obj_kept o127 I,n1,n2 | c_imp_obj_any o127 I,n1,n2 | c_imp_obj_dropped I,n1,n2 | c_obj_lit_kept a327 I,n2 | c_obj_lit_any a327 I,n2 | c_obj_lit_dropped I,n2 | c_obj_obj_kept p327 J,I,n2 | c_obj_obj_any p327 J,I,n2 | c_obj_obj_dropped J,I,n2
+f-lx_cap_using_infix	run	c_imp_imp_kept a157 n1,a | c_imp_imp_any a157 n1,a | c_imp_imp_dropped n1,a | c_imp_lit_kept a157 n1 | c_imp_lit_any a157 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a157 n1 | c_imp_val_any a157 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a157 a | c_lit_imp_any a157 a | c_lit_imp_dropped a | c_lit_lit_kept a157 | c_lit_lit_any a157 | c_lit_lit_dropped | c_val_val_kept a157 | c_val_val_any a157 | c_val_val_dropped | c_fld_imp_kept a157 a | c_fld_imp_any a157 a | c_fld_imp_dropped a | c_fld_fld_kept a157 | c_fld_fld_any a157 | c_fld_fld_dropped | c_var_imp_kept a157 a | c_var_imp_any a157 a | c_var_imp_dropped a | c_obj_imp_kept a357 I,a | c_obj_imp_any a357 I,a | c_obj_imp_dropped I,a | c_imp_obj_kept o157 n1,I | c_imp_obj_any o157 n1,I | c_imp_obj_dropped n1,I | c_obj_lit_kept a357 I | c_obj_lit_any a357 I | c_obj_lit_dropped I | c_obj_obj_kept p357 I,J | c_obj_obj_any p357 I,J | c_obj_obj_dropped I,J
+f-lx_cap_using_written	run	c_imp_imp_kept a157 a,n1 | c_imp_imp_any a157 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a157 n1 | c_imp_lit_any a157 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a157 n1 | c_imp_val_any a157 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a157 a | c_lit_imp_any a157 a | c_lit_imp_dropped a | c_lit_lit_kept a157 | c_lit_lit_any a157 | c_lit_lit_dropped | c_val_val_kept a157 | c_val_val_any a157 | c_val_val_dropped | c_fld_imp_kept a157 a | c_fld_imp_any a157 a | c_fld_imp_dropped a | c_fld_fld_kept a157 | c_fld_fld_any a157 | c_fld_fld_dropped | c_var_imp_kept a157 a | c_var_imp_any a157 a | c_var_imp_dropped a | c_obj_imp_kept a357 a,I | c_obj_imp_any a357 a,I | c_obj_imp_dropped a,I | c_imp_obj_kept o157 I,n1 | c_imp_obj_any o157 I,n1 | c_imp_obj_dropped I,n1 | c_obj_lit_kept a357 I | c_obj_lit_any a357 I | c_obj_lit_dropped I | c_obj_obj_kept p357 J,I | c_obj_obj_any p357 J,I | c_obj_obj_dropped J,I
+f-lx_nocap_one_default	run	c_default_left d1 d,n1 | c_default_given a1 a,n1 | c_infix_given a1 n1,a
+f-lx_nocap_one_infix	run	c_imp_imp_kept a1 n1,a | c_imp_imp_any a1 n1,a | c_imp_imp_dropped n1,a | c_imp_lit_kept a1 n1 | c_imp_lit_any a1 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a1 n1 | c_imp_val_any a1 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a1 a | c_lit_imp_any a1 a | c_lit_imp_dropped a | c_lit_lit_kept a1 | c_lit_lit_any a1 | c_lit_lit_dropped | c_val_val_kept a1 | c_val_val_any a1 | c_val_val_dropped | c_fld_imp_kept a1 a | c_fld_imp_any a1 a | c_fld_imp_dropped a | c_fld_fld_kept a1 | c_fld_fld_any a1 | c_fld_fld_dropped | c_var_imp_kept a1 a | c_var_imp_any a1 a | c_var_imp_dropped a | c_obj_imp_kept a3 I,a | c_obj_imp_any a3 I,a | c_obj_imp_dropped I,a | c_imp_obj_kept o1 n1,I | c_imp_obj_any o1 n1,I | c_imp_obj_dropped n1,I | c_obj_lit_kept a3 I | c_obj_lit_any a3 I | c_obj_lit_dropped I | c_obj_obj_kept p3 I,J | c_obj_obj_any p3 I,J | c_obj_obj_dropped I,J
+f-lx_nocap_one_written	run	c_imp_imp_kept a1 a,n1 | c_imp_imp_any a1 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a1 n1 | c_imp_lit_any a1 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a1 n1 | c_imp_val_any a1 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a1 a | c_lit_imp_any a1 a | c_lit_imp_dropped a | c_lit_lit_kept a1 | c_lit_lit_any a1 | c_lit_lit_dropped | c_val_val_kept a1 | c_val_val_any a1 | c_val_val_dropped | c_fld_imp_kept a1 a | c_fld_imp_any a1 a | c_fld_imp_dropped a | c_fld_fld_kept a1 | c_fld_fld_any a1 | c_fld_fld_dropped | c_var_imp_kept a1 a | c_var_imp_any a1 a | c_var_imp_dropped a | c_obj_imp_kept a3 a,I | c_obj_imp_any a3 a,I | c_obj_imp_dropped a,I | c_imp_obj_kept o1 I,n1 | c_imp_obj_any o1 I,n1 | c_imp_obj_dropped I,n1 | c_obj_lit_kept a3 I | c_obj_lit_any a3 I | c_obj_lit_dropped I | c_obj_obj_kept p3 J,I | c_obj_obj_any p3 J,I | c_obj_obj_dropped J,I
+f-lx_nocap_two_infix	run	c_imp_imp_kept a12 n1,a,n2 | c_imp_imp_any a12 n1,a,n2 | c_imp_imp_dropped n1,a,n2 | c_imp_lit_kept a12 n1,n2 | c_imp_lit_any a12 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a12 n1,n2 | c_imp_val_any a12 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a12 a,n2 | c_lit_imp_any a12 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a12 n2 | c_lit_lit_any a12 n2 | c_lit_lit_dropped n2 | c_val_val_kept a12 n2 | c_val_val_any a12 n2 | c_val_val_dropped n2 | c_fld_imp_kept a12 a,n2 | c_fld_imp_any a12 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a12 n2 | c_fld_fld_any a12 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a12 a,n2 | c_var_imp_any a12 a,n2 | c_var_imp_dropped a,n2 | c_obj_imp_kept a32 I,a,n2 | c_obj_imp_any a32 I,a,n2 | c_obj_imp_dropped I,a,n2 | c_imp_obj_kept o12 n1,I,n2 | c_imp_obj_any o12 n1,I,n2 | c_imp_obj_dropped n1,I,n2 | c_obj_lit_kept a32 I,n2 | c_obj_lit_any a32 I,n2 | c_obj_lit_dropped I,n2 | c_obj_obj_kept p32 I,J,n2 | c_obj_obj_any p32 I,J,n2 | c_obj_obj_dropped I,J,n2
+f-lx_nocap_two_written	run	c_imp_imp_kept a12 a,n1,n2 | c_imp_imp_any a12 a,n1,n2 | c_imp_imp_dropped a,n1,n2 | c_imp_lit_kept a12 n1,n2 | c_imp_lit_any a12 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a12 n1,n2 | c_imp_val_any a12 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a12 a,n2 | c_lit_imp_any a12 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a12 n2 | c_lit_lit_any a12 n2 | c_lit_lit_dropped n2 | c_val_val_kept a12 n2 | c_val_val_any a12 n2 | c_val_val_dropped n2 | c_fld_imp_kept a12 a,n2 | c_fld_imp_any a12 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a12 n2 | c_fld_fld_any a12 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a12 a,n2 | c_var_imp_any a12 a,n2 | c_var_imp_dropped a,n2 | c_obj_imp_kept a32 a,I,n2 | c_obj_imp_any a32 a,I,n2 | c_obj_imp_dropped a,I,n2 | c_imp_obj_kept o12 I,n1,n2 | c_imp_obj_any o12 I,n1,n2 | c_imp_obj_dropped I,n1,n2 | c_obj_lit_kept a32 I,n2 | c_obj_lit_any a32 I,n2 | c_obj_lit_dropped I,n2 | c_obj_obj_kept p32 J,I,n2 | c_obj_obj_any p32 J,I,n2 | c_obj_obj_dropped J,I,n2
+f-lx_nocap_using_infix	run	c_imp_imp_kept a15 n1,a | c_imp_imp_any a15 n1,a | c_imp_imp_dropped n1,a | c_imp_lit_kept a15 n1 | c_imp_lit_any a15 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a15 n1 | c_imp_val_any a15 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a15 a | c_lit_imp_any a15 a | c_lit_imp_dropped a | c_lit_lit_kept a15 | c_lit_lit_any a15 | c_lit_lit_dropped | c_val_val_kept a15 | c_val_val_any a15 | c_val_val_dropped | c_fld_imp_kept a15 a | c_fld_imp_any a15 a | c_fld_imp_dropped a | c_fld_fld_kept a15 | c_fld_fld_any a15 | c_fld_fld_dropped | c_var_imp_kept a15 a | c_var_imp_any a15 a | c_var_imp_dropped a | c_obj_imp_kept a35 I,a | c_obj_imp_any a35 I,a | c_obj_imp_dropped I,a | c_imp_obj_kept o15 n1,I | c_imp_obj_any o15 n1,I | c_imp_obj_dropped n1,I | c_obj_lit_kept a35 I | c_obj_lit_any a35 I | c_obj_lit_dropped I | c_obj_obj_kept p35 I,J | c_obj_obj_any p35 I,J | c_obj_obj_dropped I,J
+f-lx_nocap_using_written	run	c_imp_imp_kept a15 a,n1 | c_imp_imp_any a15 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a15 n1 | c_imp_lit_any a15 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a15 n1 | c_imp_val_any a15 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a15 a | c_lit_imp_any a15 a | c_lit_imp_dropped a | c_lit_lit_kept a15 | c_lit_lit_any a15 | c_lit_lit_dropped | c_val_val_kept a15 | c_val_val_any a15 | c_val_val_dropped | c_fld_imp_kept a15 a | c_fld_imp_any a15 a | c_fld_imp_dropped a | c_fld_fld_kept a15 | c_fld_fld_any a15 | c_fld_fld_dropped | c_var_imp_kept a15 a | c_var_imp_any a15 a | c_var_imp_dropped a | c_obj_imp_kept a35 a,I | c_obj_imp_any a35 a,I | c_obj_imp_dropped a,I | c_imp_obj_kept o15 I,n1 | c_imp_obj_any o15 I,n1 | c_imp_obj_dropped I,n1 | c_obj_lit_kept a35 I | c_obj_lit_any a35 I | c_obj_lit_dropped I | c_obj_obj_kept p35 J,I | c_obj_obj_any p35 J,I | c_obj_obj_dropped J,I
+g-bynamerecv-ext-infix-impure-impure	run	b1 b,n1
+g-bynamerecv-ext-infix-impure-initpath	run	s71 p2,n1
+g-bynamerecv-ext-infix-initpath-impure	run	b6 b,p
+g-bynamerecv-ext-infix-initpath-initpath	run	s76 p2,p
+g-bynamerecv-ext-written-impure-impure	run	b1 b,n1
+g-bynamerecv-ext-written-impure-initpath	run	s71 p2,n1
+g-bynamerecv-ext-written-initpath-impure	run	b6 b,p
+g-bynamerecv-ext-written-initpath-initpath	run	s76 p2,p
+g-bynamerecv-extobj-infix-impure-impure	run	b1 q,b,n1
+g-bynamerecv-extobj-infix-impure-initpath	run	s71 q,p2,n1
+g-bynamerecv-extobj-infix-initpath-impure	run	b6 q,b,p
+g-bynamerecv-extobj-infix-initpath-initpath	run	s76 q,p2,p
+g-bynamerecv-extobj-written-impure-impure	run	b1 q,b,n1
+g-bynamerecv-extobj-written-impure-initpath	run	s71 q,p2,n1
+g-bynamerecv-extobj-written-initpath-impure	run	b6 q,b,p
+g-bynamerecv-extobj-written-initpath-initpath	run	s76 q,p2,p
+g-bynamerecv-inst-infix-impure-impure	run	b18 b,n1
+g-bynamerecv-inst-infix-impure-initpath	run	s718 p2,n1
+g-bynamerecv-inst-infix-initpath-impure	run	b68 b,p
+g-bynamerecv-inst-infix-initpath-initpath	run	s768 p2,p
+g-bynamerecv-inst-written-impure-impure	run	b18 b,n1
+g-bynamerecv-inst-written-impure-initpath	run	s718 p2,n1
+g-bynamerecv-inst-written-initpath-impure	run	b68 b,p
+g-bynamerecv-inst-written-initpath-initpath	run	s768 p2,p
+g-bynameright-ext-infix-impure-impure	run	b1 n1,b
+g-bynameright-ext-infix-impure-initpath	run	s71 n1,p2
+g-bynameright-ext-infix-initpath-impure	run	b6 p,b
+g-bynameright-ext-infix-initpath-initpath	run	s76 p,p2
+g-bynameright-ext-written-impure-impure	run	b1 n1,b
+g-bynameright-ext-written-impure-initpath	run	s71 n1,p2
+g-bynameright-ext-written-initpath-impure	run	b6 p,b
+g-bynameright-ext-written-initpath-initpath	run	s76 p,p2
+g-bynameright-extobj-infix-impure-impure	run	b1 n1,q,b
+g-bynameright-extobj-infix-impure-initpath	run	s71 n1,q,p2
+g-bynameright-extobj-infix-initpath-impure	run	b6 p,q,b
+g-bynameright-extobj-infix-initpath-initpath	run	s76 p,q,p2
+g-bynameright-extobj-written-impure-impure	run	b1 q,n1,b
+g-bynameright-extobj-written-impure-initpath	run	s71 q,n1,p2
+g-bynameright-extobj-written-initpath-impure	run	b6 q,p,b
+g-bynameright-extobj-written-initpath-initpath	run	s76 q,p,p2
+g-bynameright-inst-infix-impure-impure	run	b18 n1,b
+g-bynameright-inst-infix-impure-initpath	run	s718 n1,p2
+g-bynameright-inst-infix-initpath-impure	run	b68 p,b
+g-bynameright-inst-infix-initpath-initpath	run	s768 p,p2
+g-bynameright-inst-written-impure-impure	run	b18 n1,b
+g-bynameright-inst-written-impure-initpath	run	s718 n1,p2
+g-bynameright-inst-written-initpath-impure	run	b68 p,b
+g-bynameright-inst-written-initpath-initpath	run	s768 p,p2
+g-inline-ext-infix-impure-impure	run	b1 b,n1
+g-inline-ext-infix-impure-initpath	run	s71 p2,n1
+g-inline-ext-infix-initpath-impure	run	b6 b,p
+g-inline-ext-infix-initpath-initpath	run	s76 p2,p
+g-inline-ext-written-impure-impure	run	b1 b,n1
+g-inline-ext-written-impure-initpath	run	s71 p2,n1
+g-inline-ext-written-initpath-impure	run	b6 b,p
+g-inline-ext-written-initpath-initpath	run	s76 p2,p
+g-inline-extobj-infix-impure-impure	run	b1 b,n1
+g-inline-extobj-infix-impure-initpath	run	s71 p2,n1
+g-inline-extobj-infix-initpath-impure	run	b6 b,p
+g-inline-extobj-infix-initpath-initpath	run	s76 p2,p
+g-inline-extobj-written-impure-impure	run	b1 b,n1
+g-inline-extobj-written-impure-initpath	run	s71 p2,n1
+g-inline-extobj-written-initpath-impure	run	b6 b,p
+g-inline-extobj-written-initpath-initpath	run	s76 p2,p
+g-inline-inst-infix-impure-impure	run	b18 b,n1
+g-inline-inst-infix-impure-initpath	run	s718 p2,n1
+g-inline-inst-infix-initpath-impure	run	b68 b,p
+g-inline-inst-infix-initpath-initpath	run	s768 p2,p
+g-inline-inst-written-impure-impure	run	b18 b,n1
+g-inline-inst-written-impure-initpath	run	s718 p2,n1
+g-inline-inst-written-initpath-impure	run	b68 b,p
+g-inline-inst-written-initpath-initpath	run	s768 p2,p
+g-inline-via	run	b1b6 n1,b,p,b
+g-java-infix-call	run	bfalse b
+g-java-infix-field	run	bfalse b
+g-java-written-call	run	bfalse b
+g-java-written-field	run	bfalse b
+g-leftlazy-ext-infix-impure	run	b9 n9,b
+g-leftlazy-ext-infix-initpath	run	s79 n9,p2
+g-leftlazy-ext-written-impure	run	b9 b,n9
+g-leftlazy-ext-written-initpath	run	s79 p2,n9
+g-leftlazy-extobj-infix-impure	run	b9 n9,q,b
+g-leftlazy-extobj-infix-initpath	run	s79 n9,q,p2
+g-leftlazy-extobj-written-impure	run	b9 q,b,n9
+g-leftlazy-extobj-written-initpath	run	s79 q,p2,n9
+g-leftlazy-inst-infix-impure	run	b98 n9,b
+g-leftlazy-inst-infix-initpath	run	s798 n9,p2
+g-leftlazy-inst-written-impure	run	b98 b,n9
+g-leftlazy-inst-written-initpath	run	s798 p2,n9
+g-leftobjlazy-ext-infix-impure	run	b8 n8,b
+g-leftobjlazy-ext-infix-initpath	run	s78 n8,p2
+g-leftobjlazy-ext-written-impure	run	b8 b,n8
+g-leftobjlazy-ext-written-initpath	run	s78 p2,n8
+g-leftobjlazy-extobj-infix-impure	run	b8 n8,q,b
+g-leftobjlazy-extobj-infix-initpath	run	s78 n8,q,p2
+g-leftobjlazy-extobj-written-impure	run	b8 q,b,n8
+g-leftobjlazy-extobj-written-initpath	run	s78 q,p2,n8
+g-leftobjlazy-inst-infix-impure	run	b88 n8,b
+g-leftobjlazy-inst-infix-initpath	run	s788 n8,p2
+g-leftobjlazy-inst-written-impure	run	b88 b,n8
+g-leftobjlazy-inst-written-initpath	run	s788 p2,n8
+g-noimp-extobj-written-impure-impure	run	b1 q,b,n1
+g-noimp-extobj-written-impure-initpath	run	s71 q,p2,n1
+g-noimp-extobj-written-initpath-impure	run	b6 q,b,p
+g-noimp-extobj-written-initpath-initpath	run	s76 q,p2,p
+g-noimp-inst-written-impure-impure	run	b18 b,n1
+g-noimp-inst-written-impure-initpath	run	s718 p2,n1
+g-noimp-inst-written-initpath-impure	run	b68 b,p
+g-noimp-inst-written-initpath-initpath	run	s768 p2,p
+g-opcons-ext-infix-impure-impure	run	b1 n1,b
+g-opcons-ext-infix-impure-initpath	run	s71 n1,p2
+g-opcons-ext-infix-initpath-impure	run	b6 p,b
+g-opcons-ext-infix-initpath-initpath	run	s76 p,p2
+g-opcons-ext-written-impure-impure	run	b1 b,n1
+g-opcons-ext-written-impure-initpath	run	s71 p2,n1
+g-opcons-ext-written-initpath-impure	run	b6 b,p
+g-opcons-ext-written-initpath-initpath	run	s76 p2,p
+g-opcons-extobj-infix-impure-impure	run	b1 n1,q,b
+g-opcons-extobj-infix-impure-initpath	run	s71 n1,q,p2
+g-opcons-extobj-infix-initpath-impure	run	b6 p,q,b
+g-opcons-extobj-infix-initpath-initpath	run	s76 p,q,p2
+g-opcons-extobj-written-impure-impure	run	b1 q,b,n1
+g-opcons-extobj-written-impure-initpath	run	s71 q,p2,n1
+g-opcons-extobj-written-initpath-impure	run	b6 q,b,p
+g-opcons-extobj-written-initpath-initpath	run	s76 q,p2,p
+g-opcons-inst-infix-impure-impure	run	b18 n1,b
+g-opcons-inst-infix-impure-initpath	run	s718 n1,p2
+g-opcons-inst-infix-initpath-impure	run	b68 p,b
+g-opcons-inst-infix-initpath-initpath	run	s768 p,p2
+g-opcons-inst-written-impure-impure	run	b18 b,n1
+g-opcons-inst-written-impure-initpath	run	s718 p2,n1
+g-opcons-inst-written-initpath-impure	run	b68 b,p
+g-opcons-inst-written-initpath-initpath	run	s768 p2,p
+g-opcons-mem-infix-impure	run	rr1 n1,r
+g-opcons-mem-infix-initpath	run	rr6 p,r
+g-opcons-mem-written-impure	run	rr1 r,n1
+g-opcons-mem-written-initpath	run	rr6 r,p
+g-opxop-ext-infix-impure-impure	run	b1 n1,b
+g-opxop-ext-infix-impure-initpath	run	s71 n1,p2
+g-opxop-ext-infix-initpath-impure	run	b6 p,b
+g-opxop-ext-infix-initpath-initpath	run	s76 p,p2
+g-opxop-ext-written-impure-impure	run	b1 b,n1
+g-opxop-ext-written-impure-initpath	run	s71 p2,n1
+g-opxop-ext-written-initpath-impure	run	b6 b,p
+g-opxop-ext-written-initpath-initpath	run	s76 p2,p
+g-opxop-extobj-infix-impure-impure	run	b1 n1,q,b
+g-opxop-extobj-infix-impure-initpath	run	s71 n1,q,p2
+g-opxop-extobj-infix-initpath-impure	run	b6 p,q,b
+g-opxop-extobj-infix-initpath-initpath	run	s76 p,q,p2
+g-opxop-extobj-written-impure-impure	run	b1 q,b,n1
+g-opxop-extobj-written-impure-initpath	run	s71 q,p2,n1
+g-opxop-extobj-written-initpath-impure	run	b6 q,b,p
+g-opxop-extobj-written-initpath-initpath	run	s76 q,p2,p
+g-opxop-inst-infix-impure-impure	run	b18 n1,b
+g-opxop-inst-infix-impure-initpath	run	s718 n1,p2
+g-opxop-inst-infix-initpath-impure	run	b68 p,b
+g-opxop-inst-infix-initpath-initpath	run	s768 p,p2
+g-opxop-inst-written-impure-impure	run	b18 b,n1
+g-opxop-inst-written-impure-initpath	run	s718 p2,n1
+g-opxop-inst-written-initpath-impure	run	b68 b,p
+g-opxop-inst-written-initpath-initpath	run	s768 p2,p
+g-opxop-mem-infix-impure	run	rr1 n1,r
+g-opxop-mem-infix-initpath	run	rr6 p,r
+g-opxop-mem-written-impure	run	rr1 r,n1
+g-opxop-mem-written-initpath	run	rr6 r,p
+g-prefix-inst-written-impure-impure	run	b18 mk,b,n1
+g-prefix-inst-written-impure-initpath	run	s718 mk,p2,n1
+g-prefix-inst-written-initpath-impure	run	b68 mk,b,p
+g-prefix-inst-written-initpath-initpath	run	s768 mk,p2,p
+g-prefix-mem-infix-impure	run	rr1 n1,r
+g-prefix-mem-infix-initpath	run	rr6 p,r
+g-prefix-mem-written-impure	run	rr1 r,n1
+g-prefix-mem-written-initpath	run	rr6 r,p
+g-rdflt-ext-written-impure	run	b5 b,n5
+g-rdflt-ext-written-initpath	run	s75 p2,n5
+g-rdflt-ext-written-lit	run	a5 n5
+g-rdflt-extobj-written-impure	run	b5 b,q,n5
+g-rdflt-extobj-written-initpath	run	s75 p2,q,n5
+g-rdflt-extobj-written-lit	run	a5 q,n5
+g-rdflt-inst-written-impure	run	b58 b,n5
+g-rdflt-inst-written-initpath	run	s758 p2,n5
+g-rdflt-inst-written-lit	run	a58 n5
+g-rightlazy-ext-infix-impure	run	lz1 n1,lz
+g-rightlazy-ext-infix-initpath	run	lz6 p,lz
+g-rightlazy-ext-written-impure	run	lz1 lz,n1
+g-rightlazy-ext-written-initpath	run	lz6 lz,p
+g-rightlazy-extobj-infix-impure	run	lz1 n1,q,lz
+g-rightlazy-extobj-infix-initpath	run	lz6 p,q,lz
+g-rightlazy-extobj-written-impure	run	lz1 q,lz,n1
+g-rightlazy-extobj-written-initpath	run	lz6 q,lz,p
+g-rightlazy-inst-infix-impure	run	lz18 n1,lz
+g-rightlazy-inst-infix-initpath	run	lz68 p,lz
+g-rightlazy-inst-written-impure	run	lz18 lz,n1
+g-rightlazy-inst-written-initpath	run	lz68 lz,p
+g-rightobjlazy-ext-infix-impure	run	ls1 n1,ls
+g-rightobjlazy-ext-infix-initpath	run	ls6 p,ls
+g-rightobjlazy-ext-written-impure	run	ls1 ls,n1
+g-rightobjlazy-ext-written-initpath	run	ls6 ls,p
+g-rightobjlazy-extobj-infix-impure	run	ls1 n1,q,ls
+g-rightobjlazy-extobj-infix-initpath	run	ls6 p,q,ls
+g-rightobjlazy-extobj-written-impure	run	ls1 q,ls,n1
+g-rightobjlazy-extobj-written-initpath	run	ls6 q,ls,p
+g-rightobjlazy-inst-infix-impure	run	ls18 n1,ls
+g-rightobjlazy-inst-infix-initpath	run	ls68 p,ls
+g-rightobjlazy-inst-written-impure	run	ls18 ls,n1
+g-rightobjlazy-inst-written-initpath	run	ls68 ls,p
+g-sub-super	run	s110 n1,s
+g-sub-written	run	b110 b,n1
+g-two-ext-infix-impure-impure	run	b12 n1,b,n2
+g-two-ext-infix-impure-initpath	run	s712 n1,p2,n2
+g-two-ext-infix-initpath-impure	run	b62 p,b,n2
+g-two-ext-infix-initpath-initpath	run	s762 p,p2,n2
+g-two-ext-written-impure-impure	run	b12 b,n1,n2
+g-two-ext-written-impure-initpath	run	s712 p2,n1,n2
+g-two-ext-written-initpath-impure	run	b62 b,p,n2
+g-two-ext-written-initpath-initpath	run	s762 p2,p,n2
+g-two-extobj-infix-impure-impure	run	b12 n1,q,b,n2
+g-two-extobj-infix-impure-initpath	run	s712 n1,q,p2,n2
+g-two-extobj-infix-initpath-impure	run	b62 p,q,b,n2
+g-two-extobj-infix-initpath-initpath	run	s762 p,q,p2,n2
+g-two-extobj-written-impure-impure	run	b12 q,b,n1,n2
+g-two-extobj-written-impure-initpath	run	s712 q,p2,n1,n2
+g-two-extobj-written-initpath-impure	run	b62 q,b,p,n2
+g-two-extobj-written-initpath-initpath	run	s762 q,p2,p,n2
+g-two-inst-infix-impure-impure	run	b128 n1,b,n2
+g-two-inst-infix-impure-initpath	run	s7128 n1,p2,n2
+g-two-inst-infix-initpath-impure	run	b628 p,b,n2
+g-two-inst-infix-initpath-initpath	run	s7628 p,p2,n2
+g-two-inst-written-impure-impure	run	b128 b,n1,n2
+g-two-inst-written-impure-initpath	run	s7128 p2,n1,n2
+g-two-inst-written-initpath-impure	run	b628 b,p,n2
+g-two-inst-written-initpath-initpath	run	s7628 p2,p,n2
+g-using-ext-infix-impure-impure	run	b1u n1,b
+g-using-ext-infix-impure-initpath	run	s71u n1,p2
+g-using-ext-infix-initpath-impure	run	b6u p,b
+g-using-ext-infix-initpath-initpath	run	s76u p,p2
+g-using-ext-written-impure-impure	run	b1u b,n1
+g-using-ext-written-impure-initpath	run	s71u p2,n1
+g-using-ext-written-initpath-impure	run	b6u b,p
+g-using-ext-written-initpath-initpath	run	s76u p2,p
+g-using-extobj-infix-impure-impure	run	b1u n1,q,b
+g-using-extobj-infix-impure-initpath	run	s71u n1,q,p2
+g-using-extobj-infix-initpath-impure	run	b6u p,q,b
+g-using-extobj-infix-initpath-initpath	run	s76u p,q,p2
+g-using-extobj-written-impure-impure	run	b1u q,b,n1
+g-using-extobj-written-impure-initpath	run	s71u q,p2,n1
+g-using-extobj-written-initpath-impure	run	b6u q,b,p
+g-using-extobj-written-initpath-initpath	run	s76u q,p2,p
+g-using-inst-infix-impure-impure	run	b1u8 n1,b
+g-using-inst-infix-impure-initpath	run	s71u8 n1,p2
+g-using-inst-infix-initpath-impure	run	b6u8 p,b
+g-using-inst-infix-initpath-initpath	run	s76u8 p,p2
+g-using-inst-written-impure-impure	run	b1u8 b,n1
+g-using-inst-written-impure-initpath	run	s71u8 p2,n1
+g-using-inst-written-initpath-impure	run	b6u8 b,p
+g-using-inst-written-initpath-initpath	run	s76u8 p2,p
+g-usingbefore-ext-infix-impure-impure	run	b1u n1,b
+g-usingbefore-ext-infix-impure-initpath	run	s71u n1,p2
+g-usingbefore-ext-infix-initpath-impure	run	b6u p,b
+g-usingbefore-ext-infix-initpath-initpath	run	s76u p,p2
+g-usingbefore-ext-written-impure-impure	run	b1u b,n1
+g-usingbefore-ext-written-impure-initpath	run	s71u p2,n1
+g-usingbefore-ext-written-initpath-impure	run	b6u b,p
+g-usingbefore-ext-written-initpath-initpath	run	s76u p2,p
+g-usingbefore-extobj-infix-impure-impure	run	b1u n1,q,b
+g-usingbefore-extobj-infix-impure-initpath	run	s71u n1,q,p2
+g-usingbefore-extobj-infix-initpath-impure	run	b6u p,q,b
+g-usingbefore-extobj-infix-initpath-initpath	run	s76u p,q,p2
+g-usingbefore-extobj-written-impure-impure	run	b1u q,b,n1
+g-usingbefore-extobj-written-impure-initpath	run	s71u q,p2,n1
+g-usingbefore-extobj-written-initpath-impure	run	b6u q,b,p
+g-usingbefore-extobj-written-initpath-initpath	run	s76u q,p2,p
+g-usingbefore-inst-infix-impure-impure	run	b1u8 n1,b
+g-usingbefore-inst-infix-impure-initpath	run	s71u8 n1,p2
+g-usingbefore-inst-infix-initpath-impure	run	b6u8 p,b
+g-usingbefore-inst-infix-initpath-initpath	run	s76u8 p,p2
+g-usingbefore-inst-written-impure-impure	run	b1u8 b,n1
+g-usingbefore-inst-written-impure-initpath	run	s71u8 p2,n1
+g-usingbefore-inst-written-initpath-impure	run	b6u8 b,p
+g-usingbefore-inst-written-initpath-initpath	run	s76u8 p2,p
+g-usingboth-ext-infix-impure-impure	run	b1uu n1,b
+g-usingboth-ext-infix-impure-initpath	run	s71uu n1,p2
+g-usingboth-ext-infix-initpath-impure	run	b6uu p,b
+g-usingboth-ext-infix-initpath-initpath	run	s76uu p,p2
+g-usingboth-ext-written-impure-impure	run	b1uu b,n1
+g-usingboth-ext-written-impure-initpath	run	s71uu p2,n1
+g-usingboth-ext-written-initpath-impure	run	b6uu b,p
+g-usingboth-ext-written-initpath-initpath	run	s76uu p2,p
+g-usingboth-extobj-infix-impure-impure	run	b1uu n1,q,b
+g-usingboth-extobj-infix-impure-initpath	run	s71uu n1,q,p2
+g-usingboth-extobj-infix-initpath-impure	run	b6uu p,q,b
+g-usingboth-extobj-infix-initpath-initpath	run	s76uu p,q,p2
+g-usingboth-extobj-written-impure-impure	run	b1uu q,b,n1
+g-usingboth-extobj-written-impure-initpath	run	s71uu q,p2,n1
+g-usingboth-extobj-written-initpath-impure	run	b6uu q,b,p
+g-usingboth-extobj-written-initpath-initpath	run	s76uu q,p2,p
+g-usingboth-inst-infix-impure-impure	run	b1uu8 n1,b
+g-usingboth-inst-infix-impure-initpath	run	s71uu8 n1,p2
+g-usingboth-inst-infix-initpath-impure	run	b6uu8 p,b
+g-usingboth-inst-infix-initpath-initpath	run	s76uu8 p,p2
+g-usingboth-inst-written-impure-impure	run	b1uu8 b,n1
+g-usingboth-inst-written-impure-initpath	run	s71uu8 p2,n1
+g-usingboth-inst-written-initpath-impure	run	b6uu8 b,p
+g-usingboth-inst-written-initpath-initpath	run	s76uu8 p2,p
+inst-dflt-infix-impure	run	b18 n1,b
+inst-dflt-infix-initpath	run	b68 p,b
+inst-dflt-infix-path	run	b58 b
+inst-dflt-infix-val	run	b08 b
+inst-dflt-written-impure	run	d18 d,n1
+inst-dflt-written-initpath	run	d68 d,p
+inst-dflt-written-path	run	d58 d
+inst-dflt-written-val	run	d08 d
+inst-infix-impure-impure	run	b18 n1,b
+inst-infix-impure-initpath	run	s718 n1,p2
+inst-infix-impure-lit	run	a18 n1
+inst-infix-impure-val	run	v018 n1
+inst-infix-initpath-impure	run	b68 p,b
+inst-infix-initpath-initpath	run	s768 p,p2
+inst-infix-initpath-lit	run	a68 p
+inst-infix-initpath-val	run	v068 p
+inst-infix-path-impure	run	b58 b
+inst-infix-path-initpath	run	s758 p2
+inst-infix-path-lit	run	a58
+inst-infix-path-val	run	v058
+inst-infix-val-impure	run	b08 b
+inst-infix-val-initpath	run	s708 p2
+inst-infix-val-lit	run	a08
+inst-infix-val-val	run	v008
+inst-written-impure-impure	run	b18 b,n1
+inst-written-impure-initpath	run	s718 p2,n1
+inst-written-impure-lit	run	a18 n1
+inst-written-impure-val	run	v018 n1
+inst-written-initpath-impure	run	b68 b,p
+inst-written-initpath-initpath	run	s768 p2,p
+inst-written-initpath-lit	run	a68 p
+inst-written-initpath-val	run	v068 p
+inst-written-path-impure	run	b58 b
+inst-written-path-initpath	run	s758 p2
+inst-written-path-lit	run	a58
+inst-written-path-val	run	v058
+inst-written-val-impure	run	b08 b
+inst-written-val-initpath	run	s708 p2
+inst-written-val-lit	run	a08
+inst-written-val-val	run	v008
+ldef-infix-impure-impure	run	b110 n1,b
+ldef-infix-impure-initpath	run	s7110 n1,p2
+ldef-infix-impure-lit	run	a110 n1
+ldef-infix-impure-val	run	v0110 n1
+ldef-infix-initpath-impure	run	b610 p,b
+ldef-infix-initpath-initpath	run	s7610 p,p2
+ldef-infix-initpath-lit	run	a610 p
+ldef-infix-initpath-val	run	v0610 p
+ldef-infix-path-impure	run	b510 b
+ldef-infix-path-initpath	run	s7510 p2
+ldef-infix-path-lit	run	a510
+ldef-infix-path-val	run	v0510
+ldef-infix-val-impure	run	b010 b
+ldef-infix-val-initpath	run	s7010 p2
+ldef-infix-val-lit	run	a010
+ldef-infix-val-val	run	v0010
+ldef-written-impure-impure	run	b110 b,n1
+ldef-written-impure-initpath	run	s7110 p2,n1
+ldef-written-impure-lit	run	a110 n1
+ldef-written-impure-val	run	v0110 n1
+ldef-written-initpath-impure	run	b610 b,p
+ldef-written-initpath-initpath	run	s7610 p2,p
+ldef-written-initpath-lit	run	a610 p
+ldef-written-initpath-val	run	v0610 p
+ldef-written-path-impure	run	b510 b
+ldef-written-path-initpath	run	s7510 p2
+ldef-written-path-lit	run	a510
+ldef-written-path-val	run	v0510
+ldef-written-val-impure	run	b010 b
+ldef-written-val-initpath	run	s7010 p2
+ldef-written-val-lit	run	a010
+ldef-written-val-val	run	v0010
+ltrait-infix-impure-impure	run	b110 n1,b
+ltrait-infix-impure-initpath	run	s7110 n1,p2
+ltrait-infix-impure-lit	run	a110 n1
+ltrait-infix-impure-val	run	v0110 n1
+ltrait-infix-initpath-impure	run	b610 p,b
+ltrait-infix-initpath-initpath	run	s7610 p,p2
+ltrait-infix-initpath-lit	run	a610 p
+ltrait-infix-initpath-val	run	v0610 p
+ltrait-infix-path-impure	run	b510 b
+ltrait-infix-path-initpath	run	s7510 p2
+ltrait-infix-path-lit	run	a510
+ltrait-infix-path-val	run	v0510
+ltrait-infix-val-impure	run	b010 b
+ltrait-infix-val-initpath	run	s7010 p2
+ltrait-infix-val-lit	run	a010
+ltrait-infix-val-val	run	v0010
+ltrait-written-impure-impure	run	b110 b,n1
+ltrait-written-impure-initpath	run	s7110 p2,n1
+ltrait-written-impure-lit	run	a110 n1
+ltrait-written-impure-val	run	v0110 n1
+ltrait-written-initpath-impure	run	b610 b,p
+ltrait-written-initpath-initpath	run	s7610 p2,p
+ltrait-written-initpath-lit	run	a610 p
+ltrait-written-initpath-val	run	v0610 p
+ltrait-written-path-impure	run	b510 b
+ltrait-written-path-initpath	run	s7510 p2
+ltrait-written-path-lit	run	a510
+ltrait-written-path-val	run	v0510
+ltrait-written-val-impure	run	b010 b
+ltrait-written-val-initpath	run	s7010 p2
+ltrait-written-val-lit	run	a010
+ltrait-written-val-val	run	v0010
+m-eight-callers	run	i11w111/i22w212/i33w313/i44w414/i55w515/i66w616/i77w717/i88w818 n1,q,i1,w1,n11,n2,i2,w2,n12,n3,i3,w3,n13,n4,i4,w4,n14,n5,i5,w5,n15,n6,i6,w6,n16,n7,i7,w7,n17,n8,i8,w8,n18
+mem-infix-impure-impure	run	rr1 n1,r
+mem-infix-impure-initpath	run	rp1 n1,p3
+mem-infix-impure-lit	run	r01 n1
+mem-infix-impure-val	run	rs1 n1
+mem-infix-initpath-impure	run	rr6 p,r
+mem-infix-initpath-initpath	run	rp6 p,p3
+mem-infix-initpath-lit	run	r06 p
+mem-infix-initpath-val	run	rs6 p
+mem-infix-path-impure	run	rr5 r
+mem-infix-path-initpath	run	rp5 p3
+mem-infix-path-lit	run	r05
+mem-infix-path-val	run	rs5
+mem-infix-val-impure	run	rr0 r
+mem-infix-val-initpath	run	rp0 p3
+mem-infix-val-lit	run	r00
+mem-infix-val-val	run	rs0
+mem-written-impure-impure	run	rr1 r,n1
+mem-written-impure-initpath	run	rp1 p3,n1
+mem-written-impure-lit	run	r01 n1
+mem-written-impure-val	run	rs1 n1
+mem-written-initpath-impure	run	rr6 r,p
+mem-written-initpath-initpath	run	rp6 p3,p
+mem-written-initpath-lit	run	r06 p
+mem-written-initpath-val	run	rs6 p
+mem-written-path-impure	run	rr5 r
+mem-written-path-initpath	run	rp5 p3
+mem-written-path-lit	run	r05
+mem-written-path-val	run	rs5
+mem-written-val-impure	run	rr0 r
+mem-written-val-initpath	run	rp0 p3
+mem-written-val-lit	run	r00
+mem-written-val-val	run	rs0
+r-chain	run	r21 n1,n2,r
+r-compound-assign-rhs	run	sb1 n1,b
+r-eta-partial	run	b1 e,b,made,n1
+r-export-renamed	run	b1 b,n1,q
+r-for-comprehension	run	y111/y212 n1,g,n11,y1,n2,g,n12,y2
+r-interleaved-types	run	bNum(1) u,b,n1
+r-later-defaults-named	run	b172 b,n1,n2,n7
+r-leading-using-given-infix	run	b1u n1,u,b
+r-leading-using-given-written	run	b1u u,b,n1
+r-mutable-receiver	run	b1 n1
+r-null-receiver-member	run	iae boom
+r-plus-eq-colon	run	1 n1,buf
+r-selection-function	run	b1 b,made,n1
+r-this-receiver	run	t1 n1
+r-throw-pure-written	run	npe
+r-typeclass-given	run	b1 n1,g,b
+v-ra_inst_one_written	run	c_imp_imp_kept a17 a,n1 | c_imp_imp_any a17 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a17 a | c_lit_imp_any a17 a | c_lit_imp_dropped a | c_lit_lit_kept a17 | c_lit_lit_any a17 | c_lit_lit_dropped | c_val_val_kept a17 | c_val_val_any a17 | c_val_val_dropped | c_fld_imp_kept a17 a | c_fld_imp_any a17 a | c_fld_imp_dropped a | c_fld_fld_kept a17 | c_fld_fld_any a17 | c_fld_fld_dropped | c_var_imp_kept a17 a | c_var_imp_any a17 a | c_var_imp_dropped a | c_mod_imp_kept a17 a,mi | c_mod_imp_any a17 a,mi | c_mod_imp_dropped a,mi | c_imp_mod_kept a17 ms,n1 | c_imp_mod_any a17 ms,n1 | c_imp_mod_dropped ms,n1
+v-ra_inst_two_written	run	c_imp_imp_kept a127 a,n1,n2 | c_imp_imp_any a127 a,n1,n2 | c_imp_imp_dropped a,n1,n2 | c_imp_lit_kept a127 n1,n2 | c_imp_lit_any a127 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a127 n1,n2 | c_imp_val_any a127 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a127 a,n2 | c_lit_imp_any a127 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a127 n2 | c_lit_lit_any a127 n2 | c_lit_lit_dropped n2 | c_val_val_kept a127 n2 | c_val_val_any a127 n2 | c_val_val_dropped n2 | c_fld_imp_kept a127 a,n2 | c_fld_imp_any a127 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a127 n2 | c_fld_fld_any a127 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a127 a,n2 | c_var_imp_any a127 a,n2 | c_var_imp_dropped a,n2 | c_mod_imp_kept a127 a,mi,n2 | c_mod_imp_any a127 a,mi,n2 | c_mod_imp_dropped a,mi,n2 | c_imp_mod_kept a127 ms,n1,n2 | c_imp_mod_any a127 ms,n1,n2 | c_imp_mod_dropped ms,n1,n2
+v-ra_inst_using_written	run	c_imp_imp_kept a157 a,n1 | c_imp_imp_any a157 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a157 n1 | c_imp_lit_any a157 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a157 n1 | c_imp_val_any a157 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a157 a | c_lit_imp_any a157 a | c_lit_imp_dropped a | c_lit_lit_kept a157 | c_lit_lit_any a157 | c_lit_lit_dropped | c_val_val_kept a157 | c_val_val_any a157 | c_val_val_dropped | c_fld_imp_kept a157 a | c_fld_imp_any a157 a | c_fld_imp_dropped a | c_fld_fld_kept a157 | c_fld_fld_any a157 | c_fld_fld_dropped | c_var_imp_kept a157 a | c_var_imp_any a157 a | c_var_imp_dropped a | c_mod_imp_kept a157 a,mi | c_mod_imp_any a157 a,mi | c_mod_imp_dropped a,mi | c_imp_mod_kept a157 ms,n1 | c_imp_mod_any a157 ms,n1 | c_imp_mod_dropped ms,n1
+v-ra_obj_one_written	run	c_imp_imp_kept a1 a,n1 | c_imp_imp_any a1 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a1 n1 | c_imp_lit_any a1 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a1 n1 | c_imp_val_any a1 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a1 a | c_lit_imp_any a1 a | c_lit_imp_dropped a | c_lit_lit_kept a1 | c_lit_lit_any a1 | c_lit_lit_dropped | c_val_val_kept a1 | c_val_val_any a1 | c_val_val_dropped | c_fld_imp_kept a1 a | c_fld_imp_any a1 a | c_fld_imp_dropped a | c_fld_fld_kept a1 | c_fld_fld_any a1 | c_fld_fld_dropped | c_var_imp_kept a1 a | c_var_imp_any a1 a | c_var_imp_dropped a | c_mod_imp_kept a1 a,mi | c_mod_imp_any a1 a,mi | c_mod_imp_dropped a,mi | c_imp_mod_kept a1 ms,n1 | c_imp_mod_any a1 ms,n1 | c_imp_mod_dropped ms,n1
+v-ra_obj_two_written	run	c_imp_imp_kept a12 a,n1,n2 | c_imp_imp_any a12 a,n1,n2 | c_imp_imp_dropped a,n1,n2 | c_imp_lit_kept a12 n1,n2 | c_imp_lit_any a12 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a12 n1,n2 | c_imp_val_any a12 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a12 a,n2 | c_lit_imp_any a12 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a12 n2 | c_lit_lit_any a12 n2 | c_lit_lit_dropped n2 | c_val_val_kept a12 n2 | c_val_val_any a12 n2 | c_val_val_dropped n2 | c_fld_imp_kept a12 a,n2 | c_fld_imp_any a12 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a12 n2 | c_fld_fld_any a12 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a12 a,n2 | c_var_imp_any a12 a,n2 | c_var_imp_dropped a,n2 | c_mod_imp_kept a12 a,mi,n2 | c_mod_imp_any a12 a,mi,n2 | c_mod_imp_dropped a,mi,n2 | c_imp_mod_kept a12 ms,n1,n2 | c_imp_mod_any a12 ms,n1,n2 | c_imp_mod_dropped ms,n1,n2
+v-ra_obj_using_written	run	c_imp_imp_kept a15 a,n1 | c_imp_imp_any a15 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a15 n1 | c_imp_lit_any a15 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a15 n1 | c_imp_val_any a15 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a15 a | c_lit_imp_any a15 a | c_lit_imp_dropped a | c_lit_lit_kept a15 | c_lit_lit_any a15 | c_lit_lit_dropped | c_val_val_kept a15 | c_val_val_any a15 | c_val_val_dropped | c_fld_imp_kept a15 a | c_fld_imp_any a15 a | c_fld_imp_dropped a | c_fld_fld_kept a15 | c_fld_fld_any a15 | c_fld_fld_dropped | c_var_imp_kept a15 a | c_var_imp_any a15 a | c_var_imp_dropped a | c_mod_imp_kept a15 a,mi | c_mod_imp_any a15 a,mi | c_mod_imp_dropped a,mi | c_imp_mod_kept a15 ms,n1 | c_imp_mod_any a15 ms,n1 | c_imp_mod_dropped ms,n1
+v-ra_top_one_written	run	c_imp_imp_kept a1 a,n1 | c_imp_imp_any a1 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a1 n1 | c_imp_lit_any a1 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a1 n1 | c_imp_val_any a1 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a1 a | c_lit_imp_any a1 a | c_lit_imp_dropped a | c_lit_lit_kept a1 | c_lit_lit_any a1 | c_lit_lit_dropped | c_val_val_kept a1 | c_val_val_any a1 | c_val_val_dropped | c_fld_imp_kept a1 a | c_fld_imp_any a1 a | c_fld_imp_dropped a | c_fld_fld_kept a1 | c_fld_fld_any a1 | c_fld_fld_dropped | c_var_imp_kept a1 a | c_var_imp_any a1 a | c_var_imp_dropped a | c_mod_imp_kept a1 a,mi | c_mod_imp_any a1 a,mi | c_mod_imp_dropped a,mi | c_imp_mod_kept a1 ms,n1 | c_imp_mod_any a1 ms,n1 | c_imp_mod_dropped ms,n1
+v-ra_top_two_written	run	c_imp_imp_kept a12 a,n1,n2 | c_imp_imp_any a12 a,n1,n2 | c_imp_imp_dropped a,n1,n2 | c_imp_lit_kept a12 n1,n2 | c_imp_lit_any a12 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a12 n1,n2 | c_imp_val_any a12 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a12 a,n2 | c_lit_imp_any a12 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a12 n2 | c_lit_lit_any a12 n2 | c_lit_lit_dropped n2 | c_val_val_kept a12 n2 | c_val_val_any a12 n2 | c_val_val_dropped n2 | c_fld_imp_kept a12 a,n2 | c_fld_imp_any a12 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a12 n2 | c_fld_fld_any a12 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a12 a,n2 | c_var_imp_any a12 a,n2 | c_var_imp_dropped a,n2 | c_mod_imp_kept a12 a,mi,n2 | c_mod_imp_any a12 a,mi,n2 | c_mod_imp_dropped a,mi,n2 | c_imp_mod_kept a12 ms,n1,n2 | c_imp_mod_any a12 ms,n1,n2 | c_imp_mod_dropped ms,n1,n2
+v-ra_top_using_written	run	c_imp_imp_kept a15 a,n1 | c_imp_imp_any a15 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a15 n1 | c_imp_lit_any a15 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a15 n1 | c_imp_val_any a15 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a15 a | c_lit_imp_any a15 a | c_lit_imp_dropped a | c_lit_lit_kept a15 | c_lit_lit_any a15 | c_lit_lit_dropped | c_val_val_kept a15 | c_val_val_any a15 | c_val_val_dropped | c_fld_imp_kept a15 a | c_fld_imp_any a15 a | c_fld_imp_dropped a | c_fld_fld_kept a15 | c_fld_fld_any a15 | c_fld_fld_dropped | c_var_imp_kept a15 a | c_var_imp_any a15 a | c_var_imp_dropped a | c_mod_imp_kept a15 a,mi | c_mod_imp_any a15 a,mi | c_mod_imp_dropped a,mi | c_imp_mod_kept a15 ms,n1 | c_imp_mod_any a15 ms,n1 | c_imp_mod_dropped ms,n1
+vcinst-infix-impure-impure	run	b17 n1,q,b
+vcinst-infix-impure-initpath	run	s717 n1,q,p2
+vcinst-infix-impure-lit	run	a17 n1,q
+vcinst-infix-impure-val	run	v017 n1,q
+vcinst-infix-initpath-impure	run	b67 p,q,b
+vcinst-infix-initpath-initpath	run	s767 p,q,p2
+vcinst-infix-initpath-lit	run	a67 p,q
+vcinst-infix-initpath-val	run	v067 p,q
+vcinst-infix-path-impure	run	b57 q,b
+vcinst-infix-path-initpath	run	s757 q,p2
+vcinst-infix-path-lit	run	a57 q
+vcinst-infix-path-val	run	v057 q
+vcinst-infix-val-impure	run	b07 q,b
+vcinst-infix-val-initpath	run	s707 q,p2
+vcinst-infix-val-lit	run	a07 q
+vcinst-infix-val-val	run	v007 q
+vcinst-written-impure-impure	run	b17 q,b,n1
+vcinst-written-impure-initpath	run	s717 q,p2,n1
+vcinst-written-impure-lit	run	a17 q,n1
+vcinst-written-impure-val	run	v017 q,n1
+vcinst-written-initpath-impure	run	b67 q,b,p
+vcinst-written-initpath-initpath	run	s767 q,p2,p
+vcinst-written-initpath-lit	run	a67 q,p
+vcinst-written-initpath-val	run	v067 q,p
+vcinst-written-path-impure	run	b57 q,b
+vcinst-written-path-initpath	run	s757 q,p2
+vcinst-written-path-lit	run	a57 q
+vcinst-written-path-val	run	v057 q
+vcinst-written-val-impure	run	b07 q,b
+vcinst-written-val-initpath	run	s707 q,p2
+vcinst-written-val-lit	run	a07 q
+vcinst-written-val-val	run	v007 q

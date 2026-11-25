@@ -1,0 +1,101 @@
+# The functions of src/ that read a right-associative symbol's clause order by its markers, and what the swap at
+# the definition makes of each (tests/right-assoc/closure.txt's words). Held by tests/right-assoc/readers.py: a
+# function that reads a marker and is not here fails it, and so does a line whose function reads none.
+# file<TAB>function<TAB>kind<TAB>why
+src/ast.rs	fun_end	ORDER-FREE	the AST's field
+src/interp/class.rs	qualified_name	BOUNDARY	the interpreter's names: the source view
+src/interp/quoted.rs	applied_by_qualifier	PORT	the reflection's clauses in compiled order
+src/interp/quoted.rs	own_receiver	PORT	the reflection's receiver by its identity
+src/jvm/callable.rs	erase_seen_sig	PORT	the descriptor in the signature's order
+src/jvm/gen.rs	declared_clauses	DELETE	the JVM permutation's clause list
+src/jvm/gen.rs	default_getter_want	PORT	a getter by its own signature (the JVM back end's commits)
+src/jvm/gen.rs	erased_params_of	PORT	the descriptor's types in the signature's order
+src/jvm/gen.rs	getter_args	PORT	a getter by its own signature (the JVM back end's commits)
+src/jvm/gen.rs	jvm_param_order	DELETE	the JVM descriptor permutation; the descriptor is the signature's order
+src/jvm/gen.rs	method_default_route	PORT	a getter by its own signature (the JVM back end's commits)
+src/jvm/kept.rs	facts	PINNED	records follow the semantic signature
+src/jvm/lower.rs	class_file_params	PORT	body slots in the signature's order, which emit_fun reads through it (the JVM back end's commits)
+src/jvm/lower.rs	extension_order	PORT	an extension call's arguments in the signature's order, no permutation; lower_extension_call reads it (the JVM back end's commits)
+src/jvm/lower.rs	lower_arguments	PORT	the call's arguments in the signature's order, no permutation
+src/jvm/lower.rs	lower_lifted_call	PORT	a local def's right-associative operands in its class file's order (the JVM back end's commits)
+src/jvm/lower.rs	lower_local_default	PORT	a local default getter by its own signature (the JVM back end's commits)
+src/jvm/lower.rs	lower_member_rest	PORT	a local trait member's right-associative operands in its class file's order (the JVM back end's commits)
+src/parser/defs.rs	desugar_pattern_vals_in	ORDER-FREE	no extension clauses
+src/parser/defs.rs	implicit_class_conversion	ORDER-FREE	no extension clauses
+src/parser/defs.rs	parse_fun	PORT	the swap at the definition (rightAssocParams), the source kept
+src/parser/defs.rs	parse_given	ORDER-FREE	a given's extension clauses passed on
+src/parser/defs.rs	parse_secondary_ctor	ORDER-FREE	no extension clauses
+src/parser/expr.rs	op_precedence	PINNED	associativity of a source operator, the parser's
+src/parser/mod.rs	add_main_proxies	ORDER-FREE	no extension clauses
+src/shape.rs	def_sig	PINNED	records follow the semantic signature
+src/symbols.rs	new_sym	ORDER-FREE	a symbol's field, its default
+src/symbols.rs	right_assoc_order	DELETE	the forward permutation (closure: no clause permutation anywhere)
+src/symbols.rs	source_name	BOUNDARY	a symbol's source name
+src/task/lock.rs	is_entry	ORDER-FREE	a lock file's text, no signature
+src/tasty/show.rs	def_head	BOUNDARY	display: the source view
+src/tasty/write/pickle.rs	declared_clause_order	DELETE	the pickle writer's permutation
+src/tasty/write/pickle.rs	default_getters	PORT	getters numbered in the compiled order
+src/tasty/write/pickle.rs	getter_place	PORT	a getter's place in the compiled order
+src/tasty/write/pickle.rs	method_params	PORT	the DEFDEF's paramss as the signature has them, type clauses interleaved
+src/tasty/write/pickle.rs	super_getter_accessor	PORT	a getter by its own signature
+src/tasty/write/pickle/shapes.rs	std_target_shapes	BOUNDARY	the standard library's extensions read in compiled order
+src/tasty/write/pickle/term.rs	applied_args	PORT	the swap DELETED; the interleaved TYPEAPPLY and APPLY as the signature has them
+src/tasty/write/pickle/term.rs	array_call	BOUNDARY	the standard library's extensions read in compiled order
+src/tasty/write/pickle/term.rs	default_arg	PORT	a getter call with the compiled clauses before it
+src/tasty/write/pickle/term.rs	std_call	BOUNDARY	the standard library's extensions read in compiled order
+src/tasty/write/pickle/term.rs	std_own_clauses	BOUNDARY	the standard library's extensions read in compiled order
+src/typer/apply.rs	apply_callee	PORT	its right-associative branch goes with apply_right_assoc_method
+src/typer/apply.rs	apply_extension_of_instance_in	PORT	its reorder DELETED; the instance's extension applied as any
+src/typer/apply.rs	apply_method_in_now	PORT	the receiver at its compiled position (extMethodApply)
+src/typer/apply.rs	apply_right_assoc_method	DELETE	its reorder; a selected member is an ordinary application
+src/typer/apply.rs	builtin_extension_matched	PORT	the search reads the compiled receiver
+src/typer/apply.rs	drops_java_parens	PORT	the method's own clauses by the receiver's identity
+src/typer/apply.rs	eta_extension_of_instance	PORT	an ordinary partial application of the compiled signature
+src/typer/apply.rs	extension_accepts	PORT	the search reads the compiled receiver
+src/typer/apply.rs	getter_application	PORT	a pickled body's getter by the getter's own signature
+src/typer/apply.rs	is_parameterless_extension	PORT	the method's own clauses by the receiver's identity
+src/typer/apply.rs	is_right_assoc_extension	PINNED	the definition's source test of the name alone
+src/typer/apply.rs	member_default_getter	PORT	the getter's number in the compiled order, both routes
+src/typer/apply.rs	prefix_resolves	PORT	the receiver and the clauses before it, compiled
+src/typer/apply.rs	receiver_bound_path	PORT	the receiver's path at its compiled position
+src/typer/apply.rs	receiver_class_derives	PORT	the receiver's type at its compiled position
+src/typer/apply.rs	receiver_class_rules_out	PORT	the receiver's type at its compiled position
+src/typer/apply.rs	receiver_param_type	PORT	the receiver's type at its compiled position
+src/typer/apply.rs	retry_on_qualifier	PORT	the extension's receiver by its identity
+src/typer/apply.rs	right_assoc_declared_order	DELETE	the declared order of a symbol
+src/typer/apply.rs	right_assoc_selection	DELETE	a selection's swapped retyping; an ordinary selection
+src/typer/apply.rs	right_assoc_targs_excess	PORT	E023 over the interleaved type clauses
+src/typer/apply.rs	right_assoc_written_lists	DELETE	a written call's lists put in declared order
+src/typer/apply.rs	selection_swaps	DELETE	the swapped selection's candidates
+src/typer/apply.rs	signature_param_index	DELETE	compiled index to declared
+src/typer/apply.rs	swapped_prefix_fits	DELETE	the swapped selection's test
+src/typer/apply.rs	swapped_receiver_error	DELETE	the swapped selection's message
+src/typer/apply.rs	try_extensions_or_conversion	PORT	the extension's receiver by its identity
+src/typer/check.rs	ext_scope_of	PORT	the receiver's scope by its identity
+src/typer/complete.rs	describe_member	BOUNDARY	display: the source view
+src/typer/complete.rs	extension_candidates	BOUNDARY	completion: the receiver by its identity
+src/typer/complete/import_fix.rs	holds_interpolator	ORDER-FREE	a source text's test, no signature
+src/typer/expr.rs	type_block	PORT	a local extension def's signature in compiled order
+src/typer/index.rs	ascribed_qualifier	BOUNDARY	the index: the syntactic receiver
+src/typer/index.rs	receives	BOUNDARY	the index: the syntactic receiver
+src/typer/index.rs	selects_own_name	BOUNDARY	the index: the syntactic receiver
+src/typer/loader/bodies.rs	conv_apply	PORT	a pickled call read in its compiled order
+src/typer/loader/bodies.rs	conv_def_scoped	PORT	a pickled body's local extension in compiled order
+src/typer/loader/bodies.rs	conv_template_stat	PORT	a pickled getter's name and clauses in compiled order
+src/typer/loader/bodies.rs	filled_clause	DELETE	a pickled body's compiled clause to declared
+src/typer/loader/declared.rs	pickled_signature_seen	PORT	a signed reference names the compiled declaration
+src/typer/loader/mod.rs	enter_loaded_member	PORT	a loaded member's semantic signature as pickled
+src/typer/loader/mod.rs	extension_shape	DELETE	the loader's second inversion
+src/typer/loader/mod.rs	loaded_sig_reading	DELETE	the loader's inversion of a pickled signature
+src/typer/loader/shapes.rs	std_shapes	BOUNDARY	the standard library's extensions read in compiled order
+src/typer/namer.rs	enter_def	PORT	the definition's semantic signature in compiled order
+src/typer/prims.rs	assign_op_by_application	PORT	a compound assignment of an operator ending in ':' is no assignment (NameOps 116-122)
+src/typer/prims.rs	type_infix_applied_now	PORT	typedInfixOp's route with more clauses
+src/typer/prims.rs	type_infix_now	PORT	typedInfixOp's route
+src/typer/profile.rs	fun_path	BOUNDARY	profile names: the source view
+src/typer/semanticdb/symbol.rs	of	BOUNDARY	SemanticDB: the source view
+src/typer/signature.rs	extension_receiver_subst	BOUNDARY	signature help: the receiver by its identity
+src/typer/signature.rs	method_shown	BOUNDARY	display: the source view
+src/typer/signature.rs	owner	BOUNDARY	signature help: the syntactic receiver
+src/typer/unused_defs.rs	check_param	BOUNDARY	unused parameters: the source view
+src/typer/value_exports.rs	make_forwarder	PORT	an export copies the semantic method type

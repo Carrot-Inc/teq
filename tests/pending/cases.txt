@@ -200,6 +200,15 @@ return_tail_call_receiver_while	< 123
 return_tail_call_tailrec	< 0
 return_tail_call_try_unguarded	< 8
 return_tail_call_value_class	< 100001
+right_assoc_read_inline_written	< right
+right_assoc_read_leading_using	< left
+right_assoc_read_mechanics	< prefix
+right_assoc_read_null_receiver	< left
+right_assoc_read_order_written	< D-right
+right_assoc_read_poly_export	< using
+right_assoc_read_pure_throw	< caught
+right_assoc_read_receiver_default	< right
+right_assoc_read_selections	< right
 string_constant_fold_surrogates	< folded to the pair
 super_rebind_result	< text
 trait_empty_parameters	< empty

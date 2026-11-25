@@ -388,6 +388,15 @@ return_tail_call_receiver_while	output differs
 return_tail_call_tailrec	error: Cannot rewrite recursive call: it is not in tail position
 return_tail_call_try_unguarded	RangeError: Maximum call stack size exceeded
 return_tail_call_value_class	RangeError: Maximum call stack size exceeded
+right_assoc_read_inline_written	output differs
+right_assoc_read_leading_using	output differs
+right_assoc_read_mechanics	error: value +: is not a member of E
+right_assoc_read_null_receiver	output differs
+right_assoc_read_order_written	output differs
+right_assoc_read_poly_export	error: this value does not take type arguments
+right_assoc_read_pure_throw	TypeError: Cannot read properties of null (reading 'value')
+right_assoc_read_receiver_default	error: value +: is not a member of E
+right_assoc_read_selections	error: value +: is not a member of the parents of class C
 right_assoc_throwing_operand_order	TypeError: Cannot read properties of null (reading 'value')
 runtime_objects	error: not supported on JavaScript: method equals of scala.runtime.BoxesRunTime (a Java definition without an implementation in the std's pl
 sam_conversion_after_overloaded_apply	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)

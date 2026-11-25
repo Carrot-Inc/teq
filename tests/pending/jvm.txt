@@ -193,6 +193,13 @@ reducer_literal_bound	compile
 reducer_wildcard_bound	compile
 reflect_declared_method	verify
 reflect_encoded_parameter	backend
+right_assoc_read_inline_written	output
+right_assoc_read_leading_using	output
+right_assoc_read_mechanics	compile
+right_assoc_read_order_written	output
+right_assoc_read_poly_export	compile
+right_assoc_read_receiver_default	compile
+right_assoc_read_selections	compile
 scala2_auto_application	output
 scala_package_member_before_predef	output
 script_bounded_output	compile
