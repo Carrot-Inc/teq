@@ -562,11 +562,14 @@ impl<'a> Parser<'a> {
                 };
                 let mut pm: Mods = 0;
                 let mut within = names::EMPTY;
+                // `private[this]`: dotty's `Local` (`accessQualifierOpt`), kept for a class parameter (`Ast::this_locals`).
+                let mut this_local = false;
                 loop {
                     match self.kind() {
                         Tok::KwPrivate => {
                             pm |= mods::PRIVATE;
                             self.bump();
+                            this_local = self.at(Tok::LBracket) && self.kind_at(1) == Tok::KwThis;
                             within = self.parse_access_qualifier();
                             continue;
                         }
@@ -638,6 +641,9 @@ impl<'a> Parser<'a> {
                 self.end_annotation_region(region);
                 if within != names::EMPTY {
                     self.ast.access_scopes.push((span.start, within));
+                }
+                if this_local && class_params.is_some() {
+                    self.ast.this_locals.push(span.start);
                 }
                 if name != names::EMPTY {
                     let full = param_start.to(self.prev_span());

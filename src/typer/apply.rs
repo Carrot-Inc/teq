@@ -9786,7 +9786,7 @@ impl<'a> Worker<'a> {
             self.check_access(sym, Some(recv_ty), span);
             let sym_mods = self.syms.sym(sym).mods;
             if sym_mods & crate::ast::mods::PRIVATE != 0 {
-                self.note_private_selection(sym, recv, recv_ty, false);
+                self.note_private_selection(sym, recv, false);
             }
             let accessor = if sym_mods & crate::ast::mods::PROTECTED != 0 {
                 self.check_protected_access(sym, recv, recv_ty, span);

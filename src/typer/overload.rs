@@ -2506,8 +2506,8 @@ impl<'a> Worker<'a> {
                     },
                     None => {
                         self.check_access(alt.sym, None, span);
-                        if let (Some(r), Some(rt)) = (recv, recv_ty) {
-                            self.note_private_selection(alt.sym, r, rt, false);
+                        if let Some(r) = recv {
+                            self.note_private_selection(alt.sym, r, false);
                         }
                         // A deferred inline alternative of a parameter's member: the arguments
                         // chose it on the declared type, the argument's class implements it.

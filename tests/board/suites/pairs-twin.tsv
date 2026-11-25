@@ -3416,6 +3416,8 @@ cases/value_of_inner_object	pass	-
 cases/value_of_singletons	pass	-	
 cases/var_default_init	pass	-	
 cases/var_setter_member	pass	-	
+cases/variance_locality_reach	pass	-	
+cases/variance_locality_runs	pass	-	
 cases/vc_box_any	pass	-	
 cases/vc_box_array	pass	-	
 cases/vc_box_ascription	pass	-	

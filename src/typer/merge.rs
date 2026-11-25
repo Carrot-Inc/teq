@@ -2088,9 +2088,18 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
         map(m, suffixed_roots, |r, s| r.sym(s), |_, _| {});
     }));
     let (expr_marks, eta_expansions, folded_paths, irrefutable_pats) = (&mut w.expr_marks, &mut w.eta_expansions, &mut w.folded_paths, &mut w.irrefutable_pats);
-    let written_purity = &mut w.written_purity;
+    let (written_purity, this_stand_ins) = (&mut w.written_purity, &mut w.this_stand_ins);
     tasks.push(Box::new(move |m| {
         map(m, expr_marks, |r, e| r.expr(e), |_, _| {});
+        map(m, this_stand_ins, |r, e| r.expr(e), |r, (c, form)| {
+            *c = r.class(*c);
+            *form = match *form {
+                super::StandIn::Local(s) => super::StandIn::Local(r.sym(s)),
+                super::StandIn::Module(k) => super::StandIn::Module(r.class(k)),
+                super::StandIn::Call(s) => super::StandIn::Call(r.sym(s)),
+                super::StandIn::Other => super::StandIn::Other,
+            };
+        });
         map(m, written_purity, |r, e| r.expr(e), |_, _| {});
         map(m, eta_expansions, |r, e| r.expr(e), |_, _| {});
         map(m, folded_paths, |r, e| r.expr(e), |r, (recv, s)| {
@@ -2460,6 +2469,7 @@ impl<'a> Worker<'a> {
         union(&mut self.super_problems_told, &mut o.super_problems_told);
         self.suffixed_roots.absorb(o.suffixed_roots.take_local());
         union(&mut self.expr_marks, &mut o.expr_marks);
+        union(&mut self.this_stand_ins, &mut o.this_stand_ins);
         union(&mut self.written_purity, &mut o.written_purity);
         union(&mut self.eta_expansions, &mut o.eta_expansions);
         union(&mut self.folded_paths, &mut o.folded_paths);

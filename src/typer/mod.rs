@@ -331,6 +331,17 @@ impl StampedSymMemo {
 
 pub const NUM_RANK_TABLE: usize = 32;
 pub const NO_RANK: u8 = u8::MAX;
+/// The form a receiver made for a class's `this` stood in (`Worker::this_stand_ins`): the expression's own kind and
+/// what it names, so that an expression the arena holds at that place later (a typing taken back and redone) is not
+/// read as the stand-in.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum StandIn {
+    Local(SymId),
+    Module(ClassId),
+    Call(SymId),
+    Other,
+}
+
 pub const MARK_UNCHECKED: u8 = 1;
 pub const MARK_CAST: u8 = 2;
 /// `(e: Boolean)`, an ascription to a type that is no literal type: no constant as the
@@ -2045,6 +2056,11 @@ pub struct Worker<'a> {
     /// warns of nothing, `CAST` for an `asInstanceOf` erased to the expression it casts, which
     /// is no path.
     pub expr_marks: FxMap<TExprId, u8>,
+    /// The receivers `this_ref` made for a class's `this` in another form than a plain `this` (the local that stands
+    /// for it in a lifted class, a constructor's outer parameter, an inline call's receiver, the module, a call of the
+    /// outer accessor, a held proxy's read): each with its class and the form it was made in, so that a selection's
+    /// prefix is known as that class's `this` by the function that made it, whatever its look (`is_this_stand_in`).
+    pub this_stand_ins: FxMap<TExprId, (ClassId, StandIn)>,
     /// The lambdas the typer made of a method's reference, each with the reference it was made of, the file
     /// and the span of the name as written (`Worker::typer_eta`; none for one made past an error told of the
     /// name), and whether it is an application's own expansion, which still converts to a SAM trait where one
@@ -3606,6 +3622,7 @@ impl<'a> Worker<'a> {
             inline_accessor_syms: FxMap::default(),
             inline_results: FxMap::default(),
             expr_marks: FxMap::default(),
+            this_stand_ins: FxMap::default(),
             eta_expansions: FxMap::default(),
             folded_paths: FxMap::default(),
             folded_deprecated: false,
@@ -4085,6 +4102,7 @@ impl<'a> Worker<'a> {
             inline_accessor_syms: self.inline_accessor_syms.clone(),
             inline_results: self.inline_results.clone(),
             expr_marks: self.expr_marks.clone(),
+            this_stand_ins: self.this_stand_ins.clone(),
             eta_expansions: self.eta_expansions.clone(),
             folded_paths: self.folded_paths.clone(),
             folded_deprecated: self.folded_deprecated,

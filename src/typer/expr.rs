@@ -4241,8 +4241,7 @@ impl<'a> Worker<'a> {
         match target {
             Some(s) if self.syms.sym(s).kind == SymKind::Var => {
                 if let Some(recv) = field_of {
-                    let recv_ty = self.prog.type_of(recv).unwrap_or(ANY);
-                    self.note_private_selection(s, recv, recv_ty, true);
+                    self.note_private_selection(s, recv, true);
                 }
             }
             Some(s) => {

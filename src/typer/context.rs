@@ -306,7 +306,7 @@ worker_fields! {
         diag_region, history_reads, told, meetings, claims, inherited, tclasses_published, tclasses_registered,
         walk_by_size, compilation_unported, bodies_started, deferred_cycles, std_seen, arity_seen, lists_at_fork, tvars_at_fork, files,
         ascription_constants, kind_clauses, inferred_parent_args, inferred_trait_args, sam_classes,
-        std_package_misses, inline_accessor_syms, inline_results, expr_marks, eta_expansions, folded_paths,
+        std_package_misses, inline_accessor_syms, inline_results, expr_marks, this_stand_ins, eta_expansions, folded_paths,
         folded_deprecated, wildcards_used, captured_locals, spaces, deferred_matches, late_methods, override_pairs,
         derive, anon_envs, irrefutable_pats, tag_pats, arg_types_seen, local_news, lifted_members, lifted_lazy,
         accessor_captures, held_proxies, held_proxy_of, pending_held, anon_captures, anon_parent_args,

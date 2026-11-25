@@ -2640,8 +2640,39 @@ impl<'a> Worker<'a> {
     }
 
     /// The receiver for a member of the class `c` in scope: `this`, or inside a lifted class
-    /// (anonymous or local) nested in `c` the local that stands for the `this` of `c` there.
+    /// (anonymous or local) nested in `c` the local that stands for the `this` of `c` there. A
+    /// receiver in another form than a plain `this` is noted with its class (`this_stand_ins`): the
+    /// one place that says a prefix is `c.this` (`is_this_stand_in`).
     pub fn this_ref(&mut self, c: ClassId) -> TExprId {
+        let e = self.this_ref_made(c);
+        if !matches!(self.prog.expr(e), TExpr::This) {
+            let form = self.stand_in_form(e);
+            self.this_stand_ins.insert(e, (c, form));
+        }
+        e
+    }
+
+    /// What the expression `e` names, as `this_stand_ins` keeps it.
+    fn stand_in_form(&self, e: TExprId) -> super::StandIn {
+        match self.prog.expr(e) {
+            TExpr::Local(s) => super::StandIn::Local(s),
+            TExpr::Module(k) => super::StandIn::Module(k),
+            TExpr::CallMethod(_, s, _) => super::StandIn::Call(s),
+            _ => super::StandIn::Other,
+        }
+    }
+
+    /// Whether the receiver `e` is the `this` of the class `c`: a plain `this`, or a receiver `this_ref` made for it
+    /// in another form and that the arena still holds in that form (`this_stand_ins`).
+    pub(super) fn is_this_stand_in(&self, e: TExprId, c: ClassId) -> bool {
+        if matches!(self.prog.expr(e), TExpr::This) {
+            return true;
+        }
+        let form = self.stand_in_form(e);
+        self.this_stand_ins.get(&e).is_some_and(|&(k, f)| k == c && f == form)
+    }
+
+    fn this_ref_made(&mut self, c: ClassId) -> TExprId {
         match self.inline_this(c) {
             Some((Some(proxy), _)) => {
                 return match self.inline_arg(proxy) {

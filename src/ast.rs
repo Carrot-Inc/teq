@@ -1141,6 +1141,10 @@ pub struct Ast {
     /// `private[pkg]` and `protected[pkg]`: where the name of the definition or parameter
     /// starts, and `pkg`.
     pub access_scopes: Vec<(u32, Name)>,
+    /// A class parameter written `private[this]`: where its name starts. dotty keeps `Local` for the `[this]`
+    /// (`Parsers.accessQualifierOpt`, which reports the qualifier as ignored): a `private[this]` class parameter is
+    /// a `LocalParamAccessor`, whose variance `VarianceChecker`'s traverser does not check.
+    pub this_locals: Vec<u32>,
     /// Whether the file quotes or splices anywhere.
     pub has_quotes: bool,
     /// A library body's `new p.C(..)` of a class nested in a class, with the prefix `p` that
@@ -1468,6 +1472,7 @@ impl Ast {
             top_level: Vec::new(),
             tparam_clauses: Vec::new(),
             access_scopes: Vec::new(),
+            this_locals: Vec::new(),
             has_quotes: false,
             new_outers: crate::intern::FxMap::default(),
             given_binds: Default::default(),

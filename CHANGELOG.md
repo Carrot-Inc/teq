@@ -37,6 +37,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   a", at the reference that closes the cycle), where a check, a run or a build of it never ended, an import of the
   cycle's givens and a summon included. A def's cycle is "involving method a", where teq said "recursive use of a
   needs an explicit result type". A chain of singleton types that does not close compiles as it did.
+- A class's variance is checked by its members' locality as scalac checks it: a `private[this]` class parameter is not
+  checked (`class C[-T](private[this] val row: List[T])` compiles; a case class's is checked through its `copy`
+  default's getter, as scalac reports it); a private class-parameter `var` that no other instance assigns stands at
+  its own variance (`class C[+T](private var row: List[T])`, a case class's and an enum case's compile); a trait
+  parameter's private `var` is checked through its setter's parameter. A private member read or assigned through a
+  local of `this.type` (`val self: this.type = this`), or assigned through another instance by a compound assignment
+  (`o.row ++= xs`), is checked as any member, as under scalac: teq accepted those; a parameter with an access scope
+  (`private[C] var x: T`) or protected keeps its check, without the private-parameter addendum scalac writes for a
+  plain `private` one alone; and a case class with no `copy` scalac checks (abstract, a repeated parameter, a private
+  constructor) has its `private[this]` parameter checked through `_1`, as scalac reports it.
 - On the JVM an inner class made through a `null` outer throws `NullPointerException`, and a superclass's constructor
   sees the captures it reads through an override, as scalac (it read `null` or `0`).
 - On the JVM an enum's body reading its case's parameter (`val y = x * 2` for `case C(x: Int)`) sees it, as scalac.

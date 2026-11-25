@@ -1451,6 +1451,12 @@ impl<'a> Worker<'a> {
         if !target.is_some_and(|s| self.syms.sym(s).kind == SymKind::Var) {
             return None;
         }
+        // A compound assignment is an Assign (Applications.scala 1513, typedOpAssign): through another instance it
+        // marks a private var assigned non-locally as `o.x = v` does (`note_private_selection`), its receiver as
+        // written, before it is evaluated once.
+        if let TExpr::Field(recv, s) = self.prog.expr(tl) {
+            self.note_private_selection(s, recv, true);
+        }
         let mark = self.hoisted.len();
         let tl = self.field_target_once(tl, written, span);
         let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, FunEnd::operand_at(op_end), span, None);

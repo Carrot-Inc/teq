@@ -1210,6 +1210,8 @@ vararg_eta	pass	-
 variance	pass	-	
 variance_bounds	pass	-	
 variance_hk_param_args	pass	-	
+variance_locality	pass	-	
+variance_locality_scope	pass	-	
 variance_private	pass	-	
 variance_private_ctor_var_compound	pass	-	
 variance_protected_this_param	pass	-	

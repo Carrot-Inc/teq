@@ -3421,6 +3421,8 @@ value_of_inner_object	pass	-
 value_of_singletons	pass	-	
 var_default_init	pass	-	
 var_setter_member	pass	-	
+variance_locality_reach	pass	-	
+variance_locality_runs	pass	-	
 vc_box_any	pass	-	
 vc_box_array	pass	-	
 vc_box_ascription	pass	-	

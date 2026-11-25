@@ -10177,15 +10177,38 @@ impl<'a> Worker<'a> {
         }
         for i in 0..self.own_member_count(c) {
             let m = self.own_member(c, i);
-            let (m_mods, has_def) = {
+            let (m_mods, has_def, m_kind) = {
                 let s = self.syms.sym(m);
-                (s.mods, s.def.is_some())
+                (s.mods, s.def.is_some(), s.kind)
             };
             let is_field_param = m_mods & mods::FIELD != 0 && self.is_ctor_param(c, m);
             if !(has_def || is_field_param) || self.local_private(c, m) {
                 continue;
             }
-            self.check_member_variance(c, m, false);
+            // dotty's traverser skips a `private[this]` class parameter, a `LocalParamAccessor` (Flags.scala 607,
+            // VarianceChecker.scala 208-212); a case class's is checked through the getter of `copy`'s default that
+            // Desugar makes for it (Desugar.scala 905-961, `copy$default$N`, whose result is the parameter's type).
+            if is_field_param && self.private_this_param(m) {
+                if self.syms.class(c).mods & mods::CASE != 0 {
+                    if self.case_copy_checked(c) {
+                        self.check_copy_default_variance(c, m);
+                    } else {
+                        self.check_selector_variance(c, m);
+                    }
+                }
+                continue;
+            }
+            // A private class parameter var is local until it is assigned through another instance
+            // (VarianceChecker.scala 157-159, `isLocal`: Private without AssignedNonLocally): checked at its own
+            // variance, a getter's, here; at 0 where `note_private_selection` meets such an assignment. A trait's has a
+            // setter, no local member since a parameter accessor is none (Desugar.scala 208-213, Namer.scala 204-209),
+            // whose parameter is checked at -1 beside.
+            // A qualified one (`private[C] var`) has an access scope: no Private flag in dotty, so no local member.
+            let private_param_var = is_field_param && m_mods & mods::PRIVATE != 0 && m_kind == SymKind::Var && !self.syms.sym(m).scoped_private;
+            self.check_member_variance(c, m, private_param_var);
+            if private_param_var && self.syms.class(c).kind == ClassKind::Trait {
+                self.check_setter_variance(m);
+            }
         }
         let mut aliases: Vec<AliasId> = self.syms.class(c).type_aliases.values().copied().collect();
         aliases.sort();
@@ -10223,6 +10246,122 @@ impl<'a> Worker<'a> {
         self.variance_skip.clear();
     }
 
+    /// Whether the class parameter `m` is written `private[this]` (`Ast::this_locals`): dotty's `LocalParamAccessor`.
+    fn private_this_param(&self, m: SymId) -> bool {
+        let info = self.syms.sym(m);
+        info.mods & mods::PRIVATE != 0 && self.ast(info.file).this_locals.contains(&info.span.start)
+    }
+
+    /// dotty's check of `copy$default$N` for a case class's `private[this]` parameter of its first clause (the
+    /// traverser skips the parameter itself): a method of the class's type parameters copied, its result the parameter's type, checked at 1
+    /// and shown as dotty shows it, `[A², B]: A` (a copied parameter whose name the message also gives the class's is
+    /// named apart), with the `where:` lines it writes for them; reported at the parameter's type.
+    fn check_copy_default_variance(&mut self, c: ClassId, m: SymId) {
+        // `copy` takes the first clause's parameters with their defaults, the others' without (Desugar.scala 905-961):
+        // a parameter of a later clause has no getter.
+        let Some(n) = self.syms.class(c).ctor_syms.first().and_then(|cl| cl.iter().position(|&p| p == m)) else { return };
+        self.sig_of(m);
+        let ty = self.sig_arc(m).ret;
+        // The parameter's `@uncheckedVariance` holds for the getter as for the parameter (`check_member_variance`'s
+        // exclusions): the getter's type is the parameter's tree.
+        self.unchecked_variance_of(c, m);
+        let Some((p, required)) = self.variance_violation(ty, 1) else { return };
+        let shown = self.show(ty);
+        let reported = self.name_str(self.syms.tparam(p).name).to_string();
+        let mentions = |name: &str| name == reported || shown.split(|ch: char| !(ch.is_alphanumeric() || ch == '_' || ch == '$')).any(|w| w == name);
+        let tparams = self.syms.class(c).tparams.clone();
+        let names: Vec<String> = tparams.iter().map(|&t| self.name_str(self.syms.tparam(t).name).to_string()).collect();
+        let copied: Vec<String> = names.iter().map(|nm| if mentions(nm) { format!("{nm}\u{b2}") } else { nm.clone() }).collect();
+        let in_type = if copied.is_empty() { shown.clone() } else { format!("[{}]: {}", copied.join(", "), shown) };
+        let class_name = self.name_str(self.syms.class(c).name).to_string();
+        let mut where_lines: Vec<String> = Vec::new();
+        for nm in names.iter().filter(|nm| mentions(nm)) {
+            where_lines.push(format!("{nm}  is a type in class {class_name}"));
+            where_lines.push(format!("{nm}\u{b2} is a type variable"));
+        }
+        let what = if where_lines.is_empty() {
+            format!("method copy$default${}", n + 1)
+        } else {
+            format!("method copy$default${}\n\nwhere:    {}", n + 1, where_lines.join("\n          "))
+        };
+        let (file, span) = {
+            let info = self.syms.sym(m);
+            (info.file, info.span)
+        };
+        let at = self.member_type_exprs(c, m).last().and_then(|&t| self.ast(file).ty_spans.get(t.idx()).copied()).unwrap_or(span);
+        self.report_variance_at(p, required, &in_type, file, at, &what);
+    }
+
+    /// The member `m`'s `@uncheckedVariance` exclusions, fresh for its check (`variance_skip`), as each member's check
+    /// takes them from its type's trees.
+    fn unchecked_variance_of(&mut self, c: ClassId, m: SymId) {
+        self.variance_skip.clear();
+        if !self.unchecked_variance.is_empty() {
+            let tys = self.member_type_exprs(c, m);
+            let file = self.syms.sym(m).file;
+            self.collect_unchecked_variance(file, &tys);
+        }
+    }
+
+    /// Whether the case class `c` has a `copy` whose getters dotty's checker meets: Desugar makes none for an abstract
+    /// case class or one with a repeated parameter (Desugar.scala 939-941, "cannot have default arguments for
+    /// repeated parameters"), and copies the constructor's access onto `copy` and its getters (`copiedAccessFlags`,
+    /// 948): a plain `private` constructor makes them private, which the checker counts as local and skips
+    /// (VarianceChecker.scala 157-159). A qualified one (`private[p]`) sets no Private flag.
+    fn case_copy_checked(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        if info.mods & mods::ABSTRACT != 0 || info.ctor.iter().any(|cl| cl.params.iter().any(|p| p.repeated)) {
+            return false;
+        }
+        let plain_private = info.mods & mods::PRIVATE_CTOR != 0 && !self.ast(info.file).access_scopes.iter().any(|&(at, w)| at == info.span.end && self.name_str(w) != "this");
+        !plain_private
+    }
+
+    /// dotty's check of a case class's selector `_N` (Desugar.scala 917-931: `def _N: T = this.pN`, synthetic, of the
+    /// first clause) for its `private[this]` parameter where no `copy` getter is checked (`case_copy_checked`): its
+    /// result at 1, shown as dotty shows the parameterless method's type, `=> T` (a repeated parameter's `=> Seq[T]
+    /// @Repeated`), reported at the parameter's type.
+    fn check_selector_variance(&mut self, c: ClassId, m: SymId) {
+        let Some(n) = self.syms.class(c).ctor_syms.first().and_then(|cl| cl.iter().position(|&p| p == m)) else { return };
+        self.sig_of(m);
+        let ty = self.sig_arc(m).ret;
+        self.unchecked_variance_of(c, m);
+        let Some((p, required)) = self.variance_violation(ty, 1) else { return };
+        let repeated = self.syms.class(c).ctor.first().and_then(|cl| cl.params.get(n)).is_some_and(|p| p.repeated);
+        let shown = if repeated { format!("=> {} @Repeated", self.show(ty)) } else { format!("=> {}", self.show(ty)) };
+        let (file, span) = {
+            let info = self.syms.sym(m);
+            (info.file, info.span)
+        };
+        let at = self.member_type_exprs(c, m).last().and_then(|&t| self.ast(file).ty_spans.get(t.idx()).copied()).unwrap_or(span);
+        // A repeated parameter's `T*` from its element's start, as scalac's caret covers it.
+        let at = match self.member_type_exprs(c, m).last().map(|&t| self.ast(file).ty(t)) {
+            Some(ast::TyExpr::Repeated(elem)) => match self.ast(file).ty_spans.get(elem.idx()).copied() {
+                Some(e) => crate::source::Span { start: e.start, end: at.end.max(e.end) },
+                None => at,
+            },
+            _ => at,
+        };
+        let what = format!("method _{}", n + 1);
+        self.report_variance_at(p, required, &shown, file, at, &what);
+    }
+
+    /// dotty's check of a var's setter `x_=(x$1: T)` (Desugar.scala 222-243), its parameter at -1, shown as dotty shows
+    /// it (`type T of parameter x_=`), reported at the parameter's start.
+    fn check_setter_variance(&mut self, m: SymId) {
+        self.sig_of(m);
+        let ty = self.sig_arc(m).ret;
+        let Some((p, required)) = self.variance_violation(ty, -1) else { return };
+        let shown = self.show(ty);
+        let (file, span, name) = {
+            let info = self.syms.sym(m);
+            (info.file, info.span, info.name)
+        };
+        let what = format!("parameter {}_=", self.name_str(name));
+        let at = crate::source::Span { start: span.start, end: span.start + 1 };
+        self.report_variance_at(p, required, &shown, file, at, &what);
+    }
+
     /// Whether the member `m` of `c` is private to `this` until another instance selects it:
     /// private, not qualified, no class parameter (dotty's `canBeLocal`).
     fn local_private(&self, c: ClassId, m: SymId) -> bool {
@@ -10239,11 +10378,7 @@ impl<'a> Worker<'a> {
             let s = self.syms.sym(m);
             (s.kind, s.mods, s.file, s.span)
         };
-        self.variance_skip.clear();
-        if !self.unchecked_variance.is_empty() {
-            let tys = self.member_type_exprs(c, m);
-            self.collect_unchecked_variance(m_file, &tys);
-        }
+        self.unchecked_variance_of(c, m);
         let sign = match kind {
             SymKind::Var if read_only => 1,
             SymKind::Var => 0,
@@ -10253,8 +10388,9 @@ impl<'a> Worker<'a> {
         self.sig_of(m);
         let sig = self.sig_arc(m);
         let mut what = self.member_description(m, None);
-        // dotty's `privateParamAddendum`: a private class parameter is never local.
-        if m_mods & mods::PRIVATE != 0 && m_mods & mods::FIELD != 0 && self.is_ctor_param(c, m) {
+        // dotty's `privateParamAddendum`: a private class parameter is never local; a qualified one (`private[C]`)
+        // has no Private flag (VarianceChecker.scala 181: `ParamAccessor` and `Private`), and no addendum.
+        if m_mods & mods::PRIVATE != 0 && m_mods & mods::FIELD != 0 && !self.syms.sym(m).scoped_private && self.is_ctor_param(c, m) {
             let (var_or_val, instead) = if kind == SymKind::Var { ("var", " and add\na field inside the class instead") } else { ("val", "") };
             what.push_str(&format!(
                 "\n\nImplementation limitation: private {var_or_val} parameters cannot be inferred to be local\nand therefore are always variance-checked.\n\nPotential fix: remove the private {var_or_val} modifiers on the parameter {}{instead}.",
@@ -10323,14 +10459,7 @@ impl<'a> Worker<'a> {
         format!("{} {{...}}", shown.join(" with "))
     }
 
-    /// Whether the local `l` stands for `c.this` in a class nested in `c` (`this_ref`, a
-    /// constructor's outer parameter), being of that singleton's type: dotty's prefix `c.this`.
-    fn local_is_this(&mut self, l: SymId, c: ClassId) -> bool {
-        let ty = self.sig_of(l).ret;
-        matches!(self.types.get(ty), Type::This(k) if k == c)
-    }
-
-    /// A private member of a class selected through `recv`, typed `recv_ty`, or assigned
+    /// A private member of a class selected through `recv`, or assigned
     /// through it: where `recv` is no `this` of the member's class (nor the object itself), the
     /// member is every instance's, and its variance is checked as any member's (dotty's
     /// `isAccessibleFrom` resetting `Local`, `typedAssign`'s `AssignedNonLocally`), with the
@@ -10338,30 +10467,41 @@ impl<'a> Worker<'a> {
     /// is reported once however many selections meet it; a member found sound is not checked
     /// again.
     #[inline]
-    pub(super) fn note_private_selection(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId, assigned: bool) {
+    pub(super) fn note_private_selection(&mut self, s: SymId, recv: TExprId, assigned: bool) {
         if self.syms.sym(s).mods & mods::PRIVATE != 0 {
-            self.note_private_selection_of(s, recv, recv_ty, assigned);
+            self.note_private_selection_of(s, recv, assigned);
+        }
+    }
+
+    /// The prefix that keeps a private member local (`isAccessPrivilegedThisType`, SymDenotations.scala 912-918): the
+    /// owner's `this` in whatever form the typer made it (`is_this_stand_in`: `this_ref` notes each one it makes, the
+    /// outer accessor's call two classes in, the local a lifted class holds, an inline call's receiver), and the
+    /// object itself named; a val the program writes of `this.type` (`val self: this.type = this`) is a TermRef, no
+    /// privileged prefix, nor is any other expression of that type.
+    fn privileged_prefix(&mut self, recv: TExprId, c: ClassId) -> bool {
+        match self.prog.expr(recv) {
+            TExpr::Module(o) if o == c => true,
+            _ => self.is_this_stand_in(recv, c),
         }
     }
 
     #[inline(never)]
-    fn note_private_selection_of(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId, assigned: bool) {
+    fn note_private_selection_of(&mut self, s: SymId, recv: TExprId, assigned: bool) {
         let (owner, s_mods, s_file, name) = {
             let info = self.syms.sym(s);
             (info.owner, info.mods, info.file, info.name)
         };
         let Owner::Class(c) = owner else { return };
-        if s_mods & mods::PRIVATE == 0 || self.source(s_file).is_std || !self.in_variant_scope(c) || !self.local_private(c, s) {
+        if s_mods & mods::PRIVATE == 0 || self.source(s_file).is_std || !self.in_variant_scope(c) {
             return;
         }
-        match self.prog.expr(recv) {
-            TExpr::This => return,
-            TExpr::Module(o) if o == c => return,
-            TExpr::Local(l) if self.local_is_this(l, c) => return,
-            _ => {}
+        // A private class parameter var stays local until an assignment through another instance (`check_variances`,
+        // C1): such an assignment checks it at 0 (`Typer.rememberNonLocalAssignToPrivate`, Typer.scala 1461-1471).
+        let param_var = assigned && self.syms.sym(s).kind == SymKind::Var && self.is_ctor_param(c, s) && !self.private_this_param(s) && !self.syms.sym(s).scoped_private && s_mods & mods::FIELD != 0;
+        if !self.local_private(c, s) && !param_var {
+            return;
         }
-        let recv_ty = self.deref(recv_ty);
-        if matches!(self.types.get(recv_ty), Type::This(k) if k == c) {
+        if self.privileged_prefix(recv, c) {
             return;
         }
         let mut alts: Vec<SymId> = (0..self.own_member_count(c)).map(|i| self.own_member(c, i)).filter(|&m| self.syms.sym(m).name == name && self.local_private(c, m)).collect();
