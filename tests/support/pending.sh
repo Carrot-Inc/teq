@@ -43,7 +43,24 @@ pending_end() { python3 tests/support/pending.py "$PENDING_SUITE" "$PENDING_RESU
 #   pending_fails_end <failures> [<passes>]   after the checks, with the suite's counts: the checks that failed
 #                                  held to the list, a listed check that named no failure counted as passing now;
 #                                  a failure the suite counted without a line fails the run
+#   pending_fails_args <suite> "<its own arguments>" "$@"   first, before the suite does anything: an argument that is
+#                                  neither --pending-update, --pending-add nor one of its own is refused, named,
+#                                  exit 2 (a list's flag a suite does not take, --add or --update, would otherwise
+#                                  run it whole and write nothing)
 PENDING_FAILS=0
+pending_fails_args() {
+  local suite=$1 own=$2 arg
+  shift 2
+  for arg in "$@"; do
+    case $arg in
+      --pending-update | --pending-add) ;;
+      *)
+        [[ " $own " == *" $arg "* ]] && continue
+        echo "$suite: no argument $arg: its list takes --pending-update and --pending-add${own:+, the suite itself $own}"
+        exit 2 ;;
+    esac
+  done
+}
 pending_fails_begin() {
   local arg flags=() suite=$1 dir=$2
   shift 2

@@ -2553,6 +2553,20 @@ printf 'pass unrowed\n' > "$oc/fo.txt"
 pend fo fo.txt --fails-only --passed=1
 code=$?
 check "outcomes: a suite under --fails-only, which keeps no row of a pass, is not held to its board list" "$oc/pending.log" eval '[ $code = 0 ] && ! grep -q "no row in" "$oc/pending.log"'
+# The suites whose checks are listed by their failures (tests/support/pending.sh's pending_fails_begin) refuse an
+# argument they do not take, named, before they run anything: --add or --update for the list's flags would otherwise
+# run them whole and write nothing; tasty's own --update stays its expectations'.
+: > "$oc/flags.log"
+for run in "workers --add" "workers --update" "split-watch --add" "tasty --add" "tasty --pending-updates"; do
+  read -r fs fa <<< "$run"
+  said=$(timeout 30 bash "tests/$fs.sh" "$fa" 2>&1 < /dev/null)
+  code=$?
+  [ $code = 2 ] && [ "$said" = "$fs: no argument $fa: its list takes --pending-update and --pending-add$([ "$fs" != tasty ] || echo ", the suite itself --update")" ] ||
+    echo "$run: exit $code, $said" >> "$oc/flags.log"
+done
+check "outcomes: a suite of listed failures refuses an argument it does not take, naming it and the list's flags" "$oc/flags.log" eval '[ ! -s "$oc/flags.log" ] &&
+  grep -q -x -F "pending_fails_args workers \"\" \"\$@\"" tests/workers.sh && grep -q -x -F "pending_fails_args split-watch \"\" \"\$@\"" tests/split-watch.sh &&
+  grep -q -x -F "pending_fails_args tasty --update \"\$@\"" tests/tasty.sh'
 # A stack's overflow keeps its words in a list's note, not the count of frames the program printed after them, which
 # the machine's stack sets (tests/support/pending.py's MACHINE_TAILS); a line of an expectation keeps its digits.
 printf 'fail deep\tJavaScriptException:RangeError: Maximum call stack size exceeded 7373\nfail deeper\tException in thread "main" java.lang.StackOverflowError 4711\nfail kept\t< 100001\nfail macro\texception in macro: java.lang.StackOverflowError (called by rewrite in object M)\n' > "$oc/deep.txt"

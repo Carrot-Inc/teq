@@ -44,6 +44,8 @@
 # in which one file is typed again after another, and every file of the realistic frontend in
 # turn.
 cd "$(dirname "$0")/.."
+. tests/support/pending.sh
+pending_fails_args split-watch "" "$@"
 TEQ=${TEQ:-./target/release/teq}
 TEQ=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
 STUB=tests/interop/scalajs-stub

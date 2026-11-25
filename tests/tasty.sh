@@ -7,6 +7,8 @@
 # the suite fails when a listed check fails no more and when an unlisted one fails; --pending-update takes the
 # checks that pass now out of the list, --pending-add writes the unlisted failures in.
 cd "$(dirname "$0")/.."
+. tests/support/pending.sh
+pending_fails_args tasty --update "$@"
 teq=${TEQ:-./target/release/teq}
 pass=0
 fail=0

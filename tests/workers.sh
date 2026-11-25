@@ -7,6 +7,8 @@
 # id left (`TEQ_MERGE_SWEEP=1`), and the assertion-enabled build checks
 # the parallel merge against the serial walk's order (`TEQ_MERGE_TRACE=1`).
 cd "$(dirname "$0")/.."
+. tests/support/pending.sh
+pending_fails_args workers "" "$@"
 TEQ=${TEQ:-./target/release/teq}
 # what every check runs: without one, no check runs and none passes
 for tool in timeout cmp diff node java; do
