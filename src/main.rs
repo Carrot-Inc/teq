@@ -3702,7 +3702,8 @@ mod identity_tests {
 
 /// The program `text` typed as `teq compiler check` types it with `flags`, for the unit tests of the
 /// typer's parts that read a typed program: `f` runs on its worker once the bodies are typed.
-/// The source is written to a directory of its own under the system's temporary directory.
+/// The source is written to a directory of its own under the system's temporary directory, removed when the
+/// typing ends.
 #[cfg(test)]
 pub(crate) fn with_typed_program<R: Send>(name: &str, text: &str, flags: &[&str], f: impl FnOnce(&mut typer::Worker) -> R + Send) -> R {
     with_test_typer(name, text, flags, |typer, _, _| {
@@ -3756,8 +3757,17 @@ fn with_test_typer<R: Send>(name: &str, text: &str, flags: &[&str], f: impl FnOn
     // The typing thread's exit hands its caches back to the allocator's centre, whose counts
     // the allocator's tests read.
     let _serial = alloc::serial_test();
+    // The test's source directory, removed when the test ends, a panic's unwinding too: a test run leaves no
+    // teq-unit-* directory behind in the temporary directory.
+    struct Scratch(std::path::PathBuf);
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
     let dir = std::env::temp_dir().join(format!("teq-unit-{}-{}", std::process::id(), name));
     std::fs::create_dir_all(&dir).expect("a directory for the test's source");
+    let _scratch = Scratch(dir.clone());
     let path = dir.join(format!("{}.scala", name));
     std::fs::write(&path, text).expect("the test's source written");
     let mut args = vec!["compiler".to_string(), "check".to_string(), path.to_string_lossy().into_owned()];
@@ -3842,6 +3852,20 @@ mod jvm_output_tests {
         crate::with_jvm_output("super_call_with_its_defaults", text, &[], |output, _| {
             assert!(output.errors.is_empty() && output.refused.is_empty(), "{:?} {:?}", output.errors, output.refused);
         });
+    }
+}
+
+#[cfg(test)]
+mod test_typer_tests {
+    /// The typed program's source directory is there while the test reads the program and gone once its typing
+    /// ended: a test run leaves no `teq-unit-*` directory behind.
+    #[test]
+    fn a_typed_program_leaves_no_directory_behind() {
+        let name = "leaves-no-directory";
+        let dir = std::env::temp_dir().join(format!("teq-unit-{}-{}", std::process::id(), name));
+        let there = crate::with_typed_program(name, "object O:\n  val x = 1\n", &[], |_| dir.join(format!("{name}.scala")).exists());
+        assert!(there, "the source is in its directory while the program is typed");
+        assert!(!dir.exists(), "the directory is gone once the typing ended");
     }
 }
 

@@ -1055,9 +1055,12 @@ gate() {
   for m in $(awk '{print $1}' "$agent/pool"); do mkdir -p "$agent/machines/$m"; printf 'export SCALA3=%s\nexport GATE_CPUS=8\n' "$agent/scala3" > "$agent/machines/$m/env"; done
   # a machine's own login assignments (a project's checkout), GATE_ENV_<machine>
   for m in $(awk '{print $1}' "$agent/pool"); do v=GATE_ENV_$m; [ -z "${!v}" ] || echo "${!v}" >> "$agent/machines/$m/env"; done
-  # the gate's own settings and the machine contract's variables of this machine's shell are not the stand-ins'
+  # the gate's own settings and the machine contract's variables of this machine's shell are not the stand-ins'; their
+  # temporary directory is the cell's own, so that what a stand-in leaves there (tests/support/jars.sh's directory of
+  # its checkout, a mirror's that no later run reuses) goes with the cell's work
+  mkdir -p "$agent/tmp"
   (cd "$landing" && for v in $(compgen -e | grep -E '^(GATE_|LILA_|APP_|CHAIN_KNOWN$|SCALAC_KNOWN$|NODE$)' | grep -v '^GATE_AGENT_'); do unset "$v"; done &&
-    env -u JOBS REMOTE_AGENT="$scripts" GATE_AGENT_ROOT="$agent" GATE_AGENT_TEQ="$TEQ" GATE_POLL_SECONDS=2 \
+    env -u JOBS TMPDIR="$agent/tmp" REMOTE_AGENT="$scripts" GATE_AGENT_ROOT="$agent" GATE_AGENT_TEQ="$TEQ" GATE_POLL_SECONDS=2 \
     GATE_CLAIM_WAIT=6 GATE_CLAIM_SECONDS=6 GATE_HEAD_WAIT=120 ${suite_seconds:+GATE_SUITE_SECONDS=$suite_seconds} \
     ${compare_stall:+GATE_COMPARE_STALL=$compare_stall} timeout 300 "${driver:-.}/tests/gate.sh" "$landing" "$@") > "$log" 2>&1
 }
@@ -1077,6 +1080,11 @@ check "driver: the builder's head shipped, a spoilt copy refused, lila's line on
   grep -q "^gate: [0-9]*m[0-9]*s from its first command to its last, within thirty minutes" "$log"'
 check "driver: a file whose name git quotes reaches the machines with the head's tree" "$log" eval \
   '! grep -q "rsync" "$log" && [ -f "$agent/machines/m1/rw/teq/$quoted" ] && [ -f "$agent/machines/m2/rw/teq/$quoted" ]'
+# what a stand-in leaves in its temporary directory is the cell's: the directory tests/support/jars.sh names for m1's
+# mirror (its look sources jars.sh there) is under the cell's work, none in this machine's temporary directory
+mirror_scratch=teq-$(printf %s "$agent/machines/m1/rw/teq" | cksum | cut -d' ' -f1)
+check "driver: a stand-in's temporary directory is the cell's own, nothing of its mirror's left beside this machine's" "$log" eval \
+  '[ -d "$agent/tmp/$mirror_scratch" ] && [ ! -e "${TMPDIR:-/tmp}/$mirror_scratch" ]'
 fi
 if piece_has driver-unheld; then
 piece_ran driver-unheld
