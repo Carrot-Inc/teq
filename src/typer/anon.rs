@@ -961,7 +961,7 @@ impl<'a> Worker<'a> {
 
     /// The locals a class made where `anon_envs` says can capture: those of the scopes there, of
     /// the call site's where it stands in an inline body, the enclosing instances' `this`, and
-    /// the locals of the expansions around it.
+    /// the locals of the expansions around it with their receivers' proxies.
     pub(super) fn visible_to_class(&mut self, c: ClassId) -> Vec<SymId> {
         let Some(env) = self.anon_envs.get(&c).cloned() else {
             self.env_of_peer_class(c);
@@ -1000,6 +1000,18 @@ impl<'a> Worker<'a> {
         // of another expansion's body where the call stands in one: no frame here says it.
         for site in &self.inline.sites {
             if let Some(&s) = site.frame_class.and_then(|k| self.outer_this.get(&k)) {
+                if !visible.contains(&s) {
+                    visible.push(s);
+                }
+            }
+        }
+        // And the receivers' proxies of those expansions: a nested expansion whose receiver or
+        // argument is an outer receiver's proxy, held in place, reads that proxy in its body
+        // (`leaf()` on `this` in the method of the class `derived` makes), and a class the nested
+        // body makes takes it as a free variable, as dotty's `LambdaLift` does. `inline_this`
+        // above names the innermost expansion's proxy of a class alone.
+        for &(_, proxy, _) in &self.inline.this {
+            if let Some(s) = proxy {
                 if !visible.contains(&s) {
                     visible.push(s);
                 }

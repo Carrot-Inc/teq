@@ -216,6 +216,7 @@ inlineinterp	pass	-
 inlinejdkctor	fail	-	known classes: a downstream's expansion of the product's inline body constructs the std's `Exception` with its default cause passed (`Exception(String, Throwable)`, the arguments through locals), wher
 inlinelocalclass	fail	-	known classes: the same as ledgerlocalclass: each expansion's copy of the upstream inline body's local class carries the pseudo file's SourceFile and line numbers (`a!ilca.API`), the whole build's Lib
 inlinematcheffect	pass	-	
+inlinenestedcapture	fail	-	known classes: the same as companionderived: the anonymous classes the downstream's expansions of the upstream's inline bodies make (the nested classes `leaf` and `leafOf` make inside `derived`'s and
 inlineoverloadsequality	fail	-	inlineoverloadsequality classes
 inlineoverloadsnamed	fail	-	inlineoverloadsnamed classes
 inlinequote	fail	-	deferred scalac-b: the same as macroquote: scalac's compilation of the downstream calls the upstream macro's implementations in teq's class files, which do not have them, the JVM prerequisite, queued

@@ -1485,6 +1485,7 @@ inline_module_given_field	pass	-
 inline_named_local_class_twice	pass	-	
 inline_native_method_infos	pass	-	
 inline_nested_anon_capture	pass	-	
+inline_nested_class_captures_bound_receiver	pass	-	
 inline_nested_local_objects	pass	-	
 inline_ops	pass	-	
 inline_outer_private_member	fail	-	ReferenceError: $this1sepepr_560 is not defined

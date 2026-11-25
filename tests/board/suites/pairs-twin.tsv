@@ -1474,6 +1474,7 @@ cases/inline_module_given_field	pass	-
 cases/inline_named_local_class_twice	pass	-	
 cases/inline_native_method_infos	pass	-	
 cases/inline_nested_anon_capture	pass	-	
+cases/inline_nested_class_captures_bound_receiver	pass	-	
 cases/inline_nested_local_objects	pass	-	
 cases/inline_ops	pass	-	
 cases/inline_outer_private_member	pass	-	
