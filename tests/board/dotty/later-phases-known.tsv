@@ -1,0 +1,8 @@
+# test	why its later phase is not in LATER_PHASES (tests/board/dotty.py), so that the board checks it alone and its line says "a later phase not listed"
+# LATER_PHASES holds the errors the JVM leg is for: the back end's limits and ElimErasedValueType's clash after erasure.
+# A test here the table cannot match carries "the table cannot match it" and says why.
+tests/neg/deferredSummon	Erasure.scala:550, a CompileTimeOnly reference left after inlining (`deferred` under another name): erasure's, not the back end's
+tests/neg/erasedValueb	Erasure.scala:535 and 562 (E217), an erased value used and an erased argument not pure: erasure's, not the back end's
+tests/neg/i20105	TailRec.scala:128 (E097, a method with no recursive calls): the table cannot match it, the typer's Checking raising E097 too (for a non-method), so that its id names no phase
+tests/neg/i9460	Mixin.scala:268, a parameterized trait implemented indirectly: Mixin's, not the back end's
+tests/neg/polymorphic-erased-functions-used	Erasure.scala:535, an erased parameter used: erasure's, not the back end's

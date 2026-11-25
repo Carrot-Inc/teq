@@ -236,7 +236,7 @@ erased-value-class.scala	fail	-	check: diagnostic 1 of 2: scalac's is error eras
 erased-var.scala	fail	-	check: diagnostic 1 of 1: scalac's is error erased-var.scala:4:14 `erased` is not allowed for this kind of definition.; teq's is error erased-var.scala:4:3 'erased' is not part of the supported Scala subset
 erasedInline.scala	fail	-	check: diagnostic 1 of 1: scalac's is error erasedInline.scala:3:19 `erased` is not allowed for this kind of definition.; teq's is error erasedInline.scala:3:1 'erased' is not part of the supported Scala subset
 erasedValue.scala	pass	-	
-erasedValueb.scala	fail	-	marks: 1 errors where 2 are marked
+erasedValueb.scala	fail	-	a later phase not listed, Erasure (Erasure.scala:535): marks: 1 errors where 2 are marked
 errorTypes.scala	pass	-	
 errpos.scala	fail	-	marks: error on an unmarked line errpos.scala:3: expected an expression, found 'val'
 escapingRefs.scala	fail	-	check: diagnostic 1 of 2: scalac's is error escapingRefs.scala:6:27 Found:    O.B {...}; teq's is error escapingRefs.scala:6:27 Found:    B
@@ -1349,7 +1349,7 @@ i941.scala	fail	-	check: diagnostic 3 of 3: scalac's is error i941.scala:6:21 mi
 i9432.scala	fail	-	marks: no error where 1 are marked
 i9436.scala	fail	-	check: diagnostic 1 of 2: scalac's is error i9436.scala:8:11 method f1 must be called with () argument; teq's is error i9436.scala:8:11 missing argument list for method f1
 i9437.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9437.scala:7:11 method selectDynamic in trait Selectable does not take parameters; teq's is error i9437.scala:7:11 value apply is not a member of Int
-i9460.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9460.scala:3:7 parameterized trait A is indirectly implemented,; teq's is error i9460.scala:3:7 parameterized trait A is indirectly implemented, needs to be implemented directly so that arguments
+i9460.scala	fail	-	a later phase not listed, Mixin (Mixin.scala:268): check: diagnostic 1 of 1: scalac's is error i9460.scala:3:7 parameterized trait A is indirectly implemented,; teq's is error i9460.scala:3:7 parameterized trait A is indirectly implemented,
 i9472a	fail	-	marks: no error where 1 are marked
 i9472b	fail	-	marks: no error where 1 are marked
 i9504.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i9504.scala:13:11 No given instance of type Monad[F] was found for a context parameter of method blaMonad in object Test.; teq's is error i9504.scala:13:11 No given instance of type Monad[F] was f
@@ -1594,7 +1594,7 @@ points.scala	fail	-	marks: 2 errors where 1 are marked: points.scala:9:7: class 
 poly-overloads.scala	fail	-	marks: 2 errors where 1 are marked: poly-overloads.scala:10:3: Found:    Int
 poly-override.scala	fail	-	marks: 8 errors where 9 are marked
 polymorphic-erased-functions-types.scala	fail	-	marks: 6 errors where 4 are marked: polymorphic-erased-functions-types.scala:3:44: expected ',' or ')', found identifier
-polymorphic-erased-functions-used.scala	fail	-	marks: 6 errors where 2 are marked: polymorphic-erased-functions-used.scala:3:25: expected ',' or ')', found identifier
+polymorphic-erased-functions-used.scala	fail	-	a later phase not listed, Erasure (Erasure.scala:535): marks: 6 errors where 2 are marked: polymorphic-erased-functions-used.scala:3:25: expected ',' or ')', found identifier
 polymorphic-functions.scala	fail	-	check: diagnostic 1 of 5: scalac's is error polymorphic-functions.scala:2:16 Implementation restriction: polymorphic function types must have a value parameter; teq's is error polymorphic-functions.scala:2:12 a polymorphic function type tak
 polymorphic-functions1.scala	pass	-	
 polymorphic-functions2.scala	fail	-	marks: 8 errors where 4 are marked: polymorphic-functions2.scala:1:43: Found:    [T] => (x: <error>, y: <error>) => <error>

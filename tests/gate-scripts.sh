@@ -2003,11 +2003,46 @@ for outcome, line in (("timeout", "a limit of 60 s"), ("crash", "teq: internal e
     D.compile_groups = compile_groups
     t = neg(f"{outcome}.scala", LONG)
     said(f"the JVM build's {outcome} is the verdict, its line saying the build", D.neg_judged(ctx, t, root, "ok", "", []), outcome, f"{line} (the JVM build)", [(f"{outcome}.scala", "jvm")])
+MIXIN = "-- Error: tests/neg/{0}:1:6 ---\n1 |class C extends B // error\n  |      ^\n  |      parameterized trait A is indirectly implemented,\n  |      needs to be implemented directly so that arguments can be passed\n"
+t = neg("mixin.scala", MIXIN)
+said("a later phase the table has and LATER_PHASES lacks: its line says so, never built", D.neg_judged(ctx, t, root, "ok", "", []), "fail", "a later phase not listed, Mixin (Mixin.scala:268): marks: no error where 1 are marked", [])
 PY
 while IFS=$'\t' read -r said scenario; do
   check "board: $scenario" "$work/board-later.log" [ "$said" = ok ]
 done < <(grep -E $'^(ok|FAIL)\t' "$work/board-later.log")
-check "board: every scenario of the later phases' leg was held" "$work/board-later.log" eval '[ "$(grep -c "^ok[[:space:]]" "$work/board-later.log")" = 8 ]'
+check "board: every scenario of the later phases' leg was held" "$work/board-later.log" eval '[ "$(grep -c "^ok[[:space:]]" "$work/board-later.log")" = 9 ]'
+# The table of dotty's later phases (tests/board/later_phases.py, generated from the tag's sources where they are):
+# its generator and matcher over planted sources; and, binding, every error of the tag's neg .checks the table
+# matches (tests/board/dotty/later-phase-tests.tsv) is one LATER_PHASES lists or one named with its reason in
+# tests/board/dotty/later-phases-known.tsv, and every name there is one the table matches or one it says it cannot.
+check "board: the later phases' table, its generator and its matches over planted sources" "$work/later-self.log" \
+  eval 'python3 -B tests/board/later_phases.py --self-test > "$work/later-self.log" 2>&1'
+python3 -B - > "$work/later-binding.log" 2>&1 <<'PY'
+import json, sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, "tests/board")
+import dotty as D
+import later_phases as LP
+def unheld(tests, known):
+    out = []
+    for test, site, block in tests:
+        if not any(rx.search("\n".join(block) + "\n") for rx in D.LATER_PHASES) and test not in known:
+            out.append(f"{test}: {site}, a later phase LATER_PHASES lacks: name it in tests/board/dotty/later-phases-known.tsv with its reason")
+    names = {t for t, _, _ in tests}
+    out += [f"{t}: named in tests/board/dotty/later-phases-known.tsv, an error of no phase the table matches" for t, why in sorted(known.items()) if t not in names and "the table cannot match it" not in why]
+    return out
+planted = [("t/a", "Mixin.scala:268", ["-- Error: a ---", "  | parameterized trait A is indirectly implemented,"]),
+           ("t/b", "BCodeBodyBuilder.scala:593", ["-- Error: b ---", "  | String constant is too long for the JVM"]),
+           ("t/c", "Erasure.scala:535", ["-- Error: c ---", "  | x is declared as `erased`, but is in fact used"])]
+got = unheld(planted, {"t/c": "erasure's", "t/gone": "a reason", "t/blind": "the table cannot match it: an id another phase raises too"})
+want = ["t/a: Mixin.scala:268, a later phase LATER_PHASES lacks: name it in tests/board/dotty/later-phases-known.tsv with its reason",
+        "t/gone: named in tests/board/dotty/later-phases-known.tsv, an error of no phase the table matches"]
+tests = [(l.split("\t")[0], l.split("\t")[1], json.loads(l.rstrip("\n").split("\t")[2])) for l in open(LP.TESTS, encoding="utf-8") if l.strip() and not l.startswith("#")]
+bad = ([] if got == want else [f"planted: {got}"]) + unheld(tests, LP.known())
+print("\n".join(bad) or f"later phases: {len(tests)} errors of the tag's neg .checks the table matches, each LATER_PHASES' or named with its reason")
+PY
+check "board: every later phase of the tag's neg .checks is LATER_PHASES' or named with its reason (the table binding)" "$work/later-binding.log" \
+  grep -q "^later phases: .* each LATER_PHASES' or named with its reason$" "$work/later-binding.log"
 
 fi
 if piece_has board-cap; then

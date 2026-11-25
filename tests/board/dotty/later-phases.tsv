@@ -1,0 +1,43 @@
+# phase	site	kind	pattern (JSON): tests/board/later_phases.py --write, from dotty 3.8.4's sources
+AddLocalJSFakeNews	AddLocalJSFakeNews.scala:68	interpolated	{"text": [["unexpected", "for the first argument to `createLocalJSClass`"]]}
+CheckNoSuperThis	CheckNoSuperThis.scala:33	interpolated	{"text": [["super constructor cannot be passed a self reference", "unless parameter is declared by-name"]]}
+CompleteJavaEnums	CompleteJavaEnums.scala:83	interpolated	{"text": [["the constructor of java.lang.Enum cannot be called explicitly"]]}
+Constructors	Constructors.scala:313	interpolated	{"text": [["is marked `@constructorOnly` but it is retained as a field in"]]}
+ElimErasedValueType	ElimErasedValueType.scala:119	class DoubleDefinition E120, also raised before: Checking.scala RefChecks.scala	null
+Erasure	Erasure.scala:136	other	null
+Erasure	Erasure.scala:535	value	{"text": [["is declared as `inline`, but was not inlined Try increasing `-Xmax-inlines` above"], ["is declared as `erased`, but is in fact used"]]}
+Erasure	Erasure.scala:550	value	{"text": [["Note that `deferred` can only be used under its own name when implementing a given in a trait; `", "` is not accepted"], ["Reference to", "should not have survived, it should have been processed and eliminated during expansion of an enclosing macro or term erasure"]]}
+Erasure	Erasure.scala:562	class ErasedNotPure	{"id": "E217"}
+GenBCode	GenBCode.scala:107	interpolated	{"text": [["exception from future"]]}
+GenBCode	GenBCode.scala:117	literal	{"text": [["Can not suspend and output to a jar at the same time. See suspension with -Xprint-suspension"]]}
+GenBCode (backend/jvm)	BCodeBodyBuilder.scala:593	literal	{"text": [["String constant is too long for the JVM"]]}
+GenBCode (backend/jvm)	BCodeBodyBuilder.scala:614	literal	{"text": [["Type name is too long for the JVM"]]}
+GenBCode (backend/jvm)	BCodeBodyBuilder.scala:752	interpolated	{"text": [["too many arguments for array constructor: found", "but array has only", "dimension(s)"]]}
+GenBCode (backend/jvm)	BCodeBodyBuilder.scala:920	interpolated	{"text": [["JavaSeqArray with type", "reached backend"]]}
+GenBCode (backend/jvm)	BCodeHelpers.scala:263	interpolated	{"text": [["Annotation argument is not a constant"]]}
+GenBCode (backend/jvm)	BCodeHelpers.scala:371	literal	{"text": [["Mirror method signature is too long for the JVM"]]}
+GenBCode (backend/jvm)	BCodeHelpers.scala:530	literal	{"text": [["Mirror class name is too long for the JVM"]]}
+GenBCode (backend/jvm)	BCodeHelpers.scala:650	interpolated	{"text": [["compiler bug: created invalid generic signature for", "signature", "if this is reproducible, please report bug at https://github.com/scala/scala3/issues"]]}
+GenBCode (backend/jvm)	BCodeHelpers.scala:702	value	null
+GenBCode (backend/jvm)	BCodeIdiomatic.scala:546	value	null
+GenBCode (backend/jvm)	BCodeSkelBuilder.scala:281	literal	{"text": [["The argument passed to @SerialVersionUID must be a constant"]]}
+GenBCode (backend/jvm)	BCodeSkelBuilder.scala:344	literal	{"text": [["Class name is too long for the JVM"]]}
+GenBCode (backend/jvm)	BCodeSkelBuilder.scala:577	literal	{"text": [["attempt to create duplicate local var"]]}
+GenBCode (backend/jvm)	BCodeSkelBuilder.scala:587	literal	{"text": [["attempt to create duplicate local var"]]}
+GenBCode (backend/jvm)	BCodeSkelBuilder.scala:752	literal	{"text": [["Method signature is too long for the JVM"]]}
+GenBCode (backend/jvm)	BCodeSkelBuilder.scala:866	interpolated	{"text": [["Platform restriction: a parameter list's length cannot exceed"]]}
+GenBCode (backend/jvm)	BCodeSkelBuilder.scala:920	interpolated	{"text": [["Concrete method has no definition", "${ if (ctx.settings.Ydebug.value)"]]}
+GenBCode (backend/jvm)	BackendReporting.scala:84	value	null
+GenBCode (backend/jvm)	CodeGen.scala:93	interpolated	{"text": [["Error while emitting"]]}
+GenBCode (backend/jvm)	DottyPrimitives.scala:71	interpolated	{"text": [["expected Array"]]}
+GenBCode (backend/jvm)	DottyPrimitives.scala:138	interpolated	{"text": [["Unknown primitive method"]]}
+JUnitBootstrappers	JUnitBootstrappers.scala:242	interpolated	{"text": [["is an unsupported argument for the JUnit @Test annotation in this position"]]}
+JUnitBootstrappers	JUnitBootstrappers.scala:291	literal	{"text": [["JUnit test must have Unit return type"]]}
+LazyVals	LazyVals.scala:98	interpolated	{"text": [["@threadUnsafe is only supported on lazy vals"]]}
+Mixin	Mixin.scala:268	interpolated	{"text": [["parameterized", "is indirectly implemented, needs to be implemented directly so that arguments can be passed"]]}
+Mixin	Mixin.scala:289	interpolated	{"text": [["Implementation restriction: cannot extend the Scala 2 trait", "containing the object", "that extends js.Any"]]}
+NonLocalReturns	NonLocalReturns.scala:100	interpolated	{"text": [["Non local returns are no longer supported; use `boundary` and `boundary.break` in `scala.util` instead"]]}
+RepeatableAnnotations	RepeatableAnnotations.scala:44	literal	{"text": [["Container must not be present at the same time as the element it contains"]]}
+RepeatableAnnotations	RepeatableAnnotations.scala:51	literal	{"text": [["Not repeatable annotation repeated"]]}
+TailRec	TailRec.scala:128	class TailrecNotApplicable E097, also raised before: Checking.scala	null
+TailRec	TailRec.scala:309	interpolated	{"text": [["Cannot rewrite recursive call"]]}

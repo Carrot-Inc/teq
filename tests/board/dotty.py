@@ -1490,14 +1490,42 @@ def later_phase(test):
     return any(rx.search(text) for rx in LATER_PHASES)
 
 
+LATER_TABLE = []
+
+
+def unlisted_phase(test):
+    """Of a neg test whose .check names no error LATER_PHASES lists, the first error the table of dotty's later
+    phases has (tests/board/later_phases.py), as `<phase> (<site>)`; None where it names none."""
+    path = check_file(test)
+    if not path:
+        return None
+    # imported here, as the table is read here: a copy of the board's files that lacks them (gate-scripts' cells
+    # run dotty.py from a part of the tree) runs as before
+    if not LATER_TABLE:
+        try:
+            import later_phases
+            LATER_TABLE.extend(later_phases.load())
+        except (ImportError, OSError):
+            return None
+    import later_phases
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        found = later_phases.matched(LATER_TABLE, fh.read())
+    return f"{found[0][0][0]} ({found[0][0][1]})" if found else None
+
+
 def neg_judged(ctx, test, scratch, outcome, line, diags):
     """A neg or warn test's (verdict, first line) from its check (`neg_or_warn`); a neg test of the JVM's the check
     leaves failing, whose .check names an error of a phase after the typing (`later_phase`), built for the JVM too,
     the marks held to the check's diagnostics and the build's, its line saying so; that build's timeout or crash the
-    test's."""
+    test's. One whose .check names an error of a later phase LATER_PHASES does not list (`unlisted_phase`) keeps the
+    check's verdict, its line saying which: never typed-only in silence."""
     verdict, why = neg_or_warn(ctx, test, outcome, line, diags)
-    if test.row.kind != "neg" or verdict != "fail" or test.row.platform == "scala-js" or not later_phase(test):
+    if test.row.kind != "neg" or verdict != "fail" or test.row.platform == "scala-js":
         return verdict, why
+    if not later_phase(test):
+        unlisted = unlisted_phase(test)
+        # first, so that a long line's cut (LAST_LINE) never takes it
+        return verdict, (f"a later phase not listed, {unlisted}: {why}" if unlisted and why else why)
     j_outcome, j_line, j_diags, _ = compile_groups(ctx, test, scratch, "jvm", "jvm")
     if j_outcome in ("timeout", "crash"):
         return j_outcome, f"{j_line} (the JVM build)"
