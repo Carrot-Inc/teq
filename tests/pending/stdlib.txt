@@ -244,7 +244,6 @@ lazy_local_forward	ReferenceError: Cannot access 'x' before initialization
 lazy_local_homes	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
 lazy_local_super	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
 lazy_local_value_class	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
-lazy_nonlocal_return	output differs
 lazy_nonlocal_return_classes	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
 lazy_race	error: type IllegalThreadStateException not found
 lazy_recursion	error: type IllegalThreadStateException not found
@@ -375,7 +374,6 @@ regex_class_sets	error: not supported on JavaScript: method split of java.util.r
 regex_scoped_flags	throw new PatternSyntaxException(error, regex, -1);
 regex_unicode_class_case	throw new PatternSyntaxException(error, regex, -1);
 regroup_bincompat_lib	error: not found: rgb
-return_non_local_lazy_value_class	output differs
 return_tail_call	error: Not found: type IllegalThreadStateException
 return_tail_call_and_or	RangeError: Maximum call stack size exceeded
 return_tail_call_argument_jump	RangeError: Maximum call stack size exceeded
@@ -383,7 +381,6 @@ return_tail_call_deep	RangeError: Maximum call stack size exceeded
 return_tail_call_finally_jump	output differs
 return_tail_call_guarded	output differs
 return_tail_call_inline_by_name	RangeError: Maximum call stack size exceeded
-return_tail_call_lazy_init	output differs
 return_tail_call_local_beside_nonlocal	RangeError: Maximum call stack size exceeded
 return_tail_call_local_defs	RangeError: Maximum call stack size exceeded
 return_tail_call_monitor	output differs

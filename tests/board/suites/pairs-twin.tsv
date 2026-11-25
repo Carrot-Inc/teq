@@ -1815,6 +1815,7 @@ cases/lazy_thread_unsafe_reentrant_toplevel	pass	-
 cases/lazy_thread_unsafe_reentrant_trait	pass	-	
 cases/lazy_throw_retry	pass	-	
 cases/lazy_types	pass	-	
+cases/lazy_val_return_leaves_the_def	pass	-	
 cases/lazy_waiting	pass	-	
 cases/lazy_zip_on_demand	pass	-	
 cases/lazyvals	pass	-	

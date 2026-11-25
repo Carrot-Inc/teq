@@ -1782,7 +1782,7 @@ lazy_local_super	fail	-	error: not supported on JavaScript: trait Callable java.
 lazy_local_value_class	fail	-	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
 lazy_locals	pass	-	
 lazy_made_companion	pass	-	
-lazy_nonlocal_return	fail	-	output differs
+lazy_nonlocal_return	pass	-	
 lazy_nonlocal_return_classes	fail	-	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
 lazy_null_once	pass	-	
 lazy_object	pass	-	
@@ -1802,6 +1802,7 @@ lazy_thread_unsafe_reentrant_toplevel	fail	-	output differs
 lazy_thread_unsafe_reentrant_trait	fail	-	TypeError: Cannot redefine property: x
 lazy_throw_retry	pass	-	
 lazy_types	pass	-	
+lazy_val_return_leaves_the_def	pass	-	
 lazy_waiting	fail	-	error: Not found: type IllegalThreadStateException
 lazy_zip_on_demand	pass	-	
 lazyvals	pass	-	
@@ -2635,7 +2636,7 @@ repeated_args_solved_later	pass	-
 repeated_args_value_class_cast	pass	-	
 result_takes_arguments	pass	-	
 return_local	pass	-	
-return_non_local_lazy_value_class	fail	-	output differs
+return_non_local_lazy_value_class	pass	-	
 return_non_local_value_class	pass	-	
 return_stmt	pass	-	
 return_tail_call	fail	-	error: Not found: type IllegalThreadStateException
@@ -2648,7 +2649,7 @@ return_tail_call_finally_jump	fail	-	JavaScriptException:RangeError: Maximum cal
 return_tail_call_guarded	fail	-	output differs
 return_tail_call_if_both	pass	-	
 return_tail_call_inline_by_name	fail	-	RangeError: Maximum call stack size exceeded
-return_tail_call_lazy_init	fail	-	output differs
+return_tail_call_lazy_init	pass	-	
 return_tail_call_local_beside_nonlocal	fail	-	RangeError: Maximum call stack size exceeded
 return_tail_call_local_defs	fail	-	RangeError: Maximum call stack size exceeded
 return_tail_call_monitor	fail	-	output differs

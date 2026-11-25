@@ -2036,7 +2036,11 @@ impl<'a> Emitter<'a> {
             self.open("{");
             self.enter_scope(Root::Expr(init));
             self.enter_cond();
+            // The initialiser runs in the arrow, a function of its own as a lambda's body is: a `return` in it leaves
+            // the def (dotty's NonLocalReturns takes a return under a lazy val as non-local), not the arrow.
+            self.fn_depth += 1;
             self.emit_stmt(init, &Ctx::Assign(format!("{}$v", name)));
+            self.fn_depth -= 1;
             self.leave_cond();
             self.line();
             let _ = write!(self.out, "{}$d = true;", name);

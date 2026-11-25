@@ -1840,6 +1840,7 @@ lazy_thread_unsafe_reentrant_toplevel	fail	-	< x = 2 after 2 run(s)
 lazy_thread_unsafe_reentrant_trait	fail	-	< in a class: x = 2 after 2 run(s)
 lazy_throw_retry	pass	-	
 lazy_types	pass	-	
+lazy_val_return_leaves_the_def	pass	-	
 lazy_waiting	cannot run	-	the JVM's platform
 lazy_zip_on_demand	pass	-	
 lazyvals	pass	-	
@@ -2687,7 +2688,7 @@ repeated_args_solved_later	pass	-
 repeated_args_value_class_cast	pass	-	
 result_takes_arguments	pass	-	
 return_local	pass	-	
-return_non_local_lazy_value_class	fail	-	< lazy direct 2 1
+return_non_local_lazy_value_class	pass	-	
 return_non_local_value_class	pass	-	
 return_stmt	pass	-	
 return_tail_call	cannot run	-	the JVM's platform
@@ -2700,7 +2701,7 @@ return_tail_call_finally_jump	fail	-	< RuntimeException:e 100001
 return_tail_call_guarded	fail	-	< 42
 return_tail_call_if_both	pass	-	
 return_tail_call_inline_by_name	fail	-	< 3
-return_tail_call_lazy_init	fail	-	< 6
+return_tail_call_lazy_init	pass	-	
 return_tail_call_local_beside_nonlocal	fail	-	< 31
 return_tail_call_local_defs	fail	-	< 100003
 return_tail_call_monitor	cannot run	-	the JVM's platform

@@ -1840,6 +1840,7 @@ lazy_thread_unsafe_reentrant_toplevel	pass	-
 lazy_thread_unsafe_reentrant_trait	pass	-	
 lazy_throw_retry	pass	-	
 lazy_types	pass	-	
+lazy_val_return_leaves_the_def	pass	-	
 lazy_waiting	pass	-	
 lazy_zip_on_demand	pass	-	
 lazyvals	pass	-	
