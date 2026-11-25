@@ -558,6 +558,10 @@ impl<'a> Gen<'a> {
         if let Some(entry) = self.lifted_table.entries.get(&p) {
             return entry.clone();
         }
+        // A write finds the entries the class's holds made (the table checked by its key, not as a field).
+        if super::gen::writing() {
+            panic!("a write of its class makes a lifted method's entry in the class's table, asked by {}", ASKERS[asker as usize]);
+        }
         if lifted_late() && !self.plan.methods.is_empty() {
             LATE[asker as usize].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }

@@ -113,6 +113,9 @@ impl<'a> Gen<'a> {
         if let Some(l) = cached {
             return l.clone();
         }
+        if writing() {
+            panic!("a write of its class makes the first ask of a local lazy val's {}", if init { "initialiser" } else { "accessor" });
+        }
         let cx = self.cx;
         let (shape, body) = self.lazy_shape(s);
         let placed = cx.local_home(s).is_some();
@@ -306,7 +309,7 @@ impl<'a> Gen<'a> {
         let (container, flag) = self.thread_unsafe_names(getter);
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
-        self.hold_tree(method, "@threadUnsafe lazy val's getter", false, |g| {
+        self.hold_tree(method, "@threadUnsafe lazy val's getter", |g| {
             let mut stmts = Vec::new();
             if let Some(init) = init {
                 let receiver = g.lir.this(this.clone());

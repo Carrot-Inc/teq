@@ -710,7 +710,7 @@ impl<'a> Gen<'a> {
         self.context = name.clone();
         let method = self.held_context(MethodFlags::PUBLIC, "<init>", "()V", &[], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
-        self.hold_tree(method, "main class's constructor", true, |g| {
+        self.hold_tree(method, "main class's constructor", |g| {
             let made = g.lir.init(&object_init, &[]);
             let unit = g.lir.unit();
             let done = g.lir.seq(&[made], unit);
@@ -755,7 +755,7 @@ impl<'a> Gen<'a> {
         self.field(FieldFlags { is_final: true, ..FieldFlags::PRIVATE }, "$outer", &outer);
         let method = self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), &[(None, outer.clone())], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
-        self.hold_tree(method, "inner companion's constructor", true, |g| {
+        self.hold_tree(method, "inner companion's constructor", |g| {
             let made = g.lir.init(&object_init, &[]);
             let instance = g.lir.this(this.clone());
             let given = g.param(0);
@@ -1055,7 +1055,7 @@ impl<'a> Gen<'a> {
         self.field(FieldFlags { is_final: true, synthetic: true, ..FieldFlags::PRIVATE }, "$outer", &outer);
         let method = self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), &[(None, outer.clone())], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
-        self.hold_tree(method, "instance companion's constructor", true, |g| {
+        self.hold_tree(method, "instance companion's constructor", |g| {
             let instance = g.lir.this(this.clone());
             let given = g.param(0);
             let kept = g.lir.store(instance, &name, "$outer", given);
@@ -1259,7 +1259,7 @@ impl<'a> Gen<'a> {
                 let method = self.held_context(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &getter, &method_desc(&types[..before + 1], &ret), &params[..before + 1], ret.clone(), &[d], super::classes::MethodSite::default());
                 self.m.this_slot = Some(1);
                 self.m.this_underlying = Some(u.clone());
-                self.hold_tree(method, "value class extension's default getter", false, |g| {
+                self.hold_tree(method, "value class extension's default getter", |g| {
                     let value = g.lower_default_value(d, shape.by_name, &ret);
                     g.lir.ret(value)
                 });

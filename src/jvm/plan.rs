@@ -75,10 +75,12 @@ impl<'a> Gen<'a> {
         if let Some(file) = &class.source {
             self.cw.source_file(file);
         }
+        super::gen::write_phase(None);
+        self.cw.cp.plan_frozen = cfg!(debug_assertions);
         self.plan = class;
-        self.module_tree = None;
+        *self.module_tree = None;
         self.writing_mirror = false;
-        self.long_name_refused = false;
+        *self.long_name_refused = false;
         self.checked_methods.clear();
     }
 
@@ -86,7 +88,9 @@ impl<'a> Gen<'a> {
     pub fn field(&mut self, flags: FieldFlags, name: &str, ty: &ErasedType) {
         let mut desc = String::new();
         ty.desc(&mut desc);
+        let planning = std::mem::replace(&mut self.cw.cp.plan_frozen, false);
         self.cw.field(field_access(flags), name, &desc);
+        self.cw.cp.plan_frozen = planning;
         self.plan.fields.push(FieldDef { name: Rc::from(name), ty: ty.clone(), flags });
     }
 
@@ -95,7 +99,9 @@ impl<'a> Gen<'a> {
     pub fn field_first(&mut self, flags: FieldFlags, name: &str, ty: &ErasedType) {
         let mut desc = String::new();
         ty.desc(&mut desc);
+        let planning = std::mem::replace(&mut self.cw.cp.plan_frozen, false);
         self.cw.field_first(field_access(flags), name, &desc);
+        self.cw.cp.plan_frozen = planning;
         self.plan.fields.insert(0, FieldDef { name: Rc::from(name), ty: ty.clone(), flags });
     }
 
@@ -113,7 +119,9 @@ impl<'a> Gen<'a> {
     pub fn abstract_method_site(&mut self, flags: MethodFlags, name: &str, desc: &str, site: super::classes::MethodSite) {
         let m = method_def(flags, name, desc);
         self.check_method(&m, &site);
+        let planning = std::mem::replace(&mut self.cw.cp.plan_frozen, false);
         self.cw.method(method_access(m.flags), &m.name, &m.desc, None);
+        self.cw.cp.plan_frozen = planning;
         self.plan.methods.push(m);
     }
 
@@ -122,6 +130,14 @@ impl<'a> Gen<'a> {
     /// fields and methods and no other, each one's flags and descriptor as its facts and its
     /// erased types give them, the methods in the plan's order (`ClassDef::order_lifted`).
     pub fn finish_writer(&mut self) -> Vec<u8> {
+        self.cw.cp.plan_frozen = false;
+        super::gen::write_phase(Some(true));
+        let bytes = self.finish_writer_now();
+        super::gen::write_phase(Some(false));
+        bytes
+    }
+
+    fn finish_writer_now(&mut self) -> Vec<u8> {
         let mut cw = std::mem::replace(&mut self.cw, ClassWriter::new(0, "x", OBJECT, &[]));
         // dotty checks the name as the class begins (BCodeSkelBuilder.scala 341-345, for a mirror
         // BCodeHelpers.scala 529-531) and writes nothing of the class.
@@ -161,7 +177,7 @@ impl<'a> Gen<'a> {
     /// `IllegalArgumentException` of a text past a constant's bytes), at the class's definition.
     fn class_too_large(&mut self, limit: PoolLimit) -> Vec<u8> {
         // The text is a name already refused where dotty refuses it.
-        if limit == PoolLimit::Text && self.long_name_refused {
+        if limit == PoolLimit::Text && *self.long_name_refused {
             return Vec::new();
         }
         let name = self.plan.name.clone();
@@ -181,7 +197,7 @@ impl<'a> Gen<'a> {
     /// the class's definition.
     pub(super) fn name_too_long(&mut self, message: &str, at: Option<(crate::source::FileId, crate::source::Span)>) {
         self.refuse_written(message, at);
-        self.long_name_refused = true;
+        *self.long_name_refused = true;
     }
 
     /// scalac's error `message` for what of the class being written a class file cannot hold, at `at` or

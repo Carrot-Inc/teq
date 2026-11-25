@@ -952,7 +952,7 @@ impl MethodFlags {
 
 /// A method a class defines, where `MethodRef` is one that code names: its encoded name and
 /// its erased signature, the types its callers pass and are answered with.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MethodDef {
     pub name: Rc<str>,
     pub params: Vec<ErasedType>,

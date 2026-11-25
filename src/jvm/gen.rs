@@ -551,8 +551,10 @@ pub struct MethodCx {
     /// (`Gen::end_method`), given with its context (`Gen::method_cx`).
     pub at: Option<(crate::source::FileId, crate::source::Span)>,
     /// The method where it is not the plan's: one of a name and signature the class holds already, whose code is
-    /// dropped (`Gen::open_method`, `Gen::end_method`).
+    /// dropped (`Gen::enter_plan`, `Gen::end_method`).
     pub repeated: Option<crate::lir::MethodDef>,
+    /// The plan's entry the method's code is written under, none for a repeated one (`Gen::enter_plan`).
+    pub entry: Option<usize>,
 }
 
 /// The state of a `try` that `Gen::open_try` began, for `Gen::close_try`.
@@ -624,6 +626,7 @@ impl Default for MethodCx {
             try_exits: FxMap::default(),
             at: None,
             repeated: None,
+            entry: None,
         }
     }
 }
@@ -647,6 +650,99 @@ impl MethodCx {
 /// Where a class first names a super call's target: the kind of body, then the place in it
 /// (`Gen::super_call_place`); the class's list takes its targets in this order.
 pub type SuperPlace = (u8, u32, u32, u32);
+
+/// A field of the class being written that its held members (the plan's phase) and its writes (`Gen::write_held` and
+/// `Gen::finish_writer`, the write phase) both touch. While the two phases alternate, a checks build refuses each pair
+/// writing the class from its whole plan (every hold first, then every write) would invert: a hold reading what an
+/// earlier write of the class wrote, and a hold writing what an earlier write of the class read. A release build reads
+/// and writes the field alone.
+pub struct Phased<T> {
+    value: T,
+    field: PhasedField,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum PhasedField {
+    SuperTargets,
+    LazyHolders,
+    CheckedMethods,
+    LongNameRefused,
+    ModuleTree,
+    ClassHomes,
+    ClassKeys,
+}
+
+thread_local! {
+    /// The write phase's depth, and the fields the class's writes have written and read so far, by bit.
+    static PHASE: std::cell::Cell<(u32, u32, u32)> = const { std::cell::Cell::new((0, 0, 0)) };
+}
+
+impl<T> Phased<T> {
+    pub fn new(field: PhasedField, value: T) -> Phased<T> {
+        Phased { value, field }
+    }
+
+    fn note(&self, write: bool) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
+        let bit = 1u32 << self.field as u32;
+        PHASE.with(|p| {
+            let (depth, written, read) = p.get();
+            if depth > 0 {
+                p.set((depth, if write { written | bit } else { written }, if write { read } else { read | bit }));
+            } else if !write && written & bit != 0 {
+                panic!("a held member reads {:?}, which a write of its class wrote before it", self.field);
+            } else if write && read & bit != 0 {
+                panic!("a held member writes {:?}, which a write of its class read before it", self.field);
+            }
+        });
+    }
+}
+
+impl<T> Phased<T> {
+    /// The field as `Gen::emit_class`'s tail takes it, after every write of the class: the super calls' targets the
+    /// writes recorded, which the class's interfaces take. Not checked: that tail is the class's end step, which reads
+    /// what every write of the class gave.
+    pub fn at_class_end(&mut self) -> &mut T {
+        &mut self.value
+    }
+}
+
+/// Whether a write of the class being written runs (`write_phase`), in checks builds; a release build answers false.
+/// Once the class's walk has started, no write makes a lifted method's first ask or queues a body: each is plan work
+/// made after the plan is whole.
+pub fn writing() -> bool {
+    cfg!(debug_assertions) && PHASE.with(|p| p.get().0 > 0)
+}
+
+impl<T> std::ops::Deref for Phased<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.note(false);
+        &self.value
+    }
+}
+
+impl<T> std::ops::DerefMut for Phased<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.note(true);
+        &mut self.value
+    }
+}
+
+/// The class's writes begin (`entering` true) or end; the class's checks start again (`Gen::begin_class`,
+/// `Gen::reset_class`) where neither is given.
+pub fn write_phase(entering: Option<bool>) {
+    PHASE.with(|p| {
+        let (depth, written, read) = p.get();
+        p.set(match entering {
+            Some(true) => (depth + 1, written, read),
+            Some(false) => (depth - 1, written, read),
+            None => (depth, 0, 0),
+        });
+    });
+}
 
 pub struct Gen<'a> {
     pub cx: &'a Cx<'a>,
@@ -695,7 +791,7 @@ pub struct Gen<'a> {
     /// of its first call (`super_call_place`): the JVM wants each among the class's direct
     /// superinterfaces, so the class's list takes them (dotty's `superCallTargets`). It is the
     /// writer's: emptied where a class's writer is made, read at the class's end.
-    pub super_targets: Vec<(String, SuperPlace)>,
+    pub super_targets: Phased<Vec<(String, SuperPlace)>>,
     /// The end of the super call being written in the source, where its text is the class's
     /// file's: an `invokespecial` is written after its call's arguments.
     pub super_call_at: Option<u32>,
@@ -715,6 +811,12 @@ pub struct Gen<'a> {
     /// Inside an argument the typer made, whose line holds through it (`mark_line`).
     pub line_hold: bool,
     pub pending: Vec<Pending>,
+    /// The bodies a hold asks for while a round of the class's lifted bodies is lowered (`Gen::drain_pending`): they
+    /// belong to the next round, as the writer's deferral of them did, so that no round's set changes while it is popped.
+    pub(super) pending_next: Vec<Pending>,
+    /// Whether a round of `Gen::drain_pending` is lowering its bodies.
+    pub(super) draining: bool,
+    /// Checked by its key, as `lifted_table` is: a write that misses it panics (`Gen::lifted_fun`, `Gen::lazy_method`).
     pub lifted: FxMap<SymId, Rc<Lifted>>,
     /// What the lifted method of each local def met takes and binds (`Gen::local_fun_shape`),
     /// decided where the def is first met; `lifted` holds it once the writer has named it.
@@ -724,7 +826,7 @@ pub struct Gen<'a> {
     pub lifted_lazy_inits: FxMap<SymId, Rc<Lifted>>,
     /// The thread-safe lazy members of the class being written, in the order they were met
     /// (`Gen::lazy_holder`).
-    pub lazy_holders: Vec<super::lazy::LazyHolder>,
+    pub lazy_holders: Phased<Vec<super::lazy::LazyHolder>>,
     pub lifted_defaults: FxMap<(SymId, usize), Rc<Lifted>>,
     /// What the getter of a local def's default takes and binds, decided where it is first lowered or written.
     pub(super) lifted_default_shapes: FxMap<(SymId, usize), (Rc<LiftedShape>, Rc<LiftedBody>)>,
@@ -746,8 +848,8 @@ pub struct Gen<'a> {
     pub class_captures: Vec<(SymId, String, ErasedType, Held)>,
     /// The fields of the class being written holding its `Extras`: the other classes' instances and
     /// the keys of the lazy vals.
-    pub class_homes: Vec<(ClassId, String)>,
-    pub class_keys: Vec<(SymId, String)>,
+    pub class_homes: Phased<Vec<(ClassId, String)>>,
+    pub class_keys: Phased<Vec<(SymId, String)>>,
     pub code: Code,
     /// The lowered nodes of the method being generated (`crate::lir`).
     pub lir: crate::lir::Body,
@@ -761,7 +863,7 @@ pub struct Gen<'a> {
     pub(super) templates: FxMap<Box<str>, Rc<super::template::Template>>,
     /// The constructor tree of the object being written, between its two methods
     /// (`Gen::hold_module_part`).
-    pub(super) module_tree: Option<super::classes::ModuleTree>,
+    pub(super) module_tree: Phased<Option<super::classes::ModuleTree>>,
     /// The temporaries of the matches being lowered that hold a value class's primitive
     /// underlying value, with the class and its arguments: a type pattern tests, and a
     /// `MatchError` holds, its box.
@@ -794,10 +896,10 @@ pub struct Gen<'a> {
     pub writing_mirror: bool,
     /// The class being written has a name or a method's signature past a text constant's bytes,
     /// refused where dotty refuses it (`Gen::name_too_long`).
-    pub long_name_refused: bool,
+    pub long_name_refused: Phased<bool>,
     /// The name and descriptor of each method of the class that passed `Gen::check_method`, the one gate of a
     /// method of the class file: `Gen::finish_writer` writes no class that holds another.
-    pub checked_methods: FxMap<(Rc<str>, String), ()>,
+    pub checked_methods: Phased<FxMap<(Rc<str>, String), ()>>,
     /// The static forwarders of a module's methods are being written (`Gen::static_forwarders`), which
     /// dotty adds to a class file apart from the methods it checks.
     pub writing_forwarders: bool,
@@ -846,7 +948,7 @@ impl<'a> Gen<'a> {
             cw: ClassWriter::new(0, "x", OBJECT, &[]),
             plan: Default::default(),
             lifted_table: Default::default(),
-            super_targets: Vec::new(),
+            super_targets: Phased::new(PhasedField::SuperTargets, Vec::new()),
             super_call_at: None,
             lifted_body: None,
             ctor_code: false,
@@ -858,10 +960,12 @@ impl<'a> Gen<'a> {
             line_floor: None,
             line_hold: false,
             pending: Vec::new(),
+            pending_next: Vec::new(),
+            draining: false,
             lifted: FxMap::default(),
             lifted_shapes: FxMap::default(),
             lifted_lazy_inits: FxMap::default(),
-            lazy_holders: Vec::new(),
+            lazy_holders: Phased::new(PhasedField::LazyHolders, Vec::new()),
             lifted_defaults: FxMap::default(),
             lifted_default_shapes: FxMap::default(),
             an: Analysis::default(),
@@ -871,14 +975,14 @@ impl<'a> Gen<'a> {
             finally_tries: FxMap::default(),
             tries_written: 0,
             class_captures: Vec::new(),
-            class_homes: Vec::new(),
-            class_keys: Vec::new(),
+            class_homes: Phased::new(PhasedField::ClassHomes, Vec::new()),
+            class_keys: Phased::new(PhasedField::ClassKeys, Vec::new()),
             code: Code::new(Vec::new()),
             lir: crate::lir::Body::default(),
             lower_declared: FxMap::default(),
             local_defs: Vec::new(),
             templates: FxMap::default(),
-            module_tree: None,
+            module_tree: Phased::new(PhasedField::ModuleTree, None),
             vc_temps: FxMap::default(),
             m: MethodCx::default(),
             context: String::new(),
@@ -892,8 +996,8 @@ impl<'a> Gen<'a> {
             overflow: false,
             pool_too_large: false,
             writing_mirror: false,
-            long_name_refused: false,
-            checked_methods: FxMap::default(),
+            long_name_refused: Phased::new(PhasedField::LongNameRefused, false),
+            checked_methods: Phased::new(PhasedField::CheckedMethods, FxMap::default()),
             writing_forwarders: false,
             too_large_methods: Vec::new(),
             vc_object: Rc::from(OBJECT),
@@ -959,7 +1063,10 @@ impl<'a> Gen<'a> {
     }
 
     pub fn reset_class(&mut self) {
+        write_phase(None);
         self.pending.clear();
+        self.pending_next.clear();
+        self.draining = false;
         self.local_defs.clear();
         self.pair_bridged.clear();
         self.lifted_table = Default::default();
@@ -977,7 +1084,7 @@ impl<'a> Gen<'a> {
         self.class_captures.clear();
         self.class_homes.clear();
         self.class_keys.clear();
-        self.module_tree = None;
+        *self.module_tree = None;
     }
 
     // ---- types ----
@@ -5938,6 +6045,9 @@ impl<'a> Gen<'a> {
     /// is queued while a lowering runs (docs/LIR.md, "What a slice may not do").
     pub(super) fn defer(&mut self, body: Pending) {
         assert!(!self.code.frozen, "a lifted body is queued while a lowering runs");
+        if writing() {
+            panic!("a write of its class queues the lifted body of {}", body.lifted.name);
+        }
         self.pending.push(body);
     }
 
@@ -6018,6 +6128,9 @@ impl<'a> Gen<'a> {
             }
             self.lambdas.insert(Rc::as_ptr(body), (body.clone(), l.clone()));
             return l;
+        }
+        if writing() {
+            panic!("a write of its class makes the first ask of a lambda's method");
         }
         assert!(!self.code.frozen, "a lambda is named while a lowering runs");
         let at = *self.lambda_places.entry(code).and_modify(|n| *n += 1).or_insert(0);
@@ -6146,6 +6259,9 @@ impl<'a> Gen<'a> {
         if let Some(l) = self.lifted.get(&s) {
             return l.clone();
         }
+        if writing() {
+            panic!("a write of its class makes the first ask of a local def's method");
+        }
         let cx = self.cx;
         let (shape, body) = self.local_fun_shape(s);
         let (name, place) = self.lifted_entry(Placed::Def(s), Asker::LiftedFun, &shape);
@@ -6189,6 +6305,9 @@ impl<'a> Gen<'a> {
     pub(super) fn local_default_method(&mut self, s: SymId, i: usize) -> (Rc<Lifted>, Option<Pending>) {
         if let Some(l) = self.lifted_defaults.get(&(s, i)) {
             return (l.clone(), None);
+        }
+        if writing() {
+            panic!("a write of its class makes the first ask of a local default's getter");
         }
         let f = self.cx.fun_of_sym[s.idx()];
         let (shape, body) = self.local_default_shape(s, i);
