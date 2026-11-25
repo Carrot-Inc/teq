@@ -19,21 +19,30 @@ object Probe:
       r += 1
     best
   def check(name: String, base: Int, bound: Double, op: Int => Unit): Unit = measure[Int](name, base, bound, n => n, op)
-  // `prepare` builds the operation's input outside the timing.
+  // `prepare` builds the operation's input outside the timing. An operation whose take reads over its bound is taken
+  // twice more and passes where one take is within it: a stall of the machine (the collector, a neighbour) strikes
+  // one take, a cost past the bound all three. Its line gives every take; the bound is the same for each.
   def measure[T](name: String, base: Int, bound: Double, prepare: Int => T, op: T => Unit): Unit =
     op(prepare(base))
+    val first = take(base, bound, prepare, op)
+    if first._1 then println("PASS " + name + ": " + first._2)
+    else
+      val takes = Vector(first, take(base, bound, prepare, op), take(base, bound, prepare, op))
+      val within = takes.exists(_._1)
+      if !within then failures += 1
+      println((if within then "PASS " else "FAIL ") + name + ": " + takes.indices.map(i => "take " + (i + 1) + " " + takes(i)._2).mkString("; "))
+  // One take: the three sizes, or the first two where the first decade already grows past 60; whether it is within
+  // the bound, and its line.
+  def take[T](base: Int, bound: Double, prepare: Int => T, op: T => Unit): (Boolean, String) =
     val t0 = timedOn(5, prepare(base), op)
     val t1 = timedOn(3, prepare(base * 10), op)
     val floor = if t0 < 0.05 then 0.05 else t0
     if t1 / floor > 60.0 then
-      failures += 1
-      println("FAIL " + name + ": " + fmt(t0) + " ms at " + base + ", " + fmt(t1) + " ms at " + base * 10 + " (x" + fmt(t1 / floor) + ")")
+      (false, fmt(t0) + " ms at " + base + ", " + fmt(t1) + " ms at " + base * 10 + " (x" + fmt(t1 / floor) + ")")
     else
       val t2 = timedOn(1, prepare(base * 100), op)
       val ratio = t2 / floor
-      val verdict = if ratio <= bound then "PASS " else "FAIL "
-      if ratio > bound then failures += 1
-      println(verdict + name + ": " + fmt(t0) + " / " + fmt(t1) + " / " + fmt(t2) + " ms at " + base + " / " + base * 10 + " / " + base * 100 + ", x" + fmt(ratio) + " of " + fmt(bound))
+      (ratio <= bound, fmt(t0) + " / " + fmt(t1) + " / " + fmt(t2) + " ms at " + base + " / " + base * 10 + " / " + base * 100 + ", x" + fmt(ratio) + " of " + fmt(bound))
   def timedOn[T](reps: Int, input: T, op: T => Unit): Double = timed(reps, () => op(input))
   def fmt(x: Double): String = (Math.round(x * 100.0).toDouble / 100.0).toString
   // Ten times the size costs ten times for a linear operation and about fifteen for one in

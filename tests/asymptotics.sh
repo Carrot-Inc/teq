@@ -34,6 +34,23 @@ for src in tests/asymptotics/*_probe.scala; do
     fi
   done
 done
+# The harness's self-test (tests/asymptotics/harness_selftest.scala) on both targets: a planted quadratic operation
+# fails its three takes, a planted stall of one take passes on another, each take on the operation's line.
+for target in js interp; do
+  out=out/asymptotics/harness-$target
+  case $target in
+    js) timeout 60 "$TEQ" compiler build tests/asymptotics/harness_selftest.scala tests/asymptotics/probe.scala -o "$out.js" > "$out.log" 2>&1 && timeout 300 "$NODE" "$out.js" 200 > "$out.out" 2>&1 ;;
+    interp) timeout 300 "$TEQ" interp tests/asymptotics/harness_selftest.scala tests/asymptotics/probe.scala -- 50 > "$out.out" 2>&1 ;;
+  esac
+  if grep -q -E '^FAIL planted quadratic: take 1 .*; take 2 .*; take 3 ' "$out.out" &&
+    grep -q -E '^PASS planted stall once: take 1 .*; take 2 ' "$out.out" && grep -q -x '1 probes failed' "$out.out"; then
+    pass=$((pass + 1))
+  else
+    echo "FAIL the harness's self-test under $target"
+    grep -E '^(PASS|FAIL) planted|probes' "$out.out" "$out.log" 2> /dev/null | head -5
+    fail=$((fail + 1))
+  fi
+done
 # The interpreter's retention: a frame left by a throw while a closure over it waits on the lowered
 # code's operand stack is let go, its local def's cycle cut (tests/asymptotics/frame_cycle.scala),
 # so the peak resident memory after 200 iterations stays within 30 MB of the peak after 20, where
