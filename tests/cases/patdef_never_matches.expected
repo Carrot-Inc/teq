@@ -1,0 +1,16 @@
+tuple rhs
+tuple: 1 (of class java.lang.Integer)
+case class: 1 (of class java.lang.Integer)
+nested rhs
+nested: Q(1,2) (of class Q)
+handler rhs
+handler: 2 (of class java.lang.Integer)
+lambda rhs
+lambda: 3 (of class java.lang.Integer)
+field rhs
+field: 1 (of class java.lang.Integer)
+before
+lazy rhs
+lazy: 4 (of class java.lang.Integer)
+match rhs
+0

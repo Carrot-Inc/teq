@@ -2387,6 +2387,7 @@ cases/partial_function_reflect_lambda	pass	-
 cases/partial_functions	pass	-	
 cases/partial_sites	pass	-	
 cases/partial_unification_fixed_args	pass	-	
+cases/patdef_never_matches	pass	-	
 cases/patdef_two_slot_binders	pass	-	
 cases/path_member_override_prefix	pass	-	
 cases/path_operations	pass	-	

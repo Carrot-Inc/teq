@@ -31,12 +31,15 @@ scalac 3.8.4's own class files (tests/support/patdef-table.sh runs it).
       the varargs argument's form, that and the boxing convention (`Integer.valueOf` for `BoxesRunTime.boxToInteger`),
       or differing; the cell's verdict stays the whole method's. The values each cell prints must be scalac's.
       Prints a line per cell that differs, the counts by branch and position, and the cells whose values differ; exits
-      1 where a value differs, a cell is missing from either side's code or run, a cell is judged twice, or teq's
-      build or the reference's panicked (`teq.build`, `ref.build`: the count is the last line's `panics: N`).
+      1 where a value differs, a cell is missing from either side's code or run, a cell is judged twice, either side's
+      run ended otherwise than with 0 or left no status (`scalac.exit`, `teq.exit`: a crash or a timeout after the
+      last cell's line is wrong too), or teq's build or the reference's panicked (`teq.build`, `ref.build`: the count
+      is the last line's `panics: N`).
   patdef_table.py selftest <work dir>
       The judge over planted bad records (two variables' reads swapped and a jump moved, each judged as differing; a
       value moved, a cell's code missing on one side, a cell missing from a run, a cell printed or listed twice, each
-      wrong; a lambda's body changed, and its bootstrap naming another body, each judged as differing; a cell of a
+      wrong; every cell printed and then the run exiting 1 or timing out (teq's, scalac's), or no status recorded,
+      each wrong; a lambda's body changed, and its bootstrap naming another body, each judged as differing; a cell of a
       rung not taken whose code moved from the reference's, wrong; a tuple past 22 made of teq's varargs argument over
       another element, and without its cast, each judged as differing; a tuple past 22's read off by one, without its
       cast, without its unbox, its elements out of order in the array, and its reads cut short, each of their segments
@@ -497,6 +500,15 @@ def taken(pname, branch, pos):
     return (branch in ('MatchableTuple', 'None') or pname in ('simpletyped', 'simple23typed')) and pos in ('tail', 'value', 'lambda')
 
 
+def read_status(path):
+    """A run's exit status as patdef-table.sh records it (`exit <n>`), or None where there is no record."""
+    try:
+        m = re.fullmatch(r'exit (\d+)\n?', open(path).read())
+    except FileNotFoundError:
+        return None
+    return int(m.group(1)) if m else None
+
+
 def judge(d):
     cells_ = [l.split() for l in open(os.path.join(d, 'cells.txt')) if l.strip()]
     o = os.path.join(d, 'out')
@@ -513,6 +525,10 @@ def judge(d):
     lines = []
     seen = set()
     panics = 0
+    for side in ('scalac', 'teq'):
+        status = read_status(os.path.join(o, f'{side}.exit'))
+        if status != 0:
+            wrong.append(f'{side}\'s run {"left no exit status" if status is None else "timed out" if status == 124 else f"exited {status}"}')
     for side in ('teq', 'ref'):
         build = os.path.join(o, f'{side}.build')
         n = sum(1 for line in open(build, errors='replace') if ' panicked at ' in line) if os.path.exists(build) else 0
@@ -594,6 +610,7 @@ def selftest(work):
             open(os.path.join(d, 'out', f'{side}.javap'), 'w').write('class PatDef$\n' + tup + single + lam + body.format(names.get(side, '$anonfun$1')))
             open(os.path.join(d, 'out', f'{side}.javapv'), 'w').write(bsm.format(names.get(side, '$anonfun$1')))
             open(os.path.join(d, 'out', f'{side}.out'), 'w').write('tup_tail_int 1 2\nsingle_tail_int 1\ntup_lambda_int 3\n')
+            open(os.path.join(d, 'out', f'{side}.exit'), 'w').write('exit 0\n')
         plant(d)
         import io, contextlib
         buf = io.StringIO()
@@ -704,6 +721,10 @@ def selftest(work):
     record('a value moved', False, None, edit('teq', 'out', 'tup_tail_int 1 2', 'tup_tail_int 2 1'))
     record('a cell\'s code missing on the teq side', False, None, edit('teq', 'javap', 'c_tup_tail_int', 'c_other'))
     record('a cell missing from a run', False, None, edit('teq', 'out', 'single_tail_int 1\n', ''))
+    record('every cell printed, then the run exited 1', False, None, edit('teq', 'exit', 'exit 0', 'exit 1'))
+    record('every cell printed, then the run timed out', False, None, edit('teq', 'exit', 'exit 0', 'exit 124'))
+    record('every cell printed, then scalac\'s run exited 1', False, None, edit('scalac', 'exit', 'exit 0', 'exit 1'))
+    record('a run with no exit status recorded', False, None, lambda d: os.remove(os.path.join(d, 'out', 'teq.exit')))
     record('a cell printed twice', False, None, edit('scalac', 'out', 'single_tail_int 1\n', 'single_tail_int 1\nsingle_tail_int 1\n'))
     record('a cell listed twice', False, None, lambda d: open(os.path.join(d, 'cells.txt'), 'a').write('tup_tail_int tup tail int MatchableTuple\n'))
     record('a panic in teq\'s build', False, None, panicked('teq'), want_panics=1)

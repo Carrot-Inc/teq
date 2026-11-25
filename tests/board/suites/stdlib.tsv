@@ -2401,6 +2401,7 @@ partial_function_reflect_lambda	pass	-
 partial_functions	pass	-	
 partial_sites	pass	-	
 partial_unification_fixed_args	pass	-	
+patdef_never_matches	pass	-	
 patdef_two_slot_binders	pass	-	
 path_member_override_prefix	pass	-	
 path_operations	fail	-	error: not supported on JavaScript: method getProperties of java.lang.System (a Java definition without an implementation in the std's platf

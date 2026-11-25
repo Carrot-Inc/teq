@@ -7,6 +7,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- On the JVM a pattern definition or a case whose value can never match its class pattern (`val (a, b) = { f(); 1 }:
+  @unchecked`, an `Int` field under a nested case class's pattern) throws the value's `MatchError` after its right side
+  ran, or the match takes the next case, as under scalac, where the build aborted ("no entry found for key") or refused
+  the program ("the local a is not in scope of the generated method").
 - On the JVM a super call whose argument holds a branch, a match or a try (`super.g(1, if n > 0 then 2 else 3)`) no
   longer fails to load ("VerifyError: Bad type on operand stack").
 - On the JVM and JavaScript, a class whose superclass comes through a trait read from a library or an upstream module
