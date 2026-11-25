@@ -7,13 +7,19 @@
 #   pieces.py select <suite> <k> <n>       piece k's units, one a line, in the suite's order
 #   pieces.py merge <suite> <n> [--results <file>] <log>...
 #                                          the pieces' summaries merged into the suite's result (below)
+#   pieces.py bounds <suite> <seconds>     each unit a run timed (`<unit> <seconds>` a line) against its bound, three
+#                                          times its weight (below) and never under 180 s: a line `FAIL units: ...`
+#                                          for each unit over it and exit 1, else one line and exit 0; for a suite whose
+#                                          units run one after another (tests/gate-scripts.sh), so that a unit grown by
+#                                          minutes fails at its own gate and not as the gate's last shard
 # The units come on stdin, one a line, in the order the suite runs them (its inventory); a unit named twice, an
 # empty inventory or a selector out of range is refused (exit 2). A unit's piece is a function of the units, n and
 # the weights committed in tests/support/piece-weights.txt (`<suite> <unit> <seconds>`; `<suite> * <seconds>` the
 # weight of a unit not listed there, 1 without one): the units heaviest first, by name on a tie, each to the piece
 # with the least weight so far, the first of them on a tie, so that with no weights the names are dealt round in
 # order. The gate's timing file places the pieces on machines and never chooses their units, and a unit added to a
-# suite lands in exactly one piece without a weight of its own.
+# suite lands in exactly one piece without a weight of its own. PIECES_WEIGHTS names another file of weights (a cell's
+# planted one).
 #
 # A piece's last line is its summary (pieces_end of tests/support/pieces.sh), and a whole run's too when
 # PIECES_SUMMARY names a file for it:
@@ -23,7 +29,8 @@
 # that parse), one assertion of the suite's, passed when every piece's is ok; `any:<name>=0|1` a failure of the whole
 # suite's that any piece may find (tests/modules.sh's scalac missing), one failure when one does; `pos:<name>=<integer>`
 # evidence that must be there somewhere (the sessions that joined their workers in tests/lsp.sh), summed, the suite
-# failing when the sum is 0. `merge` prints `<exit>\t<seconds>\t<line>`: the suite's verdict, its pieces' total time (with
+# failing when the sum is 0; `note:<name>=<text>,<text>...` a note the suite's line carries, no verdict (a text's `_`
+# read as spaces), the distinct texts of the pieces in their order. `merge` prints `<exit>\t<seconds>\t<line>`: the suite's verdict, its pieces' total time (with
 # --results; 0 without) and its line, `<suite>: <n> pieces, <passed> passed, <failed> failed` and the other
 # counters, then what failed. With --results (the gate's rows, `<name>\t<where>\t<seconds>\t<exit>\t<line>`) the
 # pieces' rows are the verdicts: every piece `<suite>.<k>/<n>` has exactly one, and a row of the suite's under
@@ -54,9 +61,13 @@ def inventory():
     return units
 
 
+# a unit's bound (bounds): this many times its weight, never under BOUND_FLOOR seconds
+BOUND_TIMES, BOUND_FLOOR = 3, 180
+
+
 def weights(suite):
     table, default = {}, 1.0
-    path = os.path.join(HERE, "piece-weights.txt")
+    path = os.environ.get("PIECES_WEIGHTS") or os.path.join(HERE, "piece-weights.txt")
     for line in open(path) if os.path.exists(path) else []:
         fields = line.split()
         if not fields or fields[0].startswith("#") or fields[0] != suite:
@@ -123,7 +134,7 @@ def merge(suite, n, logs, results):
             for secs, code in got:
                 seconds += int(secs) if secs.isdigit() else 0
             verdicts[k] = got[0][1] if len(got) == 1 else "1"
-    counters, ands, anys, positives = {}, {}, {}, {}
+    counters, ands, anys, positives, notes = {}, {}, {}, {}, {}
     seen = {}
     for log in logs:
         m = summary(log)
@@ -148,6 +159,11 @@ def merge(suite, n, logs, results):
                 anys[name[4:]] = anys.get(name[4:], 0) + (value != "0")
             elif name.startswith("pos:"):
                 positives[name[4:]] = positives.get(name[4:], 0) + int(value)
+            elif name.startswith("note:"):
+                notes.setdefault(name[5:], [])
+                for text in value.replace("_", " ").split(","):
+                    if text and text not in notes[name[5:]]:
+                        notes[name[5:]].append(text)
             elif name == "exit":
                 if results is None:
                     verdicts[k] = value
@@ -178,6 +194,7 @@ def merge(suite, n, logs, results):
             problems.append(f"no {name} in any piece")
     line = f"{suite}: {n} pieces, {passed} passed, {failed} failed"
     line += "".join(f", {name} {value}" for name, value in counters.items())
+    line += "".join(f"; {name}: {', '.join(texts)}" for name, texts in notes.items())
     if problems:
         line += "; " + "; ".join(problems)
     return (1 if problems or failed else 0), seconds, line
@@ -210,8 +227,21 @@ def main(argv):
             results, rest = rest[1], rest[2:]
         code, seconds, line = merge(suite, n, rest, results)
         print(f"{code}\t{seconds}\t{line}")
+    elif len(argv) == 3 and argv[0] == "bounds":
+        suite, path = argv[1], argv[2]
+        table, default = weights(suite)
+        timed = [(l.split()[0], int(l.split()[1])) for l in open(path, encoding="utf-8") if len(l.split()) == 2]
+        over = []
+        for unit, secs in timed:
+            weight = table.get(unit, default)
+            bound = max(BOUND_FLOOR, round(BOUND_TIMES * weight))
+            if secs > bound:
+                over.append(f"FAIL units: {unit} ran {secs} s, over its bound of {bound} s ({BOUND_TIMES} times its weight of "
+                            f"{weight:g} s in tests/support/piece-weights.txt, {BOUND_FLOOR} s at least)")
+        print("\n".join(over) or f"units: {len(timed)} timed, each within its bound ({BOUND_TIMES} times its weight, {BOUND_FLOOR} s at least)")
+        sys.exit(1 if over else 0)
     else:
-        refuse("usage: pieces.py list <suite> <n> | select <suite> <k> <n> | merge <suite> <n> [--results <file>] <log>...")
+        refuse("usage: pieces.py list <suite> <n> | select <suite> <k> <n> | merge <suite> <n> [--results <file>] <log>... | bounds <suite> <seconds>")
 
 
 if __name__ == "__main__":

@@ -598,10 +598,12 @@ They run as lila's, held to their records; the run lines hold the smoke's named 
 The gate's `budget`, `runtime` and `sentinel` lines compare the head's plain release build with
 master's on remote machines of their own, over the budgets of `bench/budgets.txt`, `bench/runtime-budgets.txt`
 and the sentinel's `bench/reference.txt`; `bench/pairs.py` is the estimator (its docstring has the
-statistic, the schedule and the verdicts). They measure once the suites on the shards and the project lines
+statistic, the schedule and the verdicts). They measure once the suites on the pool's shards and the project lines
 have ended: the machines share one host, its memory bandwidth and its scheduler, which a container's processors do
 not isolate, and a pair's band widens with the suites' load (the first sharded gate, beside seven shards at a
-host load of 59 to 62, had a budget row inconclusive and a sentinel row over). Their claims, syncs, builds and the
+host load of 59 to 62, had a budget row inconclusive and a sentinel row over). A machine whose look names a kind
+(`GATE_KIND`, a guest) is another host's: its shard goes on while they measure, and the deal charges it from the
+comparison's seconds (its lines' rows over the machines it holds) before the pool's, so that the pool ends first. Their claims, syncs, builds and the
 head's binary come beside the suites, on one machine a line, the first free ones of the pool, claimed before the
 shards are dealt the others (one at least left to them); when the suites have ended, the lines go to as few of those
 as end the gate within thirty minutes by the time it has taken and the lines' recorded times, one machine and its

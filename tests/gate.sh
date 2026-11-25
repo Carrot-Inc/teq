@@ -35,9 +35,10 @@
 # docs/DEVELOPING.md, "The timing lines on a machine"): budget, the type phase of every program of the compile
 # budget; runtime, the generated programs' wall and steady-state time; and sentinel, the rows of
 # bench/reference.txt against its reference revision under their cumulative ceilings. They measure once the suites on
-# the shards and the project lines have ended, since those machines share the comparison's host, its memory bandwidth
-# and its scheduler, and a pair's band widens with their load; the comparison's claim, syncs, builds and the head's
-# binary come beside the suites, on one machine a line, the first free ones of the pool, claimed before the shards
+# the pool's shards and the project lines have ended, since those machines share the comparison's host, its memory
+# bandwidth and its scheduler, and a pair's band widens with their load (a named kind's machines are another host's:
+# their shards go on, dealt the comparison's seconds more than the pool's); the comparison's claim, syncs, builds and
+# the head's binary come beside the suites, on one machine a line, the first free ones of the pool, claimed before the shards
 # are dealt the others, one of them at least left to the shards (`prepare`). When the suites have ended, the lines go to as few of those as end the gate within
 # thirty minutes by the time it has taken and the lines' recorded times, one machine and its lines one after another
 # when that fits (`deal_lines`); the shards take the other free machines but those the projects hold. Every side is a
@@ -935,11 +936,12 @@ compare_half() {
     result compare "$host" "$j" 0 "claim: waited ${j}s for a comparison machine, $handle" "$file"
     compare_on "$handle" "$lines" &
   done
-  # The measure: once the shards' and the projects' suites have ended and every machine held waits to measure or has
-  # ended, the lines go to as few of the machines ready as end the gate within thirty minutes, by the time it has
-  # taken so far and the lines' recorded times (deal_lines); the others measure nothing.
+  # The measure: once the suites of the pool's shards (a named kind's machines are another host's) and the projects'
+  # have ended and every machine held waits to measure or has ended, the lines go to as few of the machines ready as
+  # end the gate within thirty minutes, by the time it has taken so far and the lines' recorded times (deal_lines);
+  # the others measure nothing.
   while :; do
-    if [ -e "$tmp/shards.ended" ] && { [ -z "$projects" ] || [ -e "$out/projects.ended" ]; }; then
+    if [ -e "$tmp/pool.ended" ] && { [ -z "$projects" ] || [ -e "$out/projects.ended" ]; }; then
       pending=0
       for host in $held; do
         grep -q '^measure-wanted ' "$tmp/compare-$host/status" 2> /dev/null || [ "$(tail -1 "$tmp/compare-$host/status" 2> /dev/null)" = done ] || pending=1
@@ -1330,6 +1332,7 @@ take_head() {
   touch "$tmp/head.ready"
 }
 machines_started=$(now)
+synced=
 hosts=()
 handles=()
 if [ ${#want[@]} -gt 0 ]; then
@@ -1413,6 +1416,8 @@ if [ $n -gt 0 ]; then
     fi
   done
   echo "$(clock) synced to ${#good[@]} of $n machines"
+  # the machines' start, said again beside the gate's length: a slow sync is read at once
+  synced="$(($(now) - machines_started))s from the machines' first claim to \"synced to ${#good[@]} of $n machines\""
   n=${#good[@]}
   # A machine whose look names a kind (GATE_KIND in its own login environment: machines of another host, whose rows
   # are `<line>@<kind>`) is never the builder while a machine of no named kind took the tree: those come first.
@@ -1450,7 +1455,24 @@ if [ $n -gt 0 ]; then
   # `head-wait@<kind>`, else head-wait. A line stays off a machine whose kind's row for it is -1 (its row to be
   # measured there first); the gate says so, a line a machine, and a line no shard can take is dealt to none
   # (`- <line>`), which fails it.
-  python3 - "$tmp/want" "$tmp/times" "$n" "$tmp/cpus" "$tmp/kinds" > "$tmp/deal" 2> "$tmp/deal.off" <<'PY'
+  # A named kind's machines are another host's, which the comparison does not share: it measures once the pool's
+  # shards have ended (compare_half), the named kinds' going on. So their shards start that many seconds before the
+  # pool's: the comparison's lines by their rows dealt over every machine it holds (none without a comparison), and
+  # may end as late as the comparison does; the gate says so.
+  allow=0
+  if [ $compare_selected = 1 ] && ls "$tmp"/cclaim.* > /dev/null 2>&1; then
+    allow=$(python3 - "$tmp/times" "$(ls "$tmp"/cclaim.* | wc -l)" $(for name in $compare; do selected $name && echo $name; done) <<'PY'
+import sys
+times = {l.split()[0]: int(l.split()[1]) for l in open(sys.argv[1]) if l.strip() and not l.startswith("#")}
+load = [0] * int(sys.argv[2])
+for name in sorted(sys.argv[3:], key=lambda n: -times.get(n, 120)):
+    load[load.index(min(load))] += times.get(name, 120)
+print(max(load, default=0))
+PY
+)
+    allow=${allow:-0}
+  fi
+  python3 - "$tmp/want" "$tmp/times" "$n" "$tmp/cpus" "$tmp/kinds" "$allow" > "$tmp/deal" 2> "$tmp/deal.off" <<'PY'
 import sys
 want = [l.rstrip("\n") for l in open(sys.argv[1]) if l.strip()]
 times = {}
@@ -1475,10 +1497,11 @@ def off(name, s):
     if kinds[s] and -1 in (times.get(f"{name}@{kinds[s]}"), times.get(f"{base}@{kinds[s]}")):
         return f"marked -1 for the kind {kinds[s]}, its row there to be measured first"
     return None
+allow = int(sys.argv[6])
 def start(s):
     if s == 0:
         return 0
-    return times.get(f"head-wait@{kinds[s]}", times.get("head-wait", 0)) if kinds[s] else times.get("head-wait", 0)
+    return times.get(f"head-wait@{kinds[s]}", times.get("head-wait", 0)) - allow if kinds[s] else times.get("head-wait", 0)
 load = [start(s) for s in range(n)]
 for entry in sorted(want, key=lambda e: -times.get(e.split()[0], 120)):
     name = entry.split()[0]
@@ -1493,6 +1516,9 @@ for entry in sorted(want, key=lambda e: -times.get(e.split()[0], 120)):
     load[shard] += secs(name, shard)
     print(shard, entry)
 PY
+  if [ "$allow" -gt 0 ] && grep -q -v '^-$' "$tmp/kinds"; then
+    echo "gate: the named kinds' shards charged from ${allow}s before the pool's: the comparison's lines by their rows, measured once the pool's shards have ended"
+  fi
   # what each machine was kept from, one line a machine, and a line no machine of the pool can run failed with why
   hostkind() { echo "${hosts[${good[$1]}]} ($(sed -n "$(($1 + 1))p" "$tmp/kinds" | sed 's/^-$/no named kind/'))"; }
   for s in $(cut -f1 "$tmp/deal.off" | sort -un); do
@@ -1543,6 +1569,16 @@ PY
   # The builder's build, once it ends, goes to every other shard (the comparison's and the projects' machines take
   # it from $tmp themselves), or its failure has them build the head themselves.
   running=" ${good[*]} "
+  # pool_check: once no shard of the pool (a machine whose look named no kind) runs, $tmp/pool.ended: the comparison
+  # measures, the named kinds' shards going on
+  pool_check() {
+    local j
+    [ ! -e "$tmp/pool.ended" ] || return 0
+    for j in $running; do grep -q '^kind [A-Za-z0-9_-]' "$tmp/sync.$j" || return 0; done
+    touch "$tmp/pool.ended"
+    [ -z "${running// /}" ] || echo "$(clock) the pool's shards done after $(($(now) - machines_started))s: the comparison measures, the named kinds' shards going on"
+  }
+  pool_check
   deadline=$(($(now) + ${GATE_MACHINE_SECONDS:-2700}))
   for poll in $(seq 1 100000); do
     for i in $running; do
@@ -1580,6 +1616,7 @@ PY
         running=${running/ $i / }
         echo "$(clock) ${hosts[$i]}: shard done after $(($(now) - machines_started))s"
         collect "$i"
+        pool_check
       fi
     done
     [ -n "${running// /}" ] || break
@@ -1590,7 +1627,7 @@ PY
   for i in $running; do collect "$i"; done
 fi
 [ -e "$tmp/head.ready" ] || touch "$tmp/head.failed"
-touch "$tmp/shards.ended"
+touch "$tmp/pool.ended" "$tmp/shards.ended"
 machines_ended=$(now)
 for half in local compare projects; do
   pid_var=${half}_pid
@@ -1733,6 +1770,7 @@ printf "machines' half %dm%02ds on %d machines, the comparison %dm%02ds, the pro
   $(((projects_ended - projects_started) / 60)) $(((projects_ended - projects_started) % 60)) \
   $(((local_ended - local_started) / 60)) $(((local_ended - local_started) % 60)) "${out#$root/}"
 total=$((gate_ended - gate_started))
+[ -z "$synced" ] || echo "gate: $synced"
 if [ $total -gt 1800 ]; then
   printf "gate: %dm%02ds from its first command to its last: FLAG, over the thirty minutes the owner's rule allows\n" $((total / 60)) $((total % 60))
 else

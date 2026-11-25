@@ -169,6 +169,25 @@ check() {
     [ -f "$log" ] && tail -15 "$log" | sed 's/^/  /'
   fi
 }
+# Each unit's seconds, from its body's start (piece_ran) to the next unit's or the last check's end, held at the end
+# to its bound (tests/support/pieces.py bounds: three times its weight in tests/support/piece-weights.txt, 180 s at
+# least), so that a unit grown by minutes is seen at its own gate, not as the gate's last shard. REPORT ONLY until its
+# failing follow-up: a unit over its bound is named on the summary's line with its seconds and its bound
+# (`note:units-over`), the run not failed by it, and the line says the bound reports only (`note:unit-bound`).
+eval "piece_stamp() $(declare -f piece_ran | sed 1d)"
+unit_name=
+unit_started=0
+: > "$work/unit-seconds"
+unit_close() {
+  [ -z "$unit_name" ] || echo "$unit_name $((SECONDS - unit_started))" >> "$work/unit-seconds"
+  unit_name=
+}
+piece_ran() {
+  unit_close
+  unit_name=$1
+  unit_started=$SECONDS
+  piece_stamp "$@"
+}
 for tool in scala-cli java node python3; do
   command -v $tool > /dev/null || { echo "gate-scripts: no $tool (incomplete validation)"; echo "gate-scripts: 0 passed, 1 failed"; exit 1; }
 done
@@ -613,11 +632,32 @@ for what, results, logs, said in [
 ]:
     code, _, line = merge("s", 2, logs, results)
     assert code == 1 and said in line, f"{what}: {line}"
+# a note: carried onto the suite's line, each text once in the pieces' order, no verdict
+n1 = log("s.1of2.note", "pieces: s 1/2 summary: exit=0 units=1 passed=1 failed=0 note:unit-bound=report_only note:units-over=x_200_s_of_180")
+n2 = log("s.2of2.note", "pieces: s 2/2 summary: exit=0 units=1 passed=1 failed=0 note:unit-bound=report_only note:units-over=y_300_s_of_270,x_200_s_of_180")
+code, _, line = merge("s", 2, [n1, n2], None)
+assert code == 0 and line == "s: 2 pieces, 2 passed, 0 failed; unit-bound: report only; units-over: x 200 s of 180, y 300 s of 270", line
 print("merge: ok")
 PY
-check "pieces: the merge sums counters, counts a whole suite's verdict once and fails on a missing or doubled piece" "$work/merge.log" grep -q "^merge: ok$" "$work/merge.log"
+check "pieces: the merge sums counters, counts a whole suite's verdict once, fails on a missing or doubled piece and carries notes" "$work/merge.log" grep -q "^merge: ok$" "$work/merge.log"
 check "pieces: tests/all.sh runs the long suites whole" /dev/null eval \
   '[ "$(grep -c -E "^suite (lsp|jvm-watch|modules|split) +\./tests/(lsp|jvm-watch|modules|split)\.sh$" tests/all.sh)" = 4 ]'
+# A unit's bound (pieces.py bounds): three times its weight, 180 s at least, a unit of no weight at the suite's
+# default's; one over it fails, named with its seconds and its bound, and those within pass.
+printf 'gate-scripts light 55\ngate-scripts heavy 90\nother heavy 900\n' > "$work/bounds-weights"
+printf 'light 166\nheavy 270\nno-weight 180\n' > "$work/bounds-in"
+printf 'light 181\nheavy 271\nno-weight 180\n' > "$work/bounds-over"
+PIECES_WEIGHTS=$work/bounds-weights python3 tests/support/pieces.py bounds gate-scripts "$work/bounds-in" > "$work/bounds-in.log" 2>&1
+code_in=$?
+PIECES_WEIGHTS=$work/bounds-weights python3 tests/support/pieces.py bounds gate-scripts "$work/bounds-over" > "$work/bounds-over.log" 2>&1
+code_over=$?
+check "pieces: a unit over its bound (three times its weight, 180 s at least) fails, named; within it passes" "$work/bounds-over.log" eval '
+  [ $code_in = 0 ] && [ "$(cat "$work/bounds-in.log")" = "units: 3 timed, each within its bound (3 times its weight, 180 s at least)" ] && [ $code_over = 1 ] &&
+  [ "$(cat "$work/bounds-over.log")" = "$(printf "%s\n" "FAIL units: light ran 181 s, over its bound of 180 s (3 times its weight of 55 s in tests/support/piece-weights.txt, 180 s at least)" \
+    "FAIL units: heavy ran 271 s, over its bound of 270 s (3 times its weight of 90 s in tests/support/piece-weights.txt, 180 s at least)")" ]'
+check "units: every unit of the suite's is timed and held to its bound, the last at the checks' end, the bound reporting only" /dev/null eval '
+  [ "$(grep -c "^piece_ran [a-z-]*$" tests/gate-scripts.sh)" = "$(suite_units | wc -l)" ] && grep -q "^unit_close$" tests/gate-scripts.sh &&
+  grep -q "^pieces_end .* note:unit-bound=report_only_until_its_failing_follow-up \${over:+note:units-over=\$over}$" tests/gate-scripts.sh'
 
 fi
 # The project records (bench/reference/records.scala) through bench/reference/ratchet.scala's verbs, the code the
@@ -1106,6 +1146,9 @@ check "driver: a line dealt by its seconds on its shard's kind of machine, and r
   row parser m1 "$log" | grep -q " ok " && row planted m1 "$log" | grep -q " ok " && row fold m2 "$log" | grep -q " ok " &&
   grep -q -x "parser@16 $(row parser m1 "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" &&
   grep -q -x "fold $(row fold m2 "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" && grep -q -x "parser 100" "$landing/tests/gate-times.txt"'
+check "driver: the gate's last lines say the machines' sync, from their first claim to the synced line, beside its length" "$log" eval '
+  tail -2 "$log" | head -1 | grep -q -x "gate: [0-9]*s from the machines. first claim to \"synced to 2 of 2 machines\"" &&
+  tail -1 "$log" | grep -q "^gate: [0-9]*m[0-9]*s from its first command to its last"'
 git -C "$landing" reset -q --hard "$base"
 fi
 if piece_has driver-steps; then
@@ -1215,6 +1258,26 @@ log=$work/driver-guest-compare.log
 check "driver: a machine of a named kind is no comparison machine: claimed, found, released, the timing lines measured elsewhere" "$log" eval '[ $code = 0 ] &&
   [ "$(grep -E "^(budget|runtime|sentinel) " "$log" | grep -c " ok ")" = 3 ] && ! grep -q -E "^(budget|runtime|sentinel) +m1 " "$log" &&
   grep -q -E "^compare +m1 .*not a comparison machine: its kind is named" "$log"'
+# A named kind's machines are another host's: the comparison measures once the pool's shards have ended, theirs going
+# on, and the deal charges them from the comparison's seconds before the pool's (its lines' rows over the machines it
+# holds: 150 for budget, runtime and sentinel planted at 150, 60 and 90 on three). m1, a guest whose planted rows put
+# parser there (its head-wait 160 less 150, then parser 1, against the pool's 30), still runs it when the pool's
+# shard, fold's, has ended and the comparison measures. Every row the deal reads here is planted.
+base=$(git -C "$landing" rev-parse HEAD)
+plant_row() { grep -q "^$1 " "$landing/tests/gate-times.txt" && sed -i "s|^$1 .*|$1 $2|" "$landing/tests/gate-times.txt" || echo "$1 $2" >> "$landing/tests/gate-times.txt"; }
+for r in "budget 150" "runtime 60" "sentinel 90" "head-wait 40" "head-wait@guest 160" "parser 30" "parser@guest 1" "fold 1" "fold@guest 2"; do plant_row $r; done
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "the deal's rows planted"
+GATE_ENV_m1="export GATE_KIND=guest" gate "$work/driver-pool-measure.log" "$(printf 'm1 free\nm2 free\nm3 free\nm4 free\nm5 free')" --only parser,fold,budget,runtime,sentinel --master-rev HEAD
+code=$?
+log=$work/driver-pool-measure.log
+check "driver: the comparison measures once the pool's shards have ended, a guest's going on, charged from the comparison's seconds" "$log" eval '[ $code = 0 ] &&
+  grep -q -x "gate: the named kinds. shards charged from 150s before the pool.s: the comparison.s lines by their rows, measured once the pool.s shards have ended" "$log" &&
+  row parser m1 "$log" | grep -q " ok " && row fold "m[2-5]" "$log" | grep -q " ok " &&
+  [ "$(grep -E "^(budget|runtime|sentinel) " "$log" | grep -c " ok ")" = 3 ] &&
+  p=$(grep -n "the pool.s shards done after [0-9]*s: the comparison measures, the named kinds. shards going on" "$log" | head -1 | cut -d: -f1) &&
+  c=$(grep -n "comparison: measure: " "$log" | head -1 | cut -d: -f1) && d=$(grep -n "m1: shard done after" "$log" | head -1 | cut -d: -f1) &&
+  [ -n "$p" ] && [ -n "$c" ] && [ -n "$d" ] && [ "$p" -lt "$c" ] && [ "$c" -lt "$d" ]'
+git -C "$landing" reset -q --hard "$base"
 fi
 if piece_has driver-holders; then
 piece_ran driver-holders
@@ -2887,6 +2950,12 @@ check "builtin-receiver-extensions: the table's templates and its judge's plante
   eval 'python3 tests/support/builtin_receiver_extensions.py --self-test > "$work/builtin-receiver-extensions.log" 2>&1'
 
 fi
+unit_close
+python3 tests/support/pieces.py bounds gate-scripts "$work/unit-seconds" > "$work/unit-bounds.log" 2>&1
+over=$(sed -n 's/^FAIL units: \([^ ]*\) ran \([0-9]*\) s, over its bound of \([0-9]*\) s .*/\1_\2_s_of_\3/p' "$work/unit-bounds.log" | paste -sd, -)
+# each unit's seconds, on a pass too, so that a machine's log says where a piece's time went
+echo "gate-scripts: each unit's seconds: $(awk '{printf "%s%s %s", sep, $1, $2; sep = ", "}' "$work/unit-seconds")"
+[ -z "$over" ] || echo "gate-scripts: units over their bounds, REPORT ONLY until the bound's failing follow-up: $(tr '_' ' ' <<< "$over")"
 echo "gate-scripts: $pass passed, $fail failed"
-pieces_end $((fail > 0)) passed=$pass failed=$fail
+pieces_end $((fail > 0)) passed=$pass failed=$fail note:unit-bound=report_only_until_its_failing_follow-up ${over:+note:units-over=$over}
 [ $fail = 0 ]

@@ -148,9 +148,10 @@ run_line() {
   cp out/compare-runs/$name/line.json "$logs/$name.line.json" 2> /dev/null
   step "$name" $code $s "$logs/$name.log"
 }
-# The lines measure once the gate's suites on the other machines have ended (GATE_MEASURE_AFTER=1: the gate writes
-# out/compare/measure then, naming the lines of GATE_LINES this machine measures, or none, the others measuring on
-# other machines), since those machines share this one's host, its memory bandwidth and its scheduler, and the
+# The lines measure once the gate's suites on the other machines of this host have ended, the pool's shards and the
+# projects' (GATE_MEASURE_AFTER=1: the gate writes out/compare/measure then, naming the lines of GATE_LINES this
+# machine measures, or none, the others measuring on other machines; a named kind's machines are another host's), since
+# those machines share this one's host, its memory bandwidth and its scheduler, and the
 # pairs' bands widen with their load; the wait is bounded by GATE_MEASURE_WAIT seconds (default 3000), past which
 # the lines are not run.
 if [ "$GATE_MEASURE_AFTER" = 1 ]; then
