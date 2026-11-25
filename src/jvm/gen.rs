@@ -550,11 +550,6 @@ pub struct MethodCx {
     /// Where the method is defined, where the class writer knows it: the place of the refusals of its code
     /// (`Gen::end_method`), given with its context (`Gen::method_cx`).
     pub at: Option<(crate::source::FileId, crate::source::Span)>,
-    /// The method where it is not the plan's: one of a name and signature the class holds already, whose code is
-    /// dropped (`Gen::enter_plan`, `Gen::end_method`).
-    pub repeated: Option<crate::lir::MethodDef>,
-    /// The plan's entry the method's code is written under, none for a repeated one (`Gen::enter_plan`).
-    pub entry: Option<usize>,
 }
 
 /// The state of a `try` that `Gen::open_try` began, for `Gen::close_try`.
@@ -625,8 +620,6 @@ impl Default for MethodCx {
             labels: FxMap::default(),
             try_exits: FxMap::default(),
             at: None,
-            repeated: None,
-            entry: None,
         }
     }
 }

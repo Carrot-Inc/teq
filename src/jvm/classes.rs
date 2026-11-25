@@ -151,6 +151,9 @@ pub(super) struct ModuleTree {
 /// lowering declared; `what` names it in a refusal. A lifted body is held so (`Gen::lower_lifted`).
 struct HeldMethod {
     method: MethodDef,
+    /// Whether the method entered its class's plan (`Gen::enter_plan`): not where the class holds one of its name and
+    /// signature already, and its code is written all the same and dropped.
+    entered: bool,
     what: &'static str,
     /// The line its code starts at, where its writer gives one before the body (`Code::line`).
     first_line: Option<u32>,
@@ -310,7 +313,7 @@ impl<'a> Gen<'a> {
     /// slot 0 unless static, uninitialised in a constructor until its superclass's or its own other one's call, then the
     /// parameters. The types the code holds its parameters at are not always the signature's: a method that implements a
     /// class file's holds a value class's underlying value as the erasure marks it (`Gen::linked_mref`).
-    fn open_method(&mut self, method: MethodDef, m: MethodCx) {
+    fn open_method(&mut self, method: &MethodDef, m: MethodCx) {
         let is_static = method.flags.is_static;
         let constructor = &*method.name == "<init>";
         let mut locals: Vec<VT> = Vec::new();
@@ -388,30 +391,30 @@ impl<'a> Gen<'a> {
         self.checked_methods.insert((method.name.clone(), method.desc.clone()), ());
     }
 
-    /// Ends the method begun: its code goes to the class file under the plan's header. A
-    /// method whose code could not be written is none of the class's, and leaves the plan. The
-    /// code of a method the class holds already (`Gen::enter_plan`'s repeat) is dropped, after it was written
+    /// Ends the method begun, `m`: its code goes to the class file under its header where it `entered` the plan. A method
+    /// whose code could not be written is none of the class's, and leaves the plan by its name and descriptor, its
+    /// identity among the class's methods. The code of a method the class holds already (`Gen::enter_plan`'s repeat) is
+    /// dropped, after it was written
     /// for all that writing it leaves in the class: the constants and the bootstrap methods its
     /// instructions name, the names it takes and the lifted bodies it asks for (a closure's copy, a thunk:
     /// `defer`, the memos of what is lifted), the interfaces its `super` calls go to
     /// (`super_targets`), the function arities it names and what it reports. It asks for no
     /// second writing of the class with wide jumps (`overflow`).
-    pub fn end_method(&mut self) {
+    fn end_method(&mut self, m: MethodDef, entered: bool) {
         let at = self.m.at;
         let code = std::mem::replace(&mut self.code, Code::new(Vec::new()));
-        let repeated = self.m.repeated.take();
-        let entry = self.m.entry.take();
         if code.underflow || code.misreserved {
-            let m = repeated.or_else(|| entry.map(|i| self.plan.methods.remove(i))).expect("a method was begun");
+            if entered {
+                self.plan.methods.retain(|p| p.name != m.name || p.desc != m.desc);
+            }
             let line = code.last_line().map_or(String::new(), |l| format!(" at line {}", l));
             let fault = if code.underflow { "the operand stack model underflowed" } else { "internal error: a value stored in slots reserved for another width" };
             self.unsupported(&format!("{} while writing {}{}{}", fault, m.name, m.desc, line));
             return;
         }
-        if repeated.is_some() {
+        if !entered {
             return;
         }
-        let m = &self.plan.methods[entry.expect("a method was begun")];
         let reached = !self.cw.overflow;
         self.cw.method(method_access(m.flags), &m.name, &m.desc, Some(code));
         if reached && self.cw.overflow {
@@ -694,10 +697,8 @@ impl<'a> Gen<'a> {
     /// (`Gen::end_method`).
     fn enter_plan(&mut self, held: &mut HeldMethod) {
         let method = &held.method;
-        if self.plan.has_method(&method.name, &method.desc) {
-            held.m.repeated = Some(method.clone());
-        } else {
-            held.m.entry = Some(self.plan.methods.len());
+        held.entered = !self.plan.has_method(&method.name, &method.desc);
+        if held.entered {
             self.plan.methods.push(method.clone());
         }
     }
@@ -706,7 +707,7 @@ impl<'a> Gen<'a> {
     /// the lowering declared, taken from the generator, to be written later by `Gen::write_held`.
     fn hold_method(&mut self, method: MethodDef, what: &'static str, code: HeldCode) -> HeldMethod {
         let (m, lir, declared) = (std::mem::take(&mut self.m), std::mem::take(&mut self.lir), std::mem::take(&mut self.lower_declared));
-        HeldMethod { method, what, first_line: None, m, lir, declared, code }
+        HeldMethod { method, entered: false, what, first_line: None, m, lir, declared, code }
     }
 
     /// A member of the class whose body is the tree `compose` lowers, held and written at once where a writer would
@@ -837,10 +838,10 @@ impl<'a> Gen<'a> {
     /// method begun and written at once is.
     fn write_held(&mut self, held: HeldMethod) {
         self.plan_phase(false);
-        let HeldMethod { method, first_line, m, lir, declared, code, .. } = held;
+        let HeldMethod { method, entered, first_line, m, lir, declared, code, .. } = held;
         self.lir = lir;
         self.lower_declared = declared;
-        self.open_method(method, m);
+        self.open_method(&method, m);
         if let Some(line) = first_line {
             self.code.line(line);
         }
@@ -858,7 +859,7 @@ impl<'a> Gen<'a> {
                 self.write_module_part(part.root, part.init, &part.fields);
             }
         }
-        self.end_method();
+        self.end_method(method, entered);
         self.plan_phase(true);
     }
 
