@@ -767,6 +767,23 @@ pub fn parse_type(desc: &str) -> (ErasedType, &str) {
     }
 }
 
+/// dotty's `MaximumJvmParameters` (BCodeSkelBuilder.scala 139): the slots a method's parameters may take, one of
+/// the JVM's 255 kept for `this`.
+pub const MAX_PARAMETER_SLOTS: usize = 254; // dotty: MaximumJvmParameters
+
+/// The class file's own bound on a method's argument slots (JVMS 4.3.3), `this` one of them for an instance method.
+pub const MAX_ARGUMENT_SLOTS: usize = 255; // jdk: JVMS 4.3.3
+
+/// dotty's `Definitions.MaxImplementedFunctionArity`: past it a lambda's parameters arrive in one `Object[]`.
+pub const MAX_IMPLEMENTED_FUNCTION_ARITY: usize = 22; // dotty: Definitions.MaxImplementedFunctionArity
+
+/// The slots the parameters of the method descriptor `desc` take, a long and a double two, and how many
+/// parameters it has.
+pub fn parameter_slots(desc: &str) -> (usize, usize) {
+    let (params, _) = parse_method_desc(desc);
+    (params.iter().map(|t| if t.wide() { 2 } else { 1 }).sum(), params.len())
+}
+
 /// The parameter types and the result of a method descriptor.
 pub fn parse_method_desc(desc: &str) -> (Vec<ErasedType>, ErasedType) {
     let mut params = Vec::new();

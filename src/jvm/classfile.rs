@@ -45,10 +45,28 @@ enum Const {
     InvokeDynamic(u16, u16),
 }
 
+/// The largest `constant_pool_count` a class file holds: its entries take the indexes from 1 to
+/// 65,534, a long or a double two of them (JVMS 4.1, 4.4.5).
+pub const MAX_POOL_COUNT: u32 = 65_535;
+
+/// The bound of a class file a constant pool passed (`ConstPool::unwritable`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PoolLimit {
+    /// More entries than `MAX_POOL_COUNT` allows.
+    Entries,
+    /// A text of more than `MAX_TEXT_BYTES` bytes.
+    Text,
+}
+
 #[derive(Default)]
 pub struct ConstPool {
     bytes: Vec<u8>,
-    count: u16,
+    /// The next entry's index: the class's `constant_pool_count` while it is at most
+    /// `MAX_POOL_COUNT`, the pool too large for a class file past it, whose indexes are then no
+    /// one's (`too_large`).
+    count: u32,
+    /// A text longer than a constant holds was added, its length then no one's.
+    long_text: bool,
     utf8: FxMap<Box<str>, u16>,
     consts: FxMap<Const, u16>,
     /// A lowering runs (`Gen::lowering`): nothing may enter the pool, whose order is the output's.
@@ -57,7 +75,7 @@ pub struct ConstPool {
 
 impl ConstPool {
     fn new() -> ConstPool {
-        ConstPool { bytes: Vec::with_capacity(1024), count: 1, utf8: FxMap::default(), consts: FxMap::default(), frozen: false }
+        ConstPool { bytes: Vec::with_capacity(1024), count: 1, long_text: false, utf8: FxMap::default(), consts: FxMap::default(), frozen: false }
     }
 
     pub fn utf8(&mut self, s: &str) -> u16 {
@@ -65,10 +83,10 @@ impl ConstPool {
             return i;
         }
         assert!(!self.frozen, "the constant pool is written while a lowering runs");
-        let i = self.count;
-        self.count += 1;
+        let i = self.take(1);
         self.bytes.push(1);
         let encoded = modified_utf8(s);
+        self.long_text |= encoded.len() > MAX_TEXT_BYTES;
         self.bytes.extend_from_slice(&(encoded.len() as u16).to_be_bytes());
         self.bytes.extend_from_slice(&encoded);
         self.utf8.insert(s.into(), i);
@@ -80,7 +98,6 @@ impl ConstPool {
             return i;
         }
         assert!(!self.frozen, "the constant pool is written while a lowering runs");
-        let i = self.count;
         let b = &mut self.bytes;
         let mut wide = false;
         match c {
@@ -131,7 +148,7 @@ impl ConstPool {
                 b.extend_from_slice(&nt.to_be_bytes());
             }
         }
-        self.count += if wide { 2 } else { 1 };
+        let i = self.take(if wide { 2 } else { 1 });
         self.consts.insert(c, i);
         i
     }
@@ -144,13 +161,37 @@ impl ConstPool {
             Const::Field(a, b) | Const::Method(a, b) | Const::InterfaceMethod(a, b) => (a, b),
             _ => unreachable!(),
         };
-        let i = self.count;
-        self.count += 1;
+        let i = self.take(1);
         self.bytes.push(tag);
         self.bytes.extend_from_slice(&class.to_be_bytes());
         self.bytes.extend_from_slice(&nt.to_be_bytes());
         self.consts.insert(c, i);
         i
+    }
+
+    /// The index of an entry of `slots` slots added now. Past the class file's bound it is no
+    /// entry's, and the class is not written (`ClassWriter::finish`).
+    fn take(&mut self, slots: u32) -> u16 {
+        let i = self.count;
+        self.count += slots;
+        i as u16
+    }
+
+    /// Whether the pool holds more entries than a class file can.
+    pub fn too_large(&self) -> bool {
+        self.count > MAX_POOL_COUNT
+    }
+
+    /// What of the pool a class file cannot hold, the first that ASM's `ClassWriter.toByteArray`
+    /// meets: a text past a constant's bytes as it adds it (`ByteVector.putUTF8`), then the count.
+    pub fn unwritable(&self) -> Option<PoolLimit> {
+        if self.long_text {
+            Some(PoolLimit::Text)
+        } else if self.too_large() {
+            Some(PoolLimit::Entries)
+        } else {
+            None
+        }
     }
 
     pub fn class(&mut self, name: &str) -> u16 {
@@ -253,6 +294,32 @@ impl ConstPool {
     }
 }
 
+/// What a class file's text constant holds, in bytes (JVMS 4.4.7).
+pub const MAX_TEXT_BYTES: usize = 65_535;
+
+/// dotty's `BCodeUtils.checkConstantStringLength` (BCodeUtils.scala 41-60): whether `name` and
+/// `other` together stay within the bytes of one text constant, counted as dotty counts them: a
+/// NUL two bytes, a character of the BMP its modified UTF-8 length, each half of a surrogate pair
+/// two.
+pub fn constant_text_fits(name: &str, other: &str) -> bool {
+    if name.len() + other.len() <= MAX_TEXT_BYTES / 3 {
+        return true;
+    }
+    let mut bytes = 0;
+    for unit in crate::text::utf16_units(name).chain(crate::text::utf16_units(other)) {
+        bytes += match unit {
+            0 => 2,
+            0x0001..=0x007f => 1,
+            0x0080..=0x07ff | 0xd800..=0xdfff => 2,
+            _ => 3,
+        };
+        if bytes > MAX_TEXT_BYTES {
+            return false;
+        }
+    }
+    true
+}
+
 fn modified_utf8(s: &str) -> Vec<u8> {
     if s.bytes().all(|b| b != 0 && b < 0x80) {
         return s.as_bytes().to_vec();
@@ -316,10 +383,25 @@ struct Frame {
     stack: Vec<VT>,
 }
 
-/// A jump as it is written first, 16-bit: the instruction's offset and its target.
-struct Jump {
-    at: u32,
-    target: Label,
+/// What `finish` lays out: a jump as it is written first, 16-bit, or a switch, whose padding follows its offset.
+enum Item {
+    Jump { at: u32, target: Label },
+    /// The opcode at `at`, `pad` zero bytes after it as first written, its 32-bit offsets at `slots` (each from `at`
+    /// to its label), its operands ending at `end`.
+    Switch { at: u32, pad: u32, end: u32, slots: Vec<(u32, Label)> },
+}
+
+impl Item {
+    fn at(&self) -> u32 {
+        match *self {
+            Item::Jump { at, .. } | Item::Switch { at, .. } => at,
+        }
+    }
+}
+
+/// The zero bytes after a switch's opcode at `at`: its operands start at a multiple of four (JVMS 6.5).
+fn switch_pad(at: u32) -> u32 {
+    (4 - (at + 1) % 4) % 4
 }
 
 /// The state a conditional jump falls through with (`Code::relax`): the frame its inverse lands
@@ -355,7 +437,7 @@ pub struct Code {
     max_stack: u16,
     max_locals: u16,
     labels: Vec<LabelInfo>,
-    jumps: Vec<Jump>,
+    items: Vec<Item>,
     falls: Vec<Falls>,
     frames: Vec<Frame>,
     handlers: Vec<Handler>,
@@ -397,7 +479,7 @@ impl Code {
             max_stack: 0,
             max_locals,
             labels: Vec::new(),
-            jumps: Vec::new(),
+            items: Vec::new(),
             falls: Vec::new(),
             frames: Vec::new(),
             handlers: Vec::new(),
@@ -667,15 +749,59 @@ impl Code {
         self.before_insn();
         let at = self.pc();
         self.bytes.push(opcode);
-        self.jumps.push(Jump { at, target });
+        self.items.push(Item::Jump { at, target });
         self.bytes.extend_from_slice(&[0, 0]);
         if self.relax && opcode != op::GOTO {
-            self.falls.push(Falls { jump: self.jumps.len() - 1, locals: self.locals.clone(), stack: self.stack.clone() });
+            self.falls.push(Falls { jump: self.items.len() - 1, locals: self.locals.clone(), stack: self.stack.clone() });
         }
         self.record_target(target);
         if opcode == op::GOTO {
             self.reachable = false;
         }
+    }
+
+    /// A `tableswitch` or a `lookupswitch` as `layout` says, on the `Int` it pops: `targets[i]` the target of the
+    /// layout's target `i`, `default` the others'. Its operands start at a multiple of four from the code's start, after
+    /// zero bytes; every offset is a 32-bit one from the instruction (JVMS 6.5), and both follow the final layout
+    /// (`Code::widen`). The path ends here.
+    pub fn switch(&mut self, layout: &SwitchLayout, targets: &[Label], default: Label) {
+        self.before_insn();
+        self.pop();
+        let at = self.pc();
+        self.bytes.push(match layout {
+            SwitchLayout::Table { .. } => op::TABLESWITCH,
+            SwitchLayout::Lookup(_) => op::LOOKUPSWITCH,
+        });
+        let pad = switch_pad(at);
+        self.bytes.extend(std::iter::repeat(0).take(pad as usize));
+        let mut slots = Vec::new();
+        self.offset_to(&mut slots, default);
+        match layout {
+            SwitchLayout::Table { low, high, slots: cases } => {
+                self.bytes.extend_from_slice(&low.to_be_bytes());
+                self.bytes.extend_from_slice(&high.to_be_bytes());
+                for case in cases {
+                    self.offset_to(&mut slots, case.map_or(default, |t| targets[t]));
+                }
+            }
+            SwitchLayout::Lookup(pairs) => {
+                self.bytes.extend_from_slice(&(pairs.len() as u32).to_be_bytes());
+                for &(key, t) in pairs {
+                    self.bytes.extend_from_slice(&key.to_be_bytes());
+                    self.offset_to(&mut slots, targets[t]);
+                }
+            }
+        }
+        let end = self.pc();
+        self.items.push(Item::Switch { at, pad, end, slots });
+        self.reachable = false;
+    }
+
+    /// A switch's 32-bit offset to `target`, filled in when the code is finished.
+    fn offset_to(&mut self, slots: &mut Vec<(u32, Label)>, target: Label) {
+        slots.push((self.pc(), target));
+        self.bytes.extend_from_slice(&[0, 0, 0, 0]);
+        self.record_target(target);
     }
 
     /// Marks the end of a path: after a return or `athrow`.
@@ -780,89 +906,121 @@ impl Code {
         (out, overflow)
     }
 
-    /// Writes each jump's offset: in 16 bits where every one reaches, else, while the method is
-    /// written again (`relax`), with the jumps that do not reach widened (`Code::widen`).
+    /// Writes each jump's and switch's offsets: a jump's in 16 bits where every one reaches, else, while the method
+    /// is written again (`relax`), with the jumps that do not reach widened (`Code::widen`).
     fn lay_out(&mut self) {
-        for j in &self.jumps {
-            let delta = self.labels[j.target.0 as usize].offset.expect("unbound label") as i64 - j.at as i64;
-            if delta < i16::MIN as i64 || delta > i16::MAX as i64 {
-                if self.relax && self.bytes.len() <= MAX_CODE {
-                    self.widen();
-                } else {
-                    self.overflow = true;
+        let label = |c: &Code, l: Label| c.labels[l.0 as usize].offset.expect("unbound label") as i64;
+        for item in &self.items {
+            match item {
+                Item::Jump { at, target } => {
+                    let delta = label(self, *target) - *at as i64;
+                    if delta < i16::MIN as i64 || delta > i16::MAX as i64 {
+                        if self.relax && self.bytes.len() <= MAX_CODE {
+                            self.widen();
+                        } else {
+                            self.overflow = true;
+                        }
+                        return;
+                    }
+                    let p = *at as usize + 1;
+                    self.bytes[p..p + 2].copy_from_slice(&(delta as i16).to_be_bytes());
                 }
-                return;
+                Item::Switch { at, slots, .. } => {
+                    for &(p, target) in slots {
+                        let offset = (label(self, target) - *at as i64) as i32;
+                        self.bytes[p as usize..p as usize + 4].copy_from_slice(&offset.to_be_bytes());
+                    }
+                }
             }
-            let p = j.at as usize + 1;
-            self.bytes[p..p + 2].copy_from_slice(&(delta as i16).to_be_bytes());
         }
     }
 
     /// Lays the code out again with the jumps that do not reach in 16 bits wide, as scalac's ASM
     /// writes them (`MethodWriter.visitJumpInsn`, and `ClassReader` for a forward one): a `goto`
     /// as a `goto_w`, a conditional jump as its inverse over a `goto_w`, whose 8 bytes the inverse
-    /// jumps over to the code it falls through to. A widened jump moves what follows it, so the
-    /// layout is taken again until every narrow jump reaches; a jump once wide stays wide, which
-    /// makes the wide ones the least set. Every offset then follows the final layout: the labels
-    /// (the jumps' targets, the handlers' ranges), the frames and the uninitialised types in them,
-    /// the line table; the inverse of a widened conditional jump lands on a frame of the state it
-    /// falls through with.
+    /// jumps over to the code it falls through to. A widened jump moves what follows it, and a
+    /// switch takes the padding of its new offset, so the layout is taken again until every narrow
+    /// jump reaches; a jump once wide stays wide, as ASM's round trip keeps a `goto_w`. Every offset
+    /// then follows the final layout: the labels (the jumps' and switches' targets, the handlers'
+    /// ranges), the frames and the uninitialised types in them, the line table; the inverse of a
+    /// widened conditional jump lands on a frame of the state it falls through with.
     fn widen(&mut self) {
-        let n = self.jumps.len();
-        let growth = |c: &Code, k: usize| if c.bytes[c.jumps[k].at as usize] == op::GOTO { 2 } else { 5 };
+        let n = self.items.len();
         let mut wide = vec![false; n];
-        // moved[k]: what the wide jumps before jump k add to its offset.
-        let mut moved = vec![0u32; n + 1];
+        // moved[k]: what the items before item k add to its offset (a switch's padding can shrink it).
+        let mut moved = vec![0i64; n + 1];
+        let label = |c: &Code, l: Label| c.labels[l.0 as usize].offset.expect("unbound label");
         loop {
             let mut more = false;
             for k in 0..n {
-                if wide[k] {
-                    continue;
-                }
-                let j = &self.jumps[k];
-                let target = self.labels[j.target.0 as usize].offset.expect("unbound label");
-                let delta = Self::moved_to(&self.jumps, &moved, target) as i64 - (j.at + moved[k]) as i64;
-                if delta < i16::MIN as i64 || delta > i16::MAX as i64 {
-                    wide[k] = true;
-                    more = true;
+                if let Item::Jump { at, target } = self.items[k] {
+                    if wide[k] {
+                        continue;
+                    }
+                    let delta = Self::moved_to(&self.items, &moved, label(self, target)) as i64 - (at as i64 + moved[k]);
+                    if delta < i16::MIN as i64 || delta > i16::MAX as i64 {
+                        wide[k] = true;
+                        more = true;
+                    }
                 }
             }
             if !more {
                 break;
             }
             for k in 0..n {
-                moved[k + 1] = moved[k] + if wide[k] { growth(self, k) } else { 0 };
+                let growth = match self.items[k] {
+                    Item::Jump { at, .. } if wide[k] => if self.bytes[at as usize] == op::GOTO { 2 } else { 5 },
+                    Item::Jump { .. } => 0,
+                    Item::Switch { at, pad, .. } => switch_pad((at as i64 + moved[k]) as u32) as i64 - pad as i64,
+                };
+                moved[k + 1] = moved[k] + growth;
             }
         }
-        let mut bytes = Vec::with_capacity(self.bytes.len() + moved[n] as usize);
+        let at = |o: u32| Self::moved_to(&self.items, &moved, o);
+        let mut bytes = Vec::with_capacity((self.bytes.len() as i64 + moved[n]).max(0) as usize);
         let mut from = 0;
-        for (k, j) in self.jumps.iter().enumerate() {
-            bytes.extend_from_slice(&self.bytes[from..j.at as usize]);
-            from = j.at as usize + 3;
-            let opcode = self.bytes[j.at as usize];
-            let target = Self::moved_to(&self.jumps, &moved, self.labels[j.target.0 as usize].offset.expect("unbound label")) as i64;
-            let at = bytes.len() as i64;
-            if !wide[k] {
-                bytes.push(opcode);
-                bytes.extend_from_slice(&((target - at) as i16).to_be_bytes());
-            } else if opcode == op::GOTO {
-                bytes.push(op::GOTO_W);
-                bytes.extend_from_slice(&((target - at) as i32).to_be_bytes());
-            } else {
-                bytes.push(inverse(opcode));
-                bytes.extend_from_slice(&8u16.to_be_bytes());
-                bytes.push(op::GOTO_W);
-                bytes.extend_from_slice(&((target - at - 3) as i32).to_be_bytes());
+        for (k, item) in self.items.iter().enumerate() {
+            bytes.extend_from_slice(&self.bytes[from..item.at() as usize]);
+            let here = bytes.len() as i64;
+            match item {
+                Item::Jump { at: from_at, target } => {
+                    from = *from_at as usize + 3;
+                    let opcode = self.bytes[*from_at as usize];
+                    let target = at(label(self, *target)) as i64;
+                    if !wide[k] {
+                        bytes.push(opcode);
+                        bytes.extend_from_slice(&((target - here) as i16).to_be_bytes());
+                    } else if opcode == op::GOTO {
+                        bytes.push(op::GOTO_W);
+                        bytes.extend_from_slice(&((target - here) as i32).to_be_bytes());
+                    } else {
+                        bytes.push(inverse(opcode));
+                        bytes.extend_from_slice(&8u16.to_be_bytes());
+                        bytes.push(op::GOTO_W);
+                        bytes.extend_from_slice(&((target - here - 3) as i32).to_be_bytes());
+                    }
+                }
+                Item::Switch { at: from_at, pad, end, slots } => {
+                    from = *end as usize;
+                    let operands = (*from_at + 1 + *pad) as usize;
+                    bytes.push(self.bytes[*from_at as usize]);
+                    bytes.extend(std::iter::repeat(0).take(switch_pad(here as u32) as usize));
+                    let start = bytes.len();
+                    bytes.extend_from_slice(&self.bytes[operands..*end as usize]);
+                    for &(p, target) in slots {
+                        let q = start + p as usize - operands;
+                        bytes[q..q + 4].copy_from_slice(&((at(label(self, target)) as i64 - here) as i32).to_be_bytes());
+                    }
+                }
             }
         }
         bytes.extend_from_slice(&self.bytes[from..]);
-        let at = |o: u32| Self::moved_to(&self.jumps, &moved, o);
         let place = |t: VT| match t {
             VT::Uninit(o) => VT::Uninit(at(o as u32) as u16),
             t => t,
         };
         let mut landings = self.falls.iter().filter(|f| wide[f.jump]).map(|f| Frame {
-            offset: at(self.jumps[f.jump].at) + 8,
+            offset: at(self.items[f.jump].at()) + 8,
             locals: f.locals.iter().map(|&t| place(t)).collect(),
             stack: f.stack.iter().map(|&t| place(t)).collect(),
         }).peekable();
@@ -882,7 +1040,7 @@ impl Code {
         }
         for label in &mut self.labels {
             if let Some(o) = label.offset {
-                label.offset = Some(Self::moved_to(&self.jumps, &moved, o));
+                label.offset = Some(Self::moved_to(&self.items, &moved, o));
             }
         }
         self.frames = frames;
@@ -890,9 +1048,9 @@ impl Code {
         self.overflow = self.bytes.len() > MAX_CODE;
     }
 
-    /// Where the code at the 16-bit layout's offset `o` lands once the wide jumps before it grew.
-    fn moved_to(jumps: &[Jump], moved: &[u32], o: u32) -> u32 {
-        o + moved[jumps.partition_point(|j| j.at < o)]
+    /// Where the code at the first layout's offset `o` lands once the items before it grew or shrank.
+    fn moved_to(items: &[Item], moved: &[i64], o: u32) -> u32 {
+        (o as i64 + moved[items.partition_point(|i| i.at() < o)]) as u32
     }
 }
 
@@ -1120,7 +1278,9 @@ impl ClassWriter {
     }
 
     /// The class file at the major version of `output_version`, a Java release.
-    pub fn finish(mut self, output_version: u32) -> Vec<u8> {
+    /// The class file; the bound its constant pool passes instead, with the entries `finish` adds
+    /// itself (`ConstPool::unwritable`).
+    pub fn finish(mut self, output_version: u32) -> Result<Vec<u8>, PoolLimit> {
         if !self.bootstrap.is_empty() {
             let name = self.cp.utf8("BootstrapMethods");
             let mut body = Vec::new();
@@ -1134,7 +1294,10 @@ impl ClassWriter {
         out.extend_from_slice(&0xCAFEBABEu32.to_be_bytes());
         out.extend_from_slice(&0u16.to_be_bytes());
         out.extend_from_slice(&major_version(output_version).to_be_bytes());
-        out.extend_from_slice(&self.cp.count.to_be_bytes());
+        if let Some(limit) = self.cp.unwritable() {
+            return Err(limit);
+        }
+        out.extend_from_slice(&(self.cp.count as u16).to_be_bytes());
         out.extend_from_slice(&self.cp.bytes);
         out.extend_from_slice(&self.access.to_be_bytes());
         out.extend_from_slice(&self.this_class.to_be_bytes());
@@ -1153,7 +1316,7 @@ impl ClassWriter {
             }
         }
         write_attrs(&mut out, &self.attrs);
-        out
+        Ok(out)
     }
 }
 
@@ -1281,6 +1444,8 @@ pub mod op {
     pub const IF_ACMPEQ: u8 = 0xa5;
     pub const IF_ACMPNE: u8 = 0xa6;
     pub const GOTO: u8 = 0xa7;
+    pub const TABLESWITCH: u8 = 0xaa;
+    pub const LOOKUPSWITCH: u8 = 0xab;
     pub const IRETURN: u8 = 0xac;
     pub const LRETURN: u8 = 0xad;
     pub const FRETURN: u8 = 0xae;
@@ -1391,6 +1556,39 @@ pub fn write_jar(path: &str, main_class: Option<&str>, classes: &[(String, Vec<u
     std::fs::write(path, out)
 }
 
+/// How a switch's keys are written (`Code::switch`), as dotty's back end chooses (`BCodeIdiomatic.emitSWITCH`,
+/// 394-462 at 3.8.4, with `MIN_SWITCH_DENSITY` = 0.7, BCodeHelpers.scala 482).
+#[derive(Debug, PartialEq)]
+pub enum SwitchLayout {
+    /// A `tableswitch` from the lowest key to the highest: for each value between them the index of its target, or
+    /// none where no key stands (the default's).
+    Table { low: i32, high: i32, slots: Vec<Option<usize>> },
+    /// A `lookupswitch`: the keys in increasing order, each with the index of its target.
+    Lookup(Vec<(i32, usize)>),
+}
+
+/// The layout of a switch whose keys are `keys`, each with the index of its target: the keys sorted; a table where they
+/// fill at least 0.7 of the values from the lowest to the highest (the range counted in 64 bits), else a lookup; with
+/// no key, a lookup of the default alone. A key that stands twice is refused, as `emitSWITCH` aborts.
+pub fn switch_layout(keys: &[(i32, usize)]) -> SwitchLayout {
+    let mut sorted = keys.to_vec();
+    sorted.sort_by_key(|&(key, _)| key);
+    assert!(sorted.windows(2).all(|w| w[0].0 != w[1].0), "a key in two places of a switch");
+    if sorted.is_empty() {
+        return SwitchLayout::Lookup(sorted);
+    }
+    let (low, high) = (sorted[0].0, sorted[sorted.len() - 1].0);
+    let range = high as i64 - low as i64 + 1;
+    if (sorted.len() as f64) / (range as f64) < 0.7 {
+        return SwitchLayout::Lookup(sorted);
+    }
+    let mut slots = vec![None; range as usize];
+    for &(key, target) in &sorted {
+        slots[(key as i64 - low as i64) as usize] = Some(target);
+    }
+    SwitchLayout::Table { low, high, slots }
+}
+
 fn crc_table() -> [u32; 256] {
     let mut table = [0u32; 256];
     for i in 0..256u32 {
@@ -1413,7 +1611,7 @@ fn crc32(table: &[u32; 256], data: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{op, Code, ConstPool, Handler, VT};
+    use super::{op, switch_layout, Code, ConstPool, Handler, SwitchLayout, VT};
 
     /// The code of a `finish`ed method: its bytes, and whether it was refused.
     fn code_of(c: Code) -> (Vec<u8>, bool) {
@@ -1561,6 +1759,179 @@ mod tests {
         assert_eq!(c.labels[start.0 as usize].offset, Some(at(new_at)));
         assert_eq!(c.labels[handler.0 as usize].offset, Some(at(new_at + 7 + 32770 + 1)));
         assert_eq!(c.labels[skip.0 as usize].offset, Some(at(new_at + 7 + 32770 + 2)));
+    }
+
+    use super::{ClassWriter, PoolLimit, ACC_PUBLIC, ACC_SUPER, MAX_POOL_COUNT, MAX_TEXT_BYTES};
+
+    /// A class writer whose pool holds `count - 1` entries: its own two classes, then texts.
+    fn pool_of(count: u32) -> ClassWriter {
+        let mut cw = ClassWriter::new(ACC_PUBLIC | ACC_SUPER, "P", "java/lang/Object", &[]);
+        let mut i = 0;
+        while cw.cp.count < count {
+            cw.cp.utf8(&format!("t{i}"));
+            i += 1;
+        }
+        assert_eq!(cw.cp.count, count);
+        cw
+    }
+
+    /// The pool's bound (JVMS 4.1): 65,534 entries, at the indexes 1 to 65,534, make a class file,
+    /// which reads back with its `constant_pool_count` of 65,535; 65,535 and 65,536 entries do not,
+    /// nor a long whose second slot would be at 65,535.
+    #[test]
+    fn the_constant_pool_holds_65534_entries() {
+        let full = pool_of(MAX_POOL_COUNT).finish(0).expect("a pool of 65,534 entries is a class file's");
+        assert_eq!(u16::from_be_bytes([full[8], full[9]]) as u32, MAX_POOL_COUNT);
+        crate::classfile::ClassFile::parse(&full).expect("the class reads back");
+        let mut past = pool_of(MAX_POOL_COUNT);
+        past.cp.utf8("one more");
+        past.cp.utf8("and one after it");
+        assert!(past.cp.too_large(), "65,536 entries");
+        let mut over = pool_of(MAX_POOL_COUNT);
+        over.cp.utf8("one more");
+        assert!(over.cp.too_large());
+        assert_eq!(over.finish(0).err(), Some(PoolLimit::Entries), "an entry at 65,535");
+        let mut long_fits = pool_of(MAX_POOL_COUNT - 2);
+        long_fits.cp.long(7);
+        assert!(long_fits.finish(0).is_ok(), "a long at 65,533 and 65,534");
+        let mut long_over = pool_of(MAX_POOL_COUNT - 1);
+        long_over.cp.long(7);
+        assert_eq!(long_over.finish(0).err(), Some(PoolLimit::Entries), "a long at 65,534 and 65,535");
+    }
+
+    /// A method's parameters take at most 254 slots (dotty's `MaximumJvmParameters`), a long and a double two:
+    /// the counts on each side of the bound.
+    #[test]
+    fn a_parameter_list_takes_254_slots() {
+        use crate::jvm::names::{parameter_slots, MAX_PARAMETER_SLOTS};
+        let desc = |params: &str| format!("({params})V");
+        assert_eq!(parameter_slots(&desc(&"I".repeat(254))), (254, 254));
+        assert_eq!(parameter_slots(&desc(&"I".repeat(255))), (255, 255));
+        assert_eq!(parameter_slots(&desc(&"J".repeat(127))), (254, 127));
+        assert_eq!(parameter_slots(&desc(&format!("{}I", "J".repeat(127)))), (255, 128));
+        assert_eq!(parameter_slots(&desc(&format!("{}D", "Ljava/lang/String;".repeat(252)))), (254, 253));
+        assert_eq!(MAX_PARAMETER_SLOTS, 254);
+    }
+
+    /// A text constant holds 65,535 bytes of modified UTF-8: one more is no class file's, and
+    /// dotty's count of a text's bytes is the encoding's below the surrogates (`constant_text_fits`).
+    #[test]
+    fn a_text_constant_holds_65535_bytes() {
+        let mut fits = ClassWriter::new(ACC_PUBLIC | ACC_SUPER, "P", "java/lang/Object", &[]);
+        fits.cp.utf8(&"a".repeat(MAX_TEXT_BYTES));
+        assert!(fits.finish(0).is_ok());
+        let mut over = ClassWriter::new(ACC_PUBLIC | ACC_SUPER, "P", "java/lang/Object", &[]);
+        over.cp.utf8(&format!("{}\u{e9}", "a".repeat(MAX_TEXT_BYTES - 1)));
+        assert_eq!(over.finish(0).err(), Some(PoolLimit::Text));
+        for text in ["a".repeat(MAX_TEXT_BYTES), "\u{e9}".repeat(MAX_TEXT_BYTES / 2), "\u{20ac}".repeat(MAX_TEXT_BYTES / 3), "\0".repeat(MAX_TEXT_BYTES / 2)] {
+            assert!(super::constant_text_fits(&text, ""), "{} bytes", super::modified_utf8(&text).len());
+            assert!(super::modified_utf8(&text).len() <= MAX_TEXT_BYTES);
+            let longer = format!("{text}\u{20ac}");
+            assert!(!super::constant_text_fits(&longer, ""), "one more character");
+        }
+        assert!(!super::constant_text_fits(&"a".repeat(40_000), &"b".repeat(30_000)), "a name and a descriptor counted together");
+    }
+
+    /// A switch's layout at the edges of `emitSWITCH`'s rule: no key, one key, the lowest and the highest `Int`
+    /// together (a range of 2^32, counted in 64 bits), a density of exactly 0.7 (a table) and just under it (a
+    /// lookup), a hole at each end of a table's range, and keys given out of order.
+    #[test]
+    fn a_switch_is_laid_out_as_dotty_lays_it_out() {
+        assert_eq!(switch_layout(&[]), SwitchLayout::Lookup(vec![]));
+        assert_eq!(switch_layout(&[(7, 0)]), SwitchLayout::Table { low: 7, high: 7, slots: vec![Some(0)] });
+        assert_eq!(switch_layout(&[(i32::MAX, 1), (i32::MIN, 0)]), SwitchLayout::Lookup(vec![(i32::MIN, 0), (i32::MAX, 1)]));
+        assert_eq!(switch_layout(&[(i32::MAX - 1, 0), (i32::MAX, 1)]), SwitchLayout::Table { low: i32::MAX - 1, high: i32::MAX, slots: vec![Some(0), Some(1)] });
+        // Seven keys over ten values: 0.7, a table whose holes are the default's.
+        let seven: Vec<(i32, usize)> = [0, 1, 2, 4, 5, 7, 9].iter().enumerate().map(|(t, &k)| (k, t)).collect();
+        let SwitchLayout::Table { low: 0, high: 9, slots } = switch_layout(&seven) else { panic!("seven keys over ten values made no table") };
+        assert_eq!(slots, vec![Some(0), Some(1), Some(2), None, Some(3), Some(4), None, Some(5), None, Some(6)]);
+        // Six keys over nine values: 0.67, a lookup.
+        assert!(matches!(switch_layout(&[(0, 0), (1, 1), (3, 2), (5, 3), (6, 4), (8, 5)]), SwitchLayout::Lookup(_)));
+        // A hole next to each end of the range, the default's; the range is the keys' own, given in any order.
+        let holes: Vec<(i32, usize)> = [9, 0, 2, 3, 4, 5, 6, 7].iter().enumerate().map(|(t, &k)| (k, t)).collect();
+        assert_eq!(switch_layout(&holes), SwitchLayout::Table { low: 0, high: 9, slots: vec![Some(1), None, Some(2), Some(3), Some(4), Some(5), Some(6), Some(7), None, Some(0)] });
+        assert!(std::panic::catch_unwind(|| switch_layout(&[(1, 0), (1, 1)])).is_err(), "a key twice made a layout");
+    }
+
+    /// `Code::switch` writes a layout as JVMS 6.5 has it, from each of the four phases of its opcode's pc: zero bytes up
+    /// to a multiple of four from the code's start, the default's offset, then a table's low, high and one offset a
+    /// value (a hole the default's, two keys of one case the same target) or a lookup's count and pairs, every offset
+    /// from the opcode to its label; and a frame at each target.
+    #[test]
+    fn a_switch_is_written_aligned_with_its_offsets() {
+        let word = |b: &[u8], at: usize| i32::from_be_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]]);
+        for phase in 0..4usize {
+            for table in [true, false] {
+                let mut code = Code::new(Vec::new());
+                for _ in 0..phase {
+                    code.op(op::NOP);
+                }
+                code.op(op::ICONST_0);
+                code.push(VT::Int);
+                let (a, b, default) = (code.new_label(), code.new_label(), code.new_label());
+                let keys: &[(i32, usize)] = if table { &[(1, 0), (2, 1), (4, 0)] } else { &[(-5, 0), (100, 1)] };
+                let layout = switch_layout(keys);
+                assert_eq!(matches!(layout, SwitchLayout::Table { .. }), table);
+                code.switch(&layout, &[a, b], default);
+                let mut at_label = Vec::new();
+                for label in [a, b, default] {
+                    code.bind(label);
+                    at_label.push(code.pc() as i32);
+                    code.op(op::RETURN);
+                    code.end_path();
+                }
+                assert!(at_label.iter().all(|&pc| code.frames.iter().any(|f| f.offset as i32 == pc)), "a target with no frame");
+                let (attr, _) = code.finish(&mut ConstPool::default());
+                let bytes = &attr[8..];
+                let at = phase + 1;
+                assert_eq!(bytes[at], if table { op::TABLESWITCH } else { op::LOOKUPSWITCH });
+                let start = (at + 1 + 3) / 4 * 4;
+                assert!(bytes[at + 1..start].iter().all(|&z| z == 0), "padding of phase {phase}");
+                let (pa, pb, pd) = (at_label[0] - at as i32, at_label[1] - at as i32, at_label[2] - at as i32);
+                assert_eq!(word(bytes, start), pd);
+                if table {
+                    assert_eq!((word(bytes, start + 4), word(bytes, start + 8)), (1, 4));
+                    let slots: Vec<i32> = [0, 1, 2, 3].iter().map(|&i| word(bytes, start + 12 + 4 * i)).collect();
+                    assert_eq!(slots, vec![pa, pb, pd, pa]);
+                } else {
+                    assert_eq!(word(bytes, start + 4), 2);
+                    let pairs: Vec<(i32, i32)> = (0..2).map(|i| (word(bytes, start + 8 + 8 * i), word(bytes, start + 12 + 8 * i))).collect();
+                    assert_eq!(pairs, vec![(-5, pa), (100, pb)]);
+                }
+            }
+        }
+    }
+
+    /// A switch behind a widened jump takes the padding of its new offset, and its offsets follow the final layout:
+    /// the jump at 1 grows by 5, the switch moves from 5 to 10 and its padding from 2 bytes to 1.
+    #[test]
+    fn a_switch_after_a_widened_jump_is_padded_and_aimed_by_the_final_layout() {
+        let mut c = Code::new(vec![VT::Int]);
+        c.relax = true;
+        let (far, a, b, d) = (c.new_label(), c.new_label(), c.new_label(), c.new_label());
+        c.var_insn(op::ILOAD, op::ILOAD_0, 0);
+        c.jump(op::IFLE, far);
+        c.op(op::ICONST_0);
+        c.push(VT::Int);
+        let layout = switch_layout(&[(1, 0), (2, 1)]);
+        c.switch(&layout, &[a, b], d);
+        for l in [a, b, d] {
+            c.bind(l);
+            c.op(op::RETURN);
+            c.end_path();
+        }
+        filler(&mut c, 32770);
+        c.bind(far);
+        c.op(op::RETURN);
+        c.lay_out();
+        let code = &c.bytes;
+        assert_eq!((code[1], code[4]), (op::IFGT, op::GOTO_W));
+        assert_eq!(int_at(code, 5), 31 + 32770 + 4 - 4);
+        assert_eq!((code[10], code[11]), (op::TABLESWITCH, 0));
+        let words: Vec<i64> = [0, 1, 2, 3, 4].iter().map(|&i| int_at(code, 12 + 4 * i)).collect();
+        assert_eq!(words, vec![34 - 10, 1, 2, 32 - 10, 33 - 10]);
+        assert!([32, 33, 34].iter().all(|&o| c.frames.iter().any(|f| f.offset == o)), "a target's frame not moved");
+        assert_eq!(code.len(), 31 + 32770 + 1 + 4);
     }
 
     /// The jar writer's CRC-32 is the one zip.rs reads jars by: the check value, and every length

@@ -219,7 +219,7 @@ impl<'a> Gen<'a> {
             TExpr::Double(v) => self.lir.push(Kind::Double(v), ErasedType::D),
             TExpr::Bool(v) => self.lir.push(Kind::Bool(v), ErasedType::Z),
             TExpr::Char(c) => self.lir.push(Kind::Char(c), ErasedType::C),
-            TExpr::Str(s) => self.lir.push(Kind::Str(s), ErasedType::L(Rc::from(STRING))),
+            TExpr::Str(s) => self.lower_string(e, s),
             TExpr::Unit => self.lir.push(Kind::Unit, ErasedType::V),
             // A null that an ascription holds is dotty's `Typed`, no literal: `(null: T)`, a cast
             // that keeps no node, a plain inline method's expansion, an inline parameter's
@@ -1042,6 +1042,18 @@ impl<'a> Gen<'a> {
     }
 
     /// `classOf[C]`, and with dimensions the class of the array of that many of `C`.
+    /// The string literal `e` of the text `s`; where the text passes what a class file's constant
+    /// holds, scalac's error at the literal (BCodeBodyBuilder.scala 588-593) and a null of its type
+    /// written in its place.
+    fn lower_string(&mut self, e: TExprId, s: StrRef) -> LirId {
+        let string = ErasedType::L(Rc::from(STRING));
+        if super::classfile::constant_text_fits(&self.cx.input.prog.strings[s.idx()], "") {
+            return self.lir.push(Kind::Str(s), string);
+        }
+        self.refuse(e, "String constant is too long for the JVM".to_string());
+        self.lir.push(Kind::Null, string)
+    }
+
     fn lower_class_of(&mut self, e: TExprId, c: ClassId, dims: u8) -> LirId {
         // An array of a known element says its dimensions (`TExpr::ClassOf`).
         let of = if dims > 0 {
@@ -1062,7 +1074,15 @@ impl<'a> Gen<'a> {
             });
             self.class_kind(c, element)
         };
-        self.lir.push(Kind::ClassOf(of), ErasedType::L(Rc::from("java/lang/Class")))
+        let class = ErasedType::L(Rc::from("java/lang/Class"));
+        // The class constant's text: a class's name, an array's descriptor (BCodeBodyBuilder.scala 609-614).
+        if let ErasedType::L(name) = &of {
+            if !super::classfile::constant_text_fits(name, "") {
+                self.refuse(e, "Type name is too long for the JVM".to_string());
+                return self.lir.push(Kind::Null, class);
+            }
+        }
+        self.lir.push(Kind::ClassOf(of), class)
     }
 
     /// `inner.asInstanceOf[T]` as the typer decided it (`CastOp`), which is what dotty's erasure
@@ -1179,6 +1199,8 @@ impl<'a> Gen<'a> {
             let text = match prog.expr(value) {
                 // scalac drops the empty literals before it counts.
                 TExpr::Str(text) if prog.strings[text.idx()].is_empty() => continue,
+                // A text of the recipe, or of a constant argument where it holds a tag, and never an `ldc`: dotty checks
+                // only the `ldc` (BCodeBodyBuilder.scala 588-593), and the recipe's length is the class writer's.
                 TExpr::Str(text) => {
                     parts.push(self.lir.push(Kind::Str(text), string.clone()));
                     continue;

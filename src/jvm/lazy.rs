@@ -588,6 +588,9 @@ pub(super) trait UnitVisitor<'a> {
     fn anonymous(&mut self, _g: &mut Gen<'a>, _c: ClassId, _args: ListRef) -> bool {
         false
     }
+    /// A block, before its statements.
+    fn block(&mut self, _g: &mut Gen<'a>, _e: TExprId) {}
+    fn block_end(&mut self) {}
     /// A lambda over `params` whose body is `body`: whether the body is walked.
     fn lambda(&mut self, _g: &mut Gen<'a>, _params: ListRef, _body: TExprId) -> bool {
         true
@@ -1143,6 +1146,7 @@ impl<'a> Gen<'a> {
                 self.walk_expr(v, b);
             }
             TExpr::Block(stmts, res) => {
+                v.block(self, e);
                 self.walk_stmts(v, stmts);
                 if let Some(sp) = self.expr_span(res) {
                     self.walk_local_classes_before(v, sp.start);
@@ -1151,6 +1155,7 @@ impl<'a> Gen<'a> {
                 if let Some(sp) = self.expr_span(e) {
                     self.walk_local_classes_before(v, sp.end);
                 }
+                v.block_end();
             }
             TExpr::Match(scrut, cases) => {
                 self.walk_expr(v, scrut);

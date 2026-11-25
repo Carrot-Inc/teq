@@ -1,8 +1,8 @@
 //! Bytecode from the lowered IR (`crate::lir`): each node's code in the order the generator
 //! wrote it from the typed IR, so that the class files are the same byte for byte.
 
-use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LabelId, LiftedFrom, LirId, List, Relation, TempId};
-use super::classfile::{op, Label, VT};
+use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LabelId, LiftedFrom, LirId, List, Relation, SwitchCase, TempId};
+use super::classfile::{op, switch_layout, Label, VT};
 use super::classes::Declared;
 use super::gen::{Gen, Local};
 use super::names::*;
@@ -322,6 +322,11 @@ impl<'a> Gen<'a> {
                 let held = self.lir.ty(value).clone();
                 self.putstatic(&owner, &name, &held);
             }
+            Kind::StaticFieldSet { owner, name, value } => {
+                self.write(value);
+                self.dup();
+                self.putstatic(&owner, &name, &ty);
+            }
             Kind::StaticCall { method, args, order } => {
                 self.write_arguments(args, order.as_deref());
                 self.invoke_mref(&method);
@@ -515,6 +520,7 @@ impl<'a> Gen<'a> {
                 self.code.bind(end);
             }
             Kind::Break { label, value } => self.write_break(label, value, None),
+            Kind::Switch { scrutinee, cases, default } => self.write_switch(&ty, scrutinee, &cases, default, None, falls),
             // The program is refused where the form stands, in the method being written.
             Kind::Refused(refusal) => self.unsupported(&refusal.message()),
         }
@@ -585,6 +591,7 @@ impl<'a> Gen<'a> {
                 self.m.labels.insert(label, dest);
                 self.write_to(body, dest);
             }
+            Kind::Switch { scrutinee, cases, default } => self.write_switch(&ErasedType::V, scrutinee, &cases, default, Some(dest), false),
             _ => {
                 self.write(id);
                 if self.falls_through(id) {
@@ -617,7 +624,61 @@ impl<'a> Gen<'a> {
             Kind::Legacy(e, _) => !self.legacy_ends(*e),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| self.falls_through(self.lir.lists[(stmts.start + i) as usize])) && self.falls_through(*result),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.falls_through(*then) || self.falls_through(*otherwise),
+            Kind::Switch { cases, default, .. } => cases.iter().any(|c| self.falls_through(c.body)) || self.falls_through(*default),
             _ => true,
+        }
+    }
+
+    /// A `Switch` as dotty's back end writes a match on an `Int` (`genMatchTo`, BCodeBodyBuilder.scala 960-1016 at 3.8.4):
+    /// the scrutinee, the switch (`switch_layout`), then each case's body and the default's in their order, each that
+    /// falls through followed by the jump to the join, `dest` or the end of the switch (`genLoadTo` to its
+    /// `LoadDestination.Jump`, which the last body takes too). A body that is a `Break` without a value out of a
+    /// labelled block (not a `try`'s exit) is no code: the switch jumps to the block's end. With no `dest`, each body
+    /// is written as the switch is (`falls`), and where code follows the switch its join is bound, as `If`'s is.
+    fn write_switch(&mut self, ty: &ErasedType, scrutinee: LirId, cases: &[SwitchCase], default: LirId, dest: Option<Label>, falls: bool) {
+        self.write(scrutinee);
+        let bodies: Vec<LirId> = cases.iter().map(|c| c.body).chain([default]).collect();
+        let mut entries: Vec<(Label, bool)> = Vec::with_capacity(bodies.len());
+        for &body in &bodies {
+            let out = match self.lir.node(body).kind {
+                Kind::Break { label, value: None } if !self.m.try_exits.contains_key(&label) => Some(self.m.labels[&label]),
+                _ => None,
+            };
+            entries.push(match out {
+                Some(end) => (end, false),
+                None => (self.code.new_label(), true),
+            });
+        }
+        let keys: Vec<(i32, usize)> = cases.iter().enumerate().flat_map(|(i, c)| c.keys.iter().map(move |&k| (k, i))).collect();
+        let targets: Vec<Label> = entries.iter().map(|&(label, _)| label).collect();
+        let layout = switch_layout(&keys);
+        self.code.switch(&layout, &targets[..cases.len()], targets[cases.len()]);
+        let join = dest.unwrap_or_else(|| self.code.new_label());
+        let mut joined = false;
+        let mark = self.code.locals_mark();
+        for (&body, &(entry, written)) in bodies.iter().zip(&entries) {
+            if !written {
+                continue;
+            }
+            self.code.bind(entry);
+            match dest {
+                Some(dest) => self.write_to(body, dest),
+                None => {
+                    self.write_at(body, falls);
+                    if self.falls_through(body) {
+                        self.goto(join);
+                        joined = true;
+                        // The value goes with the jump.
+                        if *ty != ErasedType::V {
+                            self.code.pop();
+                        }
+                    }
+                }
+            }
+            self.code.locals_release(mark);
+        }
+        if dest.is_none() && (falls || joined) {
+            self.code.bind(join);
         }
     }
 
@@ -652,6 +713,7 @@ impl<'a> Gen<'a> {
             Kind::Legacy(e, _) => self.leaves(*e),
             Kind::Block { result, .. } => self.branch_leaves(*result),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.branch_leaves(*then) && self.branch_leaves(*otherwise),
+            Kind::Switch { cases, default, .. } => cases.iter().all(|c| self.branch_leaves(c.body)) && self.branch_leaves(*default),
             _ => false,
         }
     }
@@ -667,6 +729,7 @@ impl<'a> Gen<'a> {
         match &self.lir.node(id).kind {
             Kind::Return(_) | Kind::SelfTailCall { .. } => false,
             Kind::If { then, otherwise: Some(otherwise), .. } => self.completes(*then) || self.completes(*otherwise),
+            Kind::Switch { cases, default, .. } => cases.iter().any(|c| self.completes(c.body)) || self.completes(*default),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| {
                 let stmt = self.lir.lists[(stmts.start + i) as usize];
                 !matches!(self.lir.node(stmt).kind, Kind::Labeled { .. }) || self.completes(stmt)

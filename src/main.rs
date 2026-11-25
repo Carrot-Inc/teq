@@ -2802,7 +2802,24 @@ fn build_jvm(
     let (out_path, publication) = match &opts.products {
         Some(dir) => {
             let owned: Vec<bool> = all_sources.iter().map(|s| !s.is_std).collect();
-            let mut entries = mark_products(&mut output, &pickled, &all_sources, &owned);
+            let mut attributes_refused = Vec::new();
+            let mut entries = mark_products(&mut output, &pickled, &all_sources, &owned, &mut attributes_refused);
+            if !attributes_refused.is_empty() {
+                let mut refused = source::Diagnostics::default();
+                for (name, of, file, why) in &attributes_refused {
+                    let (file, span) = of.map_or((*file, source::Span::default()), |k| (typer.syms.class(k).file, typer.syms.class(k).span));
+                    let message = match why {
+                        products::AttributesRefused::PoolFull => format!("Error while emitting {}\nClass too large: {}", name, name),
+                        products::AttributesRefused::Unreadable => format!("internal error: the class file of {} that the JVM writer wrote does not read back", name),
+                    };
+                    refused.error(file, span, message);
+                }
+                eprint!("{}", refused.render(&all_sources));
+                source::errors_found(attributes_refused.len());
+                answer_more_diagnostics(&refused, &all_sources);
+                answer_failure(opts);
+                exit_with_report(opts, &report, 1);
+            }
             note_uses(&mut entries, &output, &class_sites, &all_sources, &owned);
             let pickles = products.as_ref().map_or(&[][..], |(w, _)| w.products.as_slice());
             let mut fresh = jvm_fresh_products(&output, entries, &all_sources, &owned, pickles);
@@ -3058,6 +3075,7 @@ fn mark_products(
     products: &[Pickled],
     sources: &[SourceFile],
     owned: &[bool],
+    refused: &mut Vec<(String, Option<types::ClassId>, source::FileId, products::AttributesRefused)>,
 ) -> Vec<products::Entry> {
     // A product is owned by the source it was pickled from, whether or not it has class files
     // (a file of type aliases alone has none).
@@ -3129,7 +3147,7 @@ fn mark_products(
         let refs: Vec<(&str, &[u8])> = attrs.iter().map(|(n, b)| (*n, b.as_slice())).collect();
         match products::add_class_attributes(&c.bytes, &refs) {
             Ok(b) => c.bytes = b.into(),
-            Err(e) => eprintln!("{}: {}", c.name, e),
+            Err(why) => refused.push((c.name.clone(), c.of, f, why)),
         }
     }
     for e in entries.iter_mut() {
@@ -3824,18 +3842,299 @@ mod jvm_output_tests {
         text
     }
 
-    /// The back end refuses a method whose code passes the JVM's 65,535 bytes even with wide jumps, and writes
-    /// its twin of a hundred statements: the helper drives the emitter from a source text.
+    /// The back end refuses a method whose code passes the JVM's 65,535 bytes even with wide jumps, in scalac's
+    /// words at the method's name, and writes its twin of a hundred statements: the helper drives the emitter from
+    /// a source text.
     #[test]
     fn the_back_end_refuses_a_method_past_the_jvm_code_bound() {
-        crate::with_jvm_output("big_method", &big_method(8000), &[], |output, _| {
-            assert_eq!(output.errors, vec!["Big: a method whose code exceeds what the JVM allows".to_string()]);
-            assert!(output.refused.is_empty(), "{:?}", output.refused);
+        let text = big_method(8000);
+        crate::with_jvm_output("big_method", &text, &[], |output, files| {
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let [(file, span, message)] = &output.refused[..] else { panic!("one refusal: {:?}", output.refused) };
+            assert_eq!(message.as_str(), "Error while emitting Big$\nMethod too large: Big$.m (I)I");
+            let source = &files[file.0 as usize];
+            assert!(source.path.ends_with("big_method.scala"), "{}", source.path);
+            assert_eq!(span.start as usize, text.find("m(x: Int)").expect("the method's name"), "the refusal is at the method's name");
         });
         crate::with_jvm_output("small_method", &big_method(100), &[], |output, _| {
             assert!(output.errors.is_empty() && output.refused.is_empty(), "{:?} {:?}", output.errors, output.refused);
             assert!(output.classes.iter().any(|c| c.name == "Big$"), "the module class is written");
         });
+    }
+
+    /// `Main`, whose local trait `T` has a member `f` of the access `access` that reads the captured `x` and takes
+    /// `n` Long parameters, and where `defaulted` one more, whose default reads the captured `y`.
+    fn local_trait_member(access: &str, n: usize, defaulted: bool) -> String {
+        let mut params: Vec<String> = (0..n).map(|i| format!("p{}: Long", i)).collect();
+        if defaulted {
+            params.push("q: Long = y".to_string());
+        }
+        format!(
+            "object Main {{\n  def main(args: Array[String]): Unit = {{\n    val x: Long = args.length.toLong + 7L\n    val y: Long = args.length.toLong + 1L\n    trait T {{\n      {}def f({}): Long = x\n      def g: Long = f({})\n    }}\n    println((new T {{}}).g)\n  }}\n}}\n",
+            access,
+            params.join(", "),
+            vec!["0L"; n].join(", ")
+        )
+    }
+
+    /// dotty's platform restriction counts the trait first in the static forwarder it writes of a trait's member,
+    /// which a private member has none of (BCodeSkelBuilder.scala 714-715): 126 Longs and the captured `x` are 254
+    /// slots, refused public and written private. teq's own forwarder of the private member stays written as the
+    /// member's is, and is checked at the class file's bound for a static method: it takes the trait and the
+    /// member's parameters, the slots of the member and its receiver, which the member's own check counts. Where
+    /// teq passes the member the `y` its default reads too, 255 slots are written and 257 refused, once, by teq.
+    #[test]
+    fn a_private_local_trait_member_has_no_forwarder_for_the_restriction_to_count() {
+        let forwarder_slots = |output: &crate::jvm::Output| {
+            let forwarder = output.classes.iter().filter_map(|c| crate::classfile::ClassFile::parse(&c.bytes).ok()).flat_map(|c| c.methods).find(|m| m.name.ends_with("$$f$"));
+            crate::jvm::names::parameter_slots(&forwarder.expect("teq's forwarder of the private member is written").descriptor).0
+        };
+        crate::with_jvm_output("private_member", &local_trait_member("private ", 126, false), &[], |output, _| {
+            assert!(output.errors.is_empty() && output.refused.is_empty(), "{:?} {:?}", output.errors, output.refused);
+            assert_eq!(forwarder_slots(output), 255);
+        });
+        crate::with_jvm_output("public_member", &local_trait_member("", 126, false), &[], |output, _| {
+            let [(_, _, message)] = &output.refused[..] else { panic!("one refusal: {:?}", output.refused) };
+            assert_eq!(message.as_str(), "Platform restriction: a parameter list's length cannot exceed 254 (Long and Double count as 2).");
+        });
+        crate::with_jvm_output("private_member_defaulted", &local_trait_member("private ", 124, true), &[], |output, _| {
+            assert!(output.errors.is_empty() && output.refused.is_empty(), "{:?} {:?}", output.errors, output.refused);
+            assert_eq!(forwarder_slots(output), 255);
+        });
+        crate::with_jvm_output("private_member_defaulted_past", &local_trait_member("private ", 125, true), &[], |output, _| {
+            let [(_, _, message)] = &output.refused[..] else { panic!("one refusal: {:?}", output.refused) };
+            assert!(message.starts_with("not supported on the JVM yet: the method f of the local trait T would take 257 argument slots"), "{}", message);
+        });
+    }
+
+    /// `C.f` of 254 parameters of the class `p.T…` whose name is `n` letters long, each typed by a type parameter
+    /// bounded by the class where `generic`, else by the class: a descriptor of 65,535 bytes at `n` 254.
+    fn wide_descriptor(n: usize, generic: bool) -> String {
+        let class = format!("T{}", "a".repeat(n - 1));
+        let (tparams, ty) = if generic { (format!("[A <: p.{}]", class), "A".to_string()) } else { (String::new(), format!("p.{}", class)) };
+        let params: Vec<String> = (0..254).map(|i| format!("p{}: {}", i, ty)).collect(); // dotty: MaximumJvmParameters
+        format!("package p {{ class {} }}\nclass C {{ def f{}({}): Int = 7 }}\nobject Main {{ def main(args: Array[String]): Unit = println(new C().getClass.getName) }}\n", class, tparams, params.join(", "))
+    }
+
+    /// dotty checks a method's generic signature where it writes one, and its name and descriptor together only
+    /// where it writes none (BCodeSkelBuilder.scala 748-753): a type parameter's method of a 65,535-byte descriptor
+    /// is written, its twin without one refused; a parameterless method has one ("()I") where a method of an empty
+    /// clause has none. Past 65,535 bytes the descriptor is the class file's own bound, scalac's ASM error.
+    #[test]
+    fn the_signature_check_is_of_the_generic_signature_where_dotty_writes_one() {
+        let refusals = |name: &str, text: &str| crate::with_jvm_output(name, text, &[], |output, _| {
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            output.refused.iter().map(|(_, _, m)| m.clone()).collect::<Vec<String>>()
+        });
+        assert_eq!(refusals("generic_at", &wide_descriptor(254, true)), Vec::<String>::new());
+        assert_eq!(refusals("plain_at", &wide_descriptor(254, false)), vec!["Method signature is too long for the JVM".to_string()]);
+        assert_eq!(refusals("generic_over", &wide_descriptor(255, true)), vec!["Error while emitting C\nUTF8 string too large".to_string()]);
+        let name = "m".repeat(65_533);
+        assert_eq!(refusals("parameterless", &format!("class D {{ def {}: Int = 1 }}\n", name)), Vec::<String>::new());
+        assert_eq!(refusals("empty_clause", &format!("class D {{ def {}(): Int = 1 }}\n", name)), vec!["Method signature is too long for the JVM".to_string()]);
+    }
+
+    /// dotty's static forwarder of a trait's member has the erased method type, the trait first (BackendUtils.scala
+    /// 678-686), which needs no generic signature where each type is a primitive or a class of no type parameters:
+    /// its name and descriptor are checked, `m…$(LT;I)I` at 65,536 bytes refused where the member's own fit; at
+    /// 65,535 written. A generic member's forwarder erases to `Object` and is checked so too.
+    #[test]
+    fn a_trait_forwarder_is_checked_by_its_erased_signature() {
+        let refusals = |name: &str, text: &str| crate::with_jvm_output(name, text, &[], |output, _| {
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            output.refused.iter().map(|(_, _, m)| m.clone()).collect::<Vec<String>>()
+        });
+        let plain = |n: usize| format!("trait T {{ def {}(x: Int): Int = x }}\nobject O extends T\n", "m".repeat(n));
+        let at = 65_536 - "$(LT;I)I".len();
+        assert_eq!(refusals("forwarder_over", &plain(at)), vec!["Method signature is too long for the JVM".to_string()]);
+        assert_eq!(refusals("forwarder_at", &plain(at - 1)), Vec::<String>::new());
+        let generic = format!("trait T {{ def {}[A](a: A): A = a }}\nobject O extends T\n", "m".repeat(65_536 - "$(LT;Ljava/lang/Object;)Ljava/lang/Object;".len()));
+        assert_eq!(refusals("generic_forwarder_over", &generic), vec!["Method signature is too long for the JVM".to_string()]);
+    }
+
+    /// `C.g`, whose block defines `f` of `longs` Long parameters and an Int and ends with `result`.
+    fn local_def_in_block(longs: usize, result: &str) -> String {
+        let params: Vec<String> = (0..longs).map(|i| format!("p{}: Long", i)).collect();
+        format!("class C(args: Array[String]) {{\n  def g: Int = {{\n    def f({}, q: Int): Int = 7\n    {}\n  }}\n}}\n", params.join(", "), result)
+    }
+
+    /// dotty lifts every local def, referenced or not (Dependencies.scala 250-251), and drops one only with its
+    /// block: FirstTransform's `constToLiteral` of a pure block of a constant type (FirstTransform.scala 202-203).
+    /// Under a block ending `7` the def is no method of dotty's, and the class file's own bound alone checks it: 255
+    /// slots of a static method are written, 257 refused in teq's words; under a block ending `args.length` dotty's
+    /// restriction refuses 255, as scalac does.
+    #[test]
+    fn a_local_def_dotty_drops_with_its_block_is_checked_by_the_class_file_alone() {
+        let refusals = |name: &str, text: &str| crate::with_jvm_output(name, text, &[], |output, _| {
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            output.refused.iter().map(|(_, _, m)| m.clone()).collect::<Vec<String>>()
+        });
+        assert_eq!(refusals("folded_255", &local_def_in_block(127, "7")), Vec::<String>::new());
+        let past = refusals("folded_257", &local_def_in_block(128, "7"));
+        let [message] = &past[..] else { panic!("one refusal: {:?}", past) };
+        assert!(message.starts_with("not supported on the JVM yet: the method f$1 would take 257 argument slots, and a class file holds 255"), "{}", message);
+        assert_eq!(refusals("kept_255", &local_def_in_block(127, "args.length")), vec!["Platform restriction: a parameter list's length cannot exceed 254 (Long and Double count as 2).".to_string()]);
+    }
+
+    /// dotty names a trait's private member as the source does (ExpandPrivate expands it only where another class
+    /// reaches it), where teq writes the expanded `p….T$$m…`: the check of its name and descriptor together counts
+    /// the source's, so that a descriptor of 65,505 bytes under a 30-byte name is written.
+    #[test]
+    fn a_private_trait_member_is_checked_under_dottys_name() {
+        let package = "p".repeat(200);
+        let (a, b) = (format!("A{}", "a".repeat(310)), format!("B{}", "b".repeat(20)));
+        let params: Vec<String> = (0..127).map(|i| format!("p{}: {}", i, a)).chain([format!("q: {}", b)]).collect(); // jdk: a descriptor of 65,505 bytes, under a class file's 65,535
+        let name = "m".repeat(30);
+        let text = format!("package {}\nclass {}\nclass {}\ntrait T {{\n  private def {}({}): Int = 7\n  def g: Int = {}({}null)\n}}\nobject Main {{ def main(args: Array[String]): Unit = println((new T {{}}).g) }}\n", package, a, b, name, params.join(", "), name, "null, ".repeat(127));
+        crate::with_jvm_output("private_signature", &text, &[], |output, _| {
+            assert!(output.errors.is_empty() && output.refused.is_empty(), "{:?} {:?}", output.errors, output.refused);
+            let member = output.classes.iter().filter_map(|c| crate::classfile::ClassFile::parse(&c.bytes).ok()).flat_map(|c| c.methods).find(|m| m.name.ends_with(&name) && m.descriptor.len() > 60_000);
+            let member = member.expect("the member is written");
+            assert_eq!(member.descriptor.len(), 65_505);
+            assert!(member.name.len() + member.descriptor.len() > 65_535, "teq's name is the expanded one: {}", member.name.len());
+        });
+    }
+
+    /// Parameters whose descriptors take `bytes` bytes together, with the package declaring their classes: as many
+    /// of the 388-byte `p….q….A…` as fit, the rest one or two `p….q….F…` of 261 to 460 bytes, or one of 460 and
+    /// `Int`s. The parameters' declarations, and the arguments of a call.
+    fn descriptor_filling(bytes: usize) -> (String, String, String) {
+        let (p, q) = ("p".repeat(128), "q".repeat(128));
+        let f = |len: usize| format!("F{}", "f".repeat(len - 1));
+        let n = (bytes - 261) / 388;
+        let rem = bytes - n * 388;
+        let mut names: Vec<String> = vec!["A".repeat(128); n];
+        let mut ints = 0;
+        if rem <= 460 {
+            names.push(f(rem - 260));
+        } else if rem < 522 {
+            names.push(f(200));
+            ints = rem - 460;
+        } else {
+            names.push(f(rem / 2 - 260));
+            names.push(f(rem - rem / 2 - 260));
+        }
+        let mut classes = names.clone();
+        classes.sort();
+        classes.dedup();
+        let package = format!("package {}.{} {{ {} }}\n", p, q, classes.iter().map(|c| format!("class {}", c)).collect::<Vec<_>>().join("; "));
+        let types: Vec<String> = names.iter().map(|c| format!("{}.{}.{}", p, q, c)).chain(std::iter::repeat_n("Int".to_string(), ints)).collect();
+        let params = types.iter().enumerate().map(|(i, t)| format!("p{}: {}", i, t)).collect::<Vec<_>>().join(", ");
+        let args = types.iter().map(|t| if t == "Int" { "0" } else { "null" }).collect::<Vec<_>>().join(", ");
+        (package, params, args)
+    }
+
+    /// The refusals of a program teq builds for the JVM, and the methods it writes of descriptors past 60,000 bytes.
+    fn refusals_and_long_methods(name: &str, text: &str) -> (Vec<String>, Vec<(String, String)>) {
+        crate::with_jvm_output(name, text, &[], |output, _| {
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let refused = output.refused.iter().map(|(_, _, m)| m.clone()).collect();
+            let methods = output.classes.iter().filter_map(|c| crate::classfile::ClassFile::parse(&c.bytes).ok()).flat_map(|c| c.methods);
+            (refused, methods.filter(|m| m.descriptor.len() > 60_000).map(|m| (m.name, m.descriptor)).collect())
+        })
+    }
+
+    /// Where teq's constructor or lifted method takes more than dotty's, or holds a value otherwise, dotty's check of
+    /// the name and the descriptor together is not applied to teq's descriptor: each program below is one scalac
+    /// compiles, dotty's method under 65,535 bytes of name and descriptor, teq's past it, and teq writes it. The
+    /// constructor of an anonymous class over a class at its superclass's 65,529-byte constructor, with a capture,
+    /// the outer instance or in a lambda (and two that capture nothing); a private member class, given its outer
+    /// where dotty gives none unreferenced; a local class and a local def holding a var as an `ObjectRef` where
+    /// dotty's is an `IntRef`; a lambda's body, its parameter and result boxed; a local def reading `this` and its
+    /// default's getter, static where dotty's are the class's; a local trait's member holding a var; a local class's
+    /// member taking its class, which teq names `L$<token>_<offset>` where dotty's is `Main$L$1`.
+    #[test]
+    fn a_method_teq_passes_more_than_dotty_is_checked_by_the_class_file_alone() {
+        let anon = |body: &str, made: &str| {
+            let (package, params, args) = descriptor_filling(65_526);
+            format!("{}abstract class C({}) {{ def f: Int }}\n{}\n", package, params, made.replace("NEW", &format!("new C({}) {{ override def f: Int = {} }}", args, body)))
+        };
+        let programs = [
+            ("anon_capture", anon("x", "object Main { def main(args: Array[String]): Unit = { val x = args.length + 7; val y = NEW; println(y.f) } }"), true),
+            ("anon_outer", anon("k", "class O { val k = 7; def m: C = NEW }\nobject Main { def main(args: Array[String]): Unit = println(new O().m.f) }"), true),
+            ("anon_lambda", anon("x", "object Main { def main(args: Array[String]): Unit = { val x = args.length + 7; val g = () => NEW; println(g().f) } }"), true),
+            ("anon_nocapture", anon("7", "object Main { def main(args: Array[String]): Unit = { val y = NEW; println(y.f) } }"), false),
+            ("anon_object", anon("Ob.k", "object Ob { val k = 7 }\nobject Main { def main(args: Array[String]): Unit = { val y = NEW; println(y.f) } }"), false),
+        ];
+        let filled = |bytes: usize, shape: &str| {
+            let (package, params, args) = descriptor_filling(bytes);
+            format!("{}{}\n", package, shape.replace("PARAMS", &params).replace("ARGS", &args))
+        };
+        let member = "m".repeat(100);
+        let more = [
+            ("private_member_class", filled(65_524, "class O { private class I(PARAMS) { def f: Int = 7 }; def g: Int = new I(ARGS).f }\nobject Main { def main(args: Array[String]): Unit = println(new O().g) }")),
+            ("local_class_var", filled(65_502, "object Main { def main(args: Array[String]): Unit = { var v = args.length; class L(PARAMS) { def f: Int = { v += 1; v } }; println(new L(ARGS).f) } }")),
+            ("local_def_var", filled(65_504, "object Main { def main(args: Array[String]): Unit = { var v = args.length; def lf(PARAMS): Int = { v += 1; v }; println(lf(ARGS)) } }")),
+            ("local_def_this", filled(65_526, "class O { val z: Int = 7; def g: Int = { def lf(PARAMS): Int = z; lf(ARGS) } }\nobject Main { def main(args: Array[String]): Unit = println(new O().g) }")),
+            ("local_getter_this", filled(65_516, "class O { val z: Int = 7; def g: Int = { def lf(PARAMS)(b: Int = z): Int = b; lf(ARGS)() } }\nobject Main { def main(args: Array[String]): Unit = println(new O().g) }")),
+            ("lambda", {
+                let (package, params, _) = descriptor_filling(65_488);
+                let vals: Vec<String> = params.split(", ").map(|p| { let (n, t) = p.split_once(": ").unwrap(); format!("val c{}: {} = {}", n, t, if t == "Int" { "0" } else { "null" }) }).collect();
+                let read: Vec<String> = params.split(", ").map(|p| format!("c{}", p.split_once(": ").unwrap().0)).collect();
+                format!("{}object Main {{ def main(args: Array[String]): Unit = {{ {}; val h = (u: Int) => Seq({}).length + u; println(h(args.length)) }} }}\n", package, vals.join("; "), read.join(", "))
+            }),
+            ("local_class_own_type", filled(65_482, &format!("object Main {{ def main(args: Array[String]): Unit = {{ class L(val a: Int) {{ def {}(o: L, PARAMS): Int = o.a }}; val l = new L(7); println(l.{}(l, ARGS)) }} }}", "n".repeat(40), "n".repeat(40)))),
+            ("local_trait_member", filled(65_408, &format!("object Main {{ def main(args: Array[String]): Unit = {{ var v = args.length; trait K {{ private def {}(PARAMS): Int = {{ v += 1; v }}; def g: Int = {}(ARGS) }}; println((new K {{}}).g) }} }}", member, member))),
+        ];
+        for (name, text, past) in programs.iter().map(|(n, t, p)| (*n, t.clone(), *p)).chain(more.into_iter().map(|(n, t)| (n, t, true))) {
+            let (refused, long) = refusals_and_long_methods(name, &text);
+            assert_eq!(refused, Vec::<String>::new(), "{}", name);
+            assert!(!long.is_empty() && long.iter().all(|(_, d)| d.len() <= 65_535), "{}: {:?}", name, long.iter().map(|(m, d)| (m.len(), d.len())).collect::<Vec<_>>());
+            // dotty's check reads dotty's name of the local trait's private member, the source's, and the member alone.
+            let is_past = |(m, d): &(String, String)| if name == "local_trait_member" { m.ends_with(member.as_str()) && member.len() + d.len() > 65_535 } else { m.len() + d.len() > 65_535 };
+            assert_eq!(long.iter().any(is_past), past, "{}: {:?}", name, long.iter().map(|(m, d)| (m.len(), d.len())).collect::<Vec<_>>());
+        }
+    }
+
+    /// Where teq's constructor passes more argument slots than dotty's counts, the class file's own bound refuses it,
+    /// in teq's words: an anonymous class over a 254-parameter constructor, capturing a value; a private member class
+    /// of 254 parameters, given its outer. scalac compiles both.
+    #[test]
+    fn a_constructor_past_the_slots_dotty_does_not_count_is_refused_in_teqs_words() {
+        let ints = (0..254).map(|i| format!("p{}: Int", i)).collect::<Vec<_>>().join(", "); // dotty: MaximumJvmParameters
+        let ones = vec!["1"; 254].join(", ");
+        let programs = [
+            format!("abstract class C({}) {{ def f: Int }}\nobject Main {{ def main(args: Array[String]): Unit = {{ val x = args.length + 7; val y = new C({}) {{ override def f: Int = x }}; println(y.f) }} }}\n", ints, ones),
+            format!("class O {{ private class I({}) {{ def f: Int = 7 }}; def g: Int = new I({}).f }}\nobject Main {{ def main(args: Array[String]): Unit = println(new O().g) }}\n", ints, ones),
+        ];
+        for (i, text) in programs.iter().enumerate() {
+            let (refused, _) = refusals_and_long_methods(&format!("slots_{}", i), text);
+            let [message] = &refused[..] else { panic!("one refusal: {:?}", refused) };
+            assert_eq!(message, "not supported on the JVM yet: the method <init> would take 256 argument slots, and a class file holds 255");
+        }
+    }
+
+    /// Where teq's constructor or lifted method takes what dotty's takes by rule (the same parameters, in whatever
+    /// order: dotty's checks read a descriptor's length and its count), dotty's check of the name and the descriptor
+    /// together reads teq's: a member class's, after the outer dotty always gives it; a local class's, a local def's
+    /// and an anonymous class's over a trait, after the values they capture, which dotty's `LambdaLift` passes as
+    /// free values. Each at 65,535 bytes is written, at 65,536 refused in dotty's words.
+    #[test]
+    fn a_method_teq_writes_as_dotty_is_checked_by_dottys_name_and_descriptor() {
+        let shapes = [
+            ("member_class", 65_524, "class O { class I(PARAMS) { def f: Int = 7 } }\nobject Main { def main(args: Array[String]): Unit = { val o = new O; println(new o.I(ARGS).f) } }"),
+            ("local_class", 65_526, "object Main { def main(args: Array[String]): Unit = { val x = args.length; class L(PARAMS) { def f: Int = x }; println(new L(ARGS).f) } }"),
+            ("local_def", 65_528, "object Main { def main(args: Array[String]): Unit = { val x = args.length; def lf(PARAMS): Int = x; println(lf(ARGS)) } }"),
+        ];
+        for (name, bytes, shape) in shapes {
+            for (over, bytes) in [(false, bytes - 1), (true, bytes)] {
+                let (package, params, args) = descriptor_filling(bytes);
+                let text = format!("{}{}\n", package, shape.replace("PARAMS", &params).replace("ARGS", &args));
+                let (refused, _) = refusals_and_long_methods(name, &text);
+                let expected = if over { vec!["Method signature is too long for the JVM".to_string()] } else { Vec::new() };
+                assert_eq!(refused, expected, "{} at {} bytes", name, bytes);
+            }
+        }
+        for (over, bytes) in [(false, 65_526), (true, 65_527)] {
+            let (package, params, _) = descriptor_filling(bytes);
+            let named: Vec<(&str, &str)> = params.split(", ").map(|p| p.split_once(": ").unwrap()).collect();
+            let vals: Vec<String> = named.iter().map(|(n, t)| format!("val c{}: {} = {}", n, t, if *t == "Int" { "0" } else { "null" })).collect();
+            let read: Vec<String> = named.iter().map(|(n, _)| format!("c{}", n)).collect();
+            let text = format!("{}trait K {{ def f: Int }}\nobject Main {{ def main(args: Array[String]): Unit = {{ {}; val k = new K {{ def f: Int = Seq({}).length }}; println(k.f) }} }}\n", package, vals.join("; "), read.join(", "));
+            let (refused, _) = refusals_and_long_methods("anon_trait", &text);
+            let expected = if over { vec!["Method signature is too long for the JVM".to_string()] } else { Vec::new() };
+            assert_eq!(refused, expected, "the anonymous class over a trait at {} bytes", bytes);
+        }
     }
 
     /// A class whose superclass's constructor takes arguments, its call left without them, is refused at the class,

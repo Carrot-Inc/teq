@@ -136,6 +136,16 @@ impl Analysis {
         free
     }
 
+    /// What the expressions `exprs` refer to beyond `declared`: the free variables dotty's LambdaLift gives a
+    /// method whose code they are (a local trait's member, one of its default's getters), not memoized.
+    pub fn of_exprs(&mut self, cx: &Cx, exprs: &[TExprId], declared: Vec<SymId>) -> Free {
+        let mut c = Collector { cx, an: self, referenced: Vec::new(), declared, this: false, closures: 0, nonlocal: false };
+        for &e in exprs {
+            c.expr(e);
+        }
+        c.finish()
+    }
+
     /// The captures of the initialiser of a local lazy val, the val's own holder left out (its
     /// accessor and initialiser take it last).
     pub fn of_lazy(&mut self, cx: &Cx, sym: SymId) -> Rc<Free> {

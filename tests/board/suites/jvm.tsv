@@ -1000,7 +1000,7 @@ function_value_callee	pass	-
 function_value_helper_leaving_local	pass	-	
 function_value_helper_local_names	pass	-	
 function_xxl	fail	-	compile
-function_xxl_arity256	fail	-	verify
+function_xxl_arity256	fail	-	compile
 function_xxl_erased_class	fail	-	compile
 function_xxl_erased_overload	pass	-	
 function_xxl_inherited_member	pass	-	

@@ -518,7 +518,6 @@ i15741.scala	marks: no error where 2 are marked
 i15750.scala	marks: 2 errors where 3 are marked
 i15784.scala	marks: 10 errors where 2 are marked: i15784.scala:2:21: expected ')', found '@'
 i15785.scala	marks: no error where 1 are marked
-i15850-a.scala	marks: no error where 1 are marked (the JVM build)
 i15850-b.scala	marks: no error where 1 are marked (the JVM build)
 i15897.scala	check: diagnostic 1 of 4: scalac's is error i15897.scala:7:31 end of statement expected but '=' found; teq's is error i15897.scala:4:24 Ambiguous overload. The overloaded alternatives of method mode in object O with types
 i15898.scala	check: diagnostic 1 of 3: scalac's is error i15898.scala:16:16 None of the overloaded alternatives of constructor AC in class AC with types; teq's is error i15898.scala:16:12 None of the overloaded alternatives of constructor AC in class AC
@@ -636,7 +635,6 @@ i18408a.scala	check: diagnostic 1 of 3: scalac's is error i18408a.scala:2:1 Ille
 i18408b.scala	check: diagnostic 1 of 3: scalac's is error i18408b.scala:2:1 Illegal start of toplevel definition; teq's is error i18408b.scala:2:1 expected a definition, found identifier
 i18408c.scala	check: diagnostic 1 of 3: scalac's is error i18408c.scala:2:1 Illegal start of toplevel definition; teq's is error i18408c.scala:2:1 expected a definition, found identifier
 i1845.scala	check: diagnostic 1 of 1: scalac's is error i1845.scala:2:12 identifier expected; teq's is error i1845.scala:2:12 type this not found
-i18458.scala	marks: no error where 1 are marked (the JVM build)
 i1846.scala	marks: 21 errors where 12 are marked: i1846.scala:6:20: expected a pattern, found indented block
 i18545.scala	marks: 2 errors where 5 are marked
 i18552.scala	marks: no error where 1 are marked

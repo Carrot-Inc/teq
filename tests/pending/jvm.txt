@@ -80,7 +80,7 @@ for_generator_callee_parameter	compile
 function_synthetic_class_reflection	compile
 function_synthetic_named_arguments	compile
 function_xxl	compile
-function_xxl_arity256	verify
+function_xxl_arity256	compile
 function_xxl_erased_class	compile
 function_xxl_jvm	verify
 given_class_index_export_given	output

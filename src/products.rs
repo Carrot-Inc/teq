@@ -708,12 +708,22 @@ pub fn classes_named<'n>(bytes: &[u8], names: &crate::intern::FxMap<&'n str, ()>
     out
 }
 
+/// Why a class file's attributes were not added (`add_class_attributes`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttributesRefused {
+    /// Their names would take the constant pool past what a class file holds: dotty's ClassWriter
+    /// writes the attributes itself and its "Class too large" counts them.
+    PoolFull,
+    /// The class file does not read back.
+    Unreadable,
+}
+
 /// Adds class attributes to a class file: their names go at the end of the constant pool, so
 /// no index the class already uses moves, and the attributes after the class's own.
-pub fn add_class_attributes(bytes: &[u8], attrs: &[(&str, &[u8])]) -> Result<Vec<u8>, String> {
-    let bad = || "a class file the writer cannot read back".to_string();
-    let u16_at = |at: usize| -> Result<usize, String> { bytes.get(at..at + 2).map(|b| u16::from_be_bytes([b[0], b[1]]) as usize).ok_or_else(bad) };
-    let u32_at = |at: usize| -> Result<usize, String> { bytes.get(at..at + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as usize).ok_or_else(bad) };
+pub fn add_class_attributes(bytes: &[u8], attrs: &[(&str, &[u8])]) -> Result<Vec<u8>, AttributesRefused> {
+    let bad = || AttributesRefused::Unreadable;
+    let u16_at = |at: usize| -> Result<usize, AttributesRefused> { bytes.get(at..at + 2).map(|b| u16::from_be_bytes([b[0], b[1]]) as usize).ok_or_else(bad) };
+    let u32_at = |at: usize| -> Result<usize, AttributesRefused> { bytes.get(at..at + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as usize).ok_or_else(bad) };
     let count = u16_at(8)?;
     let mut at = 10;
     let mut i = 1;
@@ -752,6 +762,9 @@ pub fn add_class_attributes(bytes: &[u8], attrs: &[(&str, &[u8])]) -> Result<Vec
     }
     let attrs_at = at;
     let n = u16_at(attrs_at)?;
+    if count + attrs.len() > crate::jvm::classfile::MAX_POOL_COUNT as usize {
+        return Err(AttributesRefused::PoolFull);
+    }
     let mut out = Vec::with_capacity(bytes.len() + 64);
     out.extend_from_slice(&bytes[..8]);
     out.extend_from_slice(&((count + attrs.len()) as u16).to_be_bytes());
@@ -775,6 +788,34 @@ pub fn add_class_attributes(bytes: &[u8], attrs: &[(&str, &[u8])]) -> Result<Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A class file whose `constant_pool_count` is `count`: texts, no member, no attribute.
+    fn class_of_count(count: usize) -> Vec<u8> {
+        let mut b = vec![0xCA, 0xFE, 0xBA, 0xBE, 0, 0, 0, 52];
+        b.extend_from_slice(&(count as u16).to_be_bytes());
+        for _ in 1..count {
+            b.extend_from_slice(&[1, 0, 1, b'x']);
+        }
+        b.extend_from_slice(&[0, 0x21, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
+        b
+    }
+
+    /// The products step adds its attributes' names to a written class's pool, whose
+    /// `constant_pool_count` stays at most 65,535 (JVMS 4.1): two names on 65,533 fit, on 65,534
+    /// they do not; one on 65,534 fits, on 65,535 it does not; a class that does not read back is
+    /// told apart.
+    #[test]
+    fn class_attributes_keep_the_pool_bound() {
+        let two: [(&str, &[u8]); 2] = [("TASTY", &[0; 16]), ("Scala", &[])];
+        let fits = add_class_attributes(&class_of_count(65_533), &two).expect("two names on 65,533 fit");
+        assert_eq!(u16::from_be_bytes([fits[8], fits[9]]), 65_535);
+        assert_eq!(add_class_attributes(&class_of_count(65_534), &two), Err(AttributesRefused::PoolFull));
+        let one: [(&str, &[u8]); 1] = [("Scala", &[])];
+        let local = add_class_attributes(&class_of_count(65_534), &one).expect("one name on 65,534 fits");
+        assert_eq!(u16::from_be_bytes([local[8], local[9]]), 65_535);
+        assert_eq!(add_class_attributes(&class_of_count(65_535), &one), Err(AttributesRefused::PoolFull));
+        assert_eq!(add_class_attributes(&class_of_count(3)[..20], &one), Err(AttributesRefused::Unreadable)); // jdk: a class file cut inside its constant pool
+    }
 
     /// The products' number: a manifest without `abi` is of 0, one written holds this binary's beside
     /// the writer's version, and the refusal is REFUSAL filled.

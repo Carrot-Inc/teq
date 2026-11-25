@@ -32,6 +32,18 @@ pub struct LiftedNames {
     inits: FxMap<SymId, Box<str>>,
     defaults: FxMap<(SymId, usize), Box<str>>,
     places: FxMap<Placed, u32>,
+    /// The lambdas and local defs (with their defaults' getters) inside a block dotty may replace by its constant
+    /// (`LiftWalk::block`), with which it drops them.
+    folded: FxMap<Folded, ()>,
+}
+
+/// What dotty may drop with a block it folds (`LiftedNames::folded`): a lambda by its body, a local def (and its
+/// defaults' getters) by its symbol, a local or anonymous class (and what it holds) by its class.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) enum Folded {
+    Lambda(TExprId),
+    Def(SymId),
+    Class(ClassId),
 }
 
 /// A lifted method of the unit by what it lifts, as `LiftedNames::places` keys its place: the order in which
@@ -106,6 +118,8 @@ struct LiftWalk {
     placing: Vec<Option<Placed>>,
     /// How many places of the typed tree each lambda's body has been met at.
     lambda_places: FxMap<TExprId, u32>,
+    /// For each block the walk is inside of, whether dotty may replace it by its constant (`LiftWalk::block`).
+    blocks: Vec<bool>,
 }
 
 impl LiftWalk {
@@ -188,10 +202,16 @@ impl<'a> UnitVisitor<'a> for LiftWalk {
     }
 
     fn class(&mut self, g: &mut Gen<'a>, c: ClassId) {
+        if self.blocks.contains(&true) {
+            self.out.folded.insert(Folded::Class(c), ());
+        }
         g.walk_class_lifted(self, c);
     }
 
     fn anonymous(&mut self, g: &mut Gen<'a>, c: ClassId, args: ListRef) -> bool {
+        if self.blocks.contains(&true) {
+            self.out.folded.insert(Folded::Class(c), ());
+        }
         g.walk_anonymous_lifted(self, c, args);
         true
     }
@@ -202,7 +222,25 @@ impl<'a> UnitVisitor<'a> for LiftWalk {
     /// lifted left side twice, `e' = e' + args`, and `ElimByName` makes a closure at each): two closures, two names.
     /// A body the back end copies after the walk (a `finally`'s, which the writer writes on each exit) has one place,
     /// its lambda one method (`Gen::lambda_method`).
+    /// A block dotty may replace by its constant, and with it what it defines: `FirstTransform.transformBlock`'s
+    /// `constToLiteral` (FirstTransform.scala 202-203; TreeInfo.scala 753-780) of a pure block whose type is a
+    /// constant, a definition a pure statement (`statPurity`). Read from the result's form alone
+    /// (`Gen::result_may_be_constant`), without its type or the statements' purity: a block named here may be one
+    /// dotty keeps, so that what is under it is checked as teq's and may pass where dotty refuses it, never the
+    /// reverse.
+    fn block(&mut self, g: &mut Gen<'a>, e: TExprId) {
+        let TExpr::Block(_, result) = g.cx.input.prog.expr(e) else { return self.blocks.push(false) };
+        self.blocks.push(g.result_may_be_constant(result));
+    }
+
+    fn block_end(&mut self) {
+        self.blocks.pop();
+    }
+
     fn lambda(&mut self, g: &mut Gen<'a>, params: ListRef, body: TExprId) -> bool {
+        if self.blocks.contains(&true) {
+            self.out.folded.insert(Folded::Lambda(body), ());
+        }
         let place = *self.lambda_places.entry(body).and_modify(|n| *n += 1).or_insert(0);
         let name = self.closure();
         self.out.lambdas.insert((body, place), Box::from(&*name.spelled));
@@ -222,6 +260,9 @@ impl<'a> UnitVisitor<'a> for LiftWalk {
         let s = g.cx.input.prog.funs[f.idx()].sym;
         if self.out.defs.contains_key(&s) {
             return false;
+        }
+        if self.blocks.contains(&true) {
+            self.out.folded.insert(Folded::Def(s), ());
         }
         let raw = g.cx.input.interner.get(g.cx.input.syms.sym(s).name);
         let name = self.freshened(raw, &encode(raw));
@@ -486,6 +527,45 @@ impl<'a> Gen<'a> {
         let name = self.cx.input.interner.get(self.cx.input.syms.sym(s).name);
         self.unsupported(&format!("internal error: the local lazy val {} has no number in its unit", name));
         format!("{}$lzyINIT$unnamed${}", encode(name), s.0)
+    }
+
+    /// Whether dotty may drop the lifted method `f` with a block it folds (`LiftWalk::block`), by its unit's walk.
+    pub(super) fn under_folded_block(&mut self, f: Folded) -> bool {
+        let file = match f {
+            Folded::Lambda(_) => self.writing_unit(),
+            Folded::Def(s) => self.declaring_unit(s),
+            Folded::Class(c) => self.cx.input.syms.class(c).module_file(),
+        };
+        self.file_lifted_names(file).folded.contains_key(&f)
+    }
+
+    /// Whether the block `e`'s result could have a constant type to dotty, by its form alone (dotty folds a pure tree
+    /// whose type, its term references widened, is a `ConstantType`): a literal other than `()` and `null` (`UnitType`
+    /// and `NullType` are none), a read of a value, a parameter or a value's getter, none lazy (a `final val`, an
+    /// `inline val` or a value of a singleton type is one), an operator, a concatenation or a conversion over such, an
+    /// `if` or a `match` with such a branch, a nested block's result, an ascription or a cast of such. A call of a method
+    /// is no pure tree to dotty (TreeInfo's `exprPurity` of an application). A block whose result is a class literal
+    /// dotty leaves alone (TreeInfo.scala 757-760). Wider than dotty's fold by form, never narrower.
+    pub(super) fn result_may_be_constant(&self, e: TExprId) -> bool {
+        let prog = self.cx.input.prog;
+        let list = |l: ListRef| prog.expr_list(l).to_vec();
+        match prog.expr(e) {
+            TExpr::Unit | TExpr::Null | TExpr::ClassOf(..) => false,
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) => true,
+            TExpr::Local(v) | TExpr::Static(v) | TExpr::Field(_, v) => self.cx.input.syms.sym(v).mods & crate::ast::mods::LAZY == 0,
+            // A read of a value's getter (`K.k` of an object's `final val`); a call of a method is no pure tree to dotty
+            // (`exprPurity` of an application), nor a lazy val's read.
+            TExpr::CallStatic(m, args) | TExpr::CallMethod(_, m, args) => {
+                let info = self.cx.input.syms.sym(m);
+                args.is_empty() && info.kind != SymKind::Def && info.mods & crate::ast::mods::LAZY == 0
+            }
+            TExpr::Prim(_, a, b) => self.result_may_be_constant(a) && self.result_may_be_constant(b),
+            TExpr::Unary(_, a) | TExpr::ToStr(a, _) | TExpr::Cast(a, ..) | TExpr::Block(_, a) => self.result_may_be_constant(a),
+            TExpr::StrConcat(parts) => list(parts).into_iter().all(|x| self.result_may_be_constant(x)),
+            TExpr::If(_, t, els) => self.result_may_be_constant(t) || els.is_some_and(|x| self.result_may_be_constant(x)),
+            TExpr::Match(..) => true,
+            _ => false,
+        }
     }
 
     /// The place of the lifted method of `p` among its class's lifted methods (`Placed`): a lambda's in the unit of

@@ -4,6 +4,7 @@ use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, Li
 use super::classfile::*;
 use super::free;
 use super::gen::*;
+use super::lifted::Folded;
 use super::names::*;
 use super::plan::{begun_method_def, method_access, MODULE_FIELD};
 use super::runtime::LAUNCHER;
@@ -204,6 +205,69 @@ impl PrimaryCtor<'_> {
     }
 }
 
+/// What the writer knows of a method's definition where it begins it: where it is defined, the place of its
+/// refusals; whether it is the method dotty writes (`Dotty`), which dotty's own checks then read; and why teq's
+/// descriptor can be wider than dotty's (`Wider`), which a refusal of teq's names.
+#[derive(Clone, Default)]
+pub struct MethodSite {
+    pub at: Option<(crate::source::FileId, crate::source::Span)>,
+    pub dotty: Dotty,
+    pub wider: Wider,
+}
+
+/// Whether the method teq writes is the method dotty writes: in dotty's class, under the name dotty gives it, with
+/// the parameters dotty's platform restriction counts. Where the writer says so (`Writes`), dotty's two own checks
+/// read it (`Gen::check_method`): its platform restriction (BCodeSkelBuilder.scala 859-867) and its name and
+/// descriptor together where dotty writes no generic signature (748-753). Where it cannot (`NotSure`, every site that
+/// says nothing), the class file's own bounds on what teq writes are the method's only checks, so that teq may accept
+/// a program scalac refuses and never refuses one it compiles.
+#[derive(Clone, Default)]
+pub enum Dotty {
+    #[default]
+    NotSure,
+    Writes {
+        /// The slots and the count of its parameters as dotty counts them, where they are not teq's descriptor's (a
+        /// lifted method's, a lambda's past 22 parameters, a local trait's member's: its own free variables).
+        counted: Option<(usize, usize)>,
+        /// Its name as dotty gives it, where teq's is another (a private member teq expands): the shortest dotty may
+        /// write, so that a longer one dotty writes accepts more and never refuses more.
+        name: Option<Rc<str>>,
+        /// Whether dotty's check of the name and the descriptor together may read teq's descriptor: true only where
+        /// dotty writes the method no generic signature (`Gen::dotty_writes_no_signature`) and teq's descriptor is
+        /// dotty's. Where teq passes the method more than dotty does, or holds a value otherwise
+        /// (`Gen::holds_as_dotty`), the site says false and `counted` alone answers dotty's restriction.
+        no_generic_signature: bool,
+    },
+}
+
+impl Dotty {
+    /// dotty's method under teq's name and descriptor.
+    pub fn writes(no_generic_signature: bool) -> Dotty {
+        Dotty::Writes { counted: None, name: None, no_generic_signature }
+    }
+}
+
+/// Why teq's descriptor of a method can take more argument slots than the method dotty counts, which the class file's
+/// own bound then answers with a refusal of teq's (`Gen::check_method`).
+#[derive(Clone, Default)]
+pub enum Wider {
+    #[default]
+    No,
+    /// A local trait's member, or its static forwarder: teq passes it every value the trait captures, where dotty
+    /// passes the member its own free variables. The member's name.
+    LocalTraitMember(Rc<str>),
+    /// A lambda past 22 parameters, which teq passes one by one where dotty passes one `Object[]`: its parameters
+    /// and the values it captures. Its function's `apply` takes the parameters and `this` too.
+    Lambda(usize, usize),
+    /// A method whose own refusal, if any, is another's: a local trait member's static forwarder (the member's
+    /// refusal names both), or a member whose program dotty's restriction refuses already.
+    Answered,
+    /// A lambda's body of 22 parameters or fewer, called through a method handle, which takes one slot fewer than a
+    /// method: dotty's restriction answers it where it is dotty's method; where dotty drops it with its block, the
+    /// handle's bound alone.
+    LambdaBody,
+}
+
 impl<'a> Gen<'a> {
     fn is_lazy_member(&self, s: SymId) -> bool {
         self.cx.is_lazy_member(s)
@@ -221,19 +285,28 @@ impl<'a> Gen<'a> {
     /// signature already: the first one begun is the class's. A later one's code is written all
     /// the same and left out at its end (`end_method`).
     pub fn begin_method(&mut self, flags: MethodFlags, name: &str, desc: &str, this_uninit: bool, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId]) {
+        self.begin_method_at(flags, name, desc, this_uninit, params, ret, roots, MethodSite::default());
+    }
+
+    /// `begin_method` of a method whose definition the writer knows (`MethodSite`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn begin_method_at(&mut self, flags: MethodFlags, name: &str, desc: &str, this_uninit: bool, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId], site: MethodSite) {
         let method = begun_method_def(flags, name, desc, params, &ret);
-        let m = self.method_cx(flags.is_static, params, ret, roots);
+        let m = self.method_cx(&method, site, params, ret, roots);
         self.lir.clear();
         self.lower_declared.clear();
         self.open_method(method, m, this_uninit);
     }
 
     /// The context a method's code is lowered and written in: its parameters' slots, `this` first unless it is
-    /// static, its result, and the locals of `roots` that live in cells.
-    fn method_cx(&mut self, is_static: bool, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId]) -> MethodCx {
-        let mut m = MethodCx::default();
+    /// static, its result, the locals of `roots` that live in cells, and where it is defined. Every method with code
+    /// passes here before its body is lowered, now (`Gen::begin_method_at`) or for a lifted body to be written later
+    /// (`Gen::lower_lifted`), and so passes the class file's gate here.
+    fn method_cx(&mut self, method: &MethodDef, site: MethodSite, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId]) -> MethodCx {
+        self.check_method(method, &site);
+        let mut m = MethodCx { at: site.at, ..MethodCx::default() };
         let mut slot = 0;
-        if !is_static {
+        if !method.flags.is_static {
             m.this_slot = Some(0);
             slot = 1;
         }
@@ -251,9 +324,9 @@ impl<'a> Gen<'a> {
     }
 
     /// Starts the code of `method` in the context `m`, its first frame holding `this` and the parameters.
-    fn open_method(&mut self, method: MethodDef, m: MethodCx, this_uninit: bool) {
+    fn open_method(&mut self, method: MethodDef, mut m: MethodCx, this_uninit: bool) {
         let is_static = method.flags.is_static;
-        self.repeated = if self.plan.has_method(&method.name, &method.desc) {
+        m.repeated = if self.plan.has_method(&method.name, &method.desc) {
             Some(method)
         } else {
             self.plan.methods.push(method);
@@ -276,6 +349,64 @@ impl<'a> Gen<'a> {
         self.m = m;
     }
 
+    /// The one gate of a method of the class file, whatever writes it (`Gen::begin_method_at`,
+    /// `Gen::abstract_method_at`). Where the site says the method is dotty's (`Dotty::Writes`): dotty's check of its
+    /// name and descriptor together where dotty writes no generic signature (BCodeSkelBuilder.scala 748-753; of a
+    /// mirror's forwarder, BCodeHelpers.scala 368-372, nothing after the method's own: scalac 3.8.4 gives the one
+    /// error for a module's method) and its platform restriction (BCodeSkelBuilder.scala 859-867, before `genDefDef`
+    /// asks whether the method is abstract). At every site: the class file's own bound on what teq writes.
+    /// `Gen::finish_writer` writes no class with a method that did not pass here.
+    pub(super) fn check_method(&mut self, method: &MethodDef, site: &MethodSite) {
+        let mut refused = false;
+        if let Dotty::Writes { counted, name, no_generic_signature } = &site.dotty {
+            if *no_generic_signature && !self.names_own_class(&method.desc) && !super::classfile::constant_text_fits(name.as_deref().unwrap_or(&method.name), &method.desc) {
+                if self.writing_mirror {
+                    self.long_name_refused = true;
+                } else {
+                    self.name_too_long("Method signature is too long for the JVM", site.at);
+                    refused = true;
+                }
+            }
+            let (slots, count) = counted.unwrap_or_else(|| parameter_slots(&method.desc));
+            if slots > MAX_PARAMETER_SLOTS {
+                let counted = if slots == count { "" } else { " (Long and Double count as 2)" };
+                self.refuse_written(&format!("Platform restriction: a parameter list's length cannot exceed {}{}.", MAX_PARAMETER_SLOTS, counted), site.at);
+                refused = true;
+            }
+        }
+        // The class file's own bound on the descriptor teq writes (JVMS 4.3.3: 255 argument slots, `this` one of
+        // them), checked both ways where dotty's are: a refusal of teq's, never a class that fails to load; one
+        // refusal a method, dotty's where it gave one. A forwarder teq adds beside a class's methods (a mixin's, a
+        // mirror's) takes its member's parameters, whose own check answers it, as `Wider::Answered` says of the rest.
+        if !refused && !self.writing_mirror && !self.writing_forwarders && !matches!(site.wider, Wider::Answered) {
+            let mut written = parameter_slots(&method.desc).0 + usize::from(!method.flags.is_static);
+            let mut limit = MAX_ARGUMENT_SLOTS;
+            match site.wider {
+                // The lambda's method is called through a method handle, which takes one slot fewer (a static
+                // `$anonfun` of 255 slots fails at its bootstrap, as one of 254 runs); its function's `apply` takes
+                // the parameters and `this`.
+                Wider::Lambda(n, _) if n + 1 > MAX_ARGUMENT_SLOTS => written = n + 1,
+                Wider::Lambda(..) | Wider::LambdaBody => limit = MAX_ARGUMENT_SLOTS - 1,
+                _ => {}
+            }
+            if written > limit {
+                let message = match &site.wider {
+                    Wider::LocalTraitMember(member) => {
+                        let cx = self.cx;
+                        let owner = self.this_class.map_or_else(|| self.this_name.to_string(), |c| cx.input.interner.get(cx.input.syms.class(c).name).to_string());
+                        format!("not supported on the JVM yet: the method {} of the local trait {} would take {} argument slots, because teq passes it every value {} captures, and a class file holds {}; a local class in place of the trait holds them as fields", member, owner, written, owner, MAX_ARGUMENT_SLOTS)
+                    }
+                    Wider::Lambda(n, 0) => format!("not supported on the JVM yet: a function of {} parameters would take {} argument slots, because teq does not pass its parameters as one array yet, and the JVM allows {}", n, written, limit),
+                    Wider::Lambda(n, captured) => format!("not supported on the JVM yet: a function of {} parameters that captures {} values would take {} argument slots, because teq does not pass its parameters as one array yet, and the JVM allows {}", n, captured, written, limit),
+                    Wider::LambdaBody => format!("not supported on the JVM yet: the method {} would take {} argument slots, and a method handle allows {}", method.name, written, limit),
+                    Wider::No | Wider::Answered => format!("not supported on the JVM yet: the method {} would take {} argument slots, and a class file holds {}", method.name, written, MAX_ARGUMENT_SLOTS),
+                };
+                self.refuse_written(&message, site.at);
+            }
+        }
+        self.checked_methods.insert((method.name.clone(), method.desc.clone()), ());
+    }
+
     /// Ends the method begun: its code goes to the class file under the plan's header. A
     /// method whose code could not be written is none of the class's, and leaves the plan. The
     /// code of a method the class held already (`begin_method`) is dropped, after it was written
@@ -285,8 +416,9 @@ impl<'a> Gen<'a> {
     /// (`super_targets`), the function arities it names and what it reports. It asks for no
     /// second writing of the class with wide jumps (`overflow`).
     pub fn end_method(&mut self) {
+        let at = self.m.at;
         let code = std::mem::replace(&mut self.code, Code::new(Vec::new()));
-        let repeated = self.repeated.take();
+        let repeated = self.m.repeated.take();
         if code.underflow || code.misreserved {
             let m = repeated.or_else(|| self.plan.methods.pop()).expect("a method was begun");
             let line = code.last_line().map_or(String::new(), |l| format!(" at line {}", l));
@@ -308,7 +440,11 @@ impl<'a> Gen<'a> {
             let (nodes, outside) = (named(&mut self.m.unlowered), named(&mut self.m.outside));
             self.gaps_lines.push(format!("LIRGAPS\t{}.{}{}\t{}\t{}\t{}", self.this_name, m.name, m.desc, nodes, outside, code.outside));
         }
+        let reached = !self.cw.overflow;
         self.cw.method(method_access(m.flags), &m.name, &m.desc, Some(code));
+        if reached && self.cw.overflow {
+            self.too_large_methods.push((self.plan.name.clone(), m.name.to_string(), m.desc.clone(), at));
+        }
         self.overflow |= self.cw.overflow;
     }
 
@@ -413,6 +549,58 @@ impl<'a> Gen<'a> {
             PendingBody::LazyAccessor(_) => (Vec::new(), None, Vec::new()),
         };
         let is_lambda = matches!(p.body, PendingBody::Lambda(..));
+        let sym_at = |s: SymId| {
+            let info = cx.input.syms.sym(s);
+            Some((info.file, info.span))
+        };
+        let at = match &p.body {
+            PendingBody::Fun(f) | PendingBody::Default(f, _) => sym_at(cx.input.prog.funs[f.idx()].sym),
+            PendingBody::Lambda(_, body) => cx.input.prog.span_of(*body),
+            PendingBody::LazyInit(s, _) | PendingBody::LazyAccessor(s) => sym_at(*s),
+        };
+        // dotty's platform restriction counts the parameters of the method as LambdaLift and Erasure leave it: a
+        // lifted body that reads `this` is a method of its class, its receiver no parameter (LambdaLift.scala
+        // 97-104), and a lambda past 22 parameters takes them in one `Object[]` (Erasure's `typedDefDef`,
+        // `nme.ALLARGS`, Erasure.scala 917-927).
+        let width = |t: &ErasedType| -> usize { if t.wide() { 2 } else { 1 } };
+        let receiver = l.this as usize;
+        let (own_slots, own_count): (usize, usize) = if is_lambda && l.params.len() > MAX_IMPLEMENTED_FUNCTION_ARITY {
+            (1, 1)
+        } else {
+            (l.params.iter().map(width).sum(), l.params.len())
+        };
+        let before: usize = params[receiver..].iter().map(|(_, t)| width(t)).sum();
+        // A lambda's body, a local def and its default's getter are dotty's lifted methods: LambdaLift lifts every
+        // local definition, referenced or not (Dependencies.scala 250-251, LambdaLift.scala 222), with no generic
+        // signature (BCodeHelpers.scala 683), unless dotty drops it with its block (`Gen::under_folded_block`). A
+        // local lazy val's initialiser and accessor are teq's shapes.
+        let dottys = match &p.body {
+            PendingBody::Lambda(_, body) => !self.under_folded_block(Folded::Lambda(*body)),
+            PendingBody::Fun(f) | PendingBody::Default(f, _) => !self.under_folded_block(Folded::Def(cx.input.prog.funs[f.idx()].sym)),
+            PendingBody::LazyInit(..) | PendingBody::LazyAccessor(_) => false,
+        };
+        // Its descriptor is dotty's where teq passes it what dotty does: not a lambda's, whose parameters and result teq
+        // boxes, nor one taking the instance first where dotty's is its class's method, nor one holding a value
+        // otherwise than dotty.
+        let dottys_descriptor = !is_lambda && !l.this && !l.key && l.captures.iter().all(|c| !c.key && !c.cell && self.holds_as_dotty(c.sym));
+        // dotty numbers a lifted def by its name across the compilation unit (`LambdaLift.newName`'s `freshened`),
+        // teq within the class: the shortest dotty may write is the name's first.
+        let first = l.name.rsplit_once('$').filter(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).map(|(base, _)| Rc::from(format!("{}$1", base)));
+        let dotty = if dottys {
+            Dotty::Writes { counted: Some((before + own_slots, first_param - receiver + own_count)), name: first, no_generic_signature: dottys_descriptor }
+        } else {
+            Dotty::NotSure
+        };
+        // Where dotty writes a lambda's body of 22 parameters or fewer, its restriction answers it, and a body it passes
+        // fails at its bootstrap in scalac's class too; where it drops it, the method handle's bound alone.
+        let wider = if is_lambda && l.params.len() > MAX_IMPLEMENTED_FUNCTION_ARITY {
+            Wider::Lambda(l.params.len(), l.captures.len())
+        } else if is_lambda && !dottys {
+            Wider::LambdaBody
+        } else {
+            Wider::No
+        };
+        let site = MethodSite { at, dotty, wider };
         for (i, t) in l.params.iter().enumerate() {
             // The parameters of a lambda arrive boxed and get locals of their own below.
             let sym = if is_lambda { None } else { param_syms.get(i).copied() };
@@ -420,7 +608,7 @@ impl<'a> Gen<'a> {
         }
         let mut method = begun_method_def(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, &params, &l.ret);
         method.place = l.place;
-        self.m = self.method_cx(true, &params, l.ret.clone(), &roots);
+        self.m = self.method_cx(&method, site, &params, l.ret.clone(), &roots);
         self.lir.clear();
         self.lower_declared.clear();
         self.m.lambda = is_lambda;
@@ -661,6 +849,227 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// Whether dotty writes a static forwarder of the trait member `s` (BCodeSkelBuilder.scala 714-715): not of a
+    /// private one, nor of its default getters, which take its access (Desugar.scala 428-430).
+    fn dotty_forwards(&self, s: SymId) -> bool {
+        let info = self.cx.input.syms.sym(s);
+        info.mods & mods::PRIVATE == 0 || info.scoped_private
+    }
+
+    /// dotty's member `s`, which teq writes under `emitted`: its name the shorter of teq's and the source's, encoded
+    /// (dotty writes the source's where teq expands a private member's, `T$$m`, as ExpandPrivate expands one only
+    /// where another class reaches it; teq's where an annotation names it), its parameters teq's descriptor's, its
+    /// generic signature as `dotty_writes_no_signature` reads it.
+    fn dotty_member(&mut self, s: SymId, emitted: &str) -> Dotty {
+        if self.class_folded() {
+            return Dotty::NotSure;
+        }
+        let source = encode(self.cx.input.interner.get(self.cx.input.syms.sym(s).name));
+        let name = (source.len() < emitted.len()).then(|| Rc::from(source.as_str()));
+        Dotty::Writes { counted: None, name, no_generic_signature: self.dotty_writes_no_signature(s) }
+    }
+
+    /// dotty's getter of the default of the member `s`'s parameter `i` (Desugar.scala 419-433): the member's type
+    /// parameters and the clauses before the parameter's, `before` parameters, under the name teq gives it. No
+    /// generic signature only where the member takes no type parameter, the getter a clause (one of the first
+    /// clause's is parameterless, whose `ExprType` needs one) and no type it reads needs one.
+    fn dotty_default_getter(&mut self, s: SymId, i: usize, before: usize) -> Dotty {
+        if self.class_folded() {
+            return Dotty::NotSure;
+        }
+        let info = self.cx.input.syms.sym(s);
+        let Some(sig) = &info.sig else { return Dotty::writes(false) };
+        let params: Vec<&ParamSig> = sig.clauses.iter().flat_map(|c| &c.params).collect();
+        let reads_none = |p: &ParamSig| !p.by_name && !p.repeated && self.need_no_java_sig(p.ty) && self.declared_needs_no_java_sig(p.sym);
+        let no_generic_signature = sig.tparams.is_empty()
+            && info.ext_tparams == 0
+            && before > 0
+            && params.get(i).is_some_and(|p| reads_none(p))
+            && params[..before.min(params.len())].iter().all(|p| reads_none(p));
+        Dotty::writes(no_generic_signature)
+    }
+
+    /// dotty's constructor of the class `c` whose declared parameters are `declared`, the values it captures and the
+    /// instance around it taken as teq's descriptor takes them (c3): a generic signature where `c` or a class around
+    /// it takes type parameters (its `PolyType`) or a declared parameter's type needs one.
+    pub(super) fn dotty_constructor(&mut self, c: ClassId, declared: &[SymId]) -> Dotty {
+        if self.class_folded() || !self.constructors_take_dottys(c) {
+            return Dotty::NotSure;
+        }
+        Dotty::writes(self.class_and_outers_take_no_type_parameters(c) && declared.iter().all(|&p| self.declared_needs_no_java_sig(p) && self.sym_type_needs_no_java_sig(p)))
+    }
+
+    /// Whether teq's constructors of the class `c` take what dotty's take, by rule. dotty's checks read a descriptor's
+    /// length and its count of parameters, never their order, so the same parameters in another order are dotty's:
+    /// the declared parameters with the values the class captures held as they are, which dotty's `LambdaLift` passes
+    /// as its free values (`addFreeParams`), or with the enclosing instance of a member class dotty always gives one
+    /// (`ExplicitOuter.needsOuterAlways`: not private, no module, no term among its owners). Not where teq passes an
+    /// anonymous class the arguments of its superclass, its own extras, more than one enclosing instance or one dotty
+    /// gives only where it is referenced, a value held otherwise than dotty holds it, or a secondary constructor the
+    /// captures (dotty's takes its own free values alone).
+    fn constructors_take_dottys(&mut self, c: ClassId) -> bool {
+        let cx = self.cx;
+        let extras = self.class_extras(c);
+        if self.anon_super_params(c).is_some() || !extras.homes.is_empty() || !extras.keys.is_empty() {
+            return false;
+        }
+        let mut enclosing: Vec<ClassId> = Vec::new();
+        for s in self.class_captured(c) {
+            match self.enclosing_instance_of(s) {
+                Some(o) => enclosing.push(o),
+                None if !self.holds_as_dotty(s) => return false,
+                None => {}
+            }
+        }
+        let info = cx.input.syms.class(c);
+        if let [o] = enclosing[..] {
+            let mut owners = info.owner;
+            let term_among_owners = loop {
+                match owners {
+                    Owner::Class(k) => owners = cx.input.syms.class(k).owner,
+                    Owner::Local => break true,
+                    Owner::Package(_) => break false,
+                }
+            };
+            if info.owner != Owner::Class(o) || info.kind == ClassKind::Object || info.mods & mods::PRIVATE != 0 || term_among_owners {
+                return false;
+            }
+        } else if !enclosing.is_empty() {
+            return false;
+        }
+        let Some(&idx) = cx.tclass_of.get(c.idx()).filter(|&&i| i != u32::MAX) else { return true };
+        let ctors: Vec<SymId> = cx.input.prog.classes[idx as usize].ctors.iter().map(|&f| cx.input.prog.funs[f.idx()].sym).collect();
+        ctors.into_iter().all(|s| !self.via_own_captures(c, s).contains(&true))
+    }
+
+    /// Whether the descriptor `desc` names a class teq names itself: one whose owners hold a term (a local or an
+    /// anonymous class, or a class inside one), which teq names `L$<token>_<offset>` where dotty's name is another
+    /// (`Main$L$1`), so that the descriptor is not dotty's. Until teq names its local classes as scalac does.
+    fn names_own_class(&self, desc: &str) -> bool {
+        let cx = self.cx;
+        let mut rest = desc;
+        while let Some(start) = rest.find('L') {
+            let Some(end) = rest[start..].find(';') else { return false };
+            let named = cx.class_by_name.get(&rest[start + 1..start + end]).or_else(|| cx.all_by_name.get(&rest[start + 1..start + end]));
+            if let Some(&c) = named {
+                let mut owner = cx.input.syms.class(c).owner;
+                while let Owner::Class(k) = owner {
+                    owner = cx.input.syms.class(k).owner;
+                }
+                if owner == Owner::Local {
+                    return true;
+                }
+            }
+            rest = &rest[start + end + 1..];
+        }
+        false
+    }
+
+    /// Whether teq holds the captured value `s` as dotty does, as its own type: not a var's cell (teq's `ObjectRef`
+    /// where dotty's is an `IntRef` or its kin), a lazy val's holder or a by-name value.
+    pub(super) fn holds_as_dotty(&self, s: SymId) -> bool {
+        self.held(s) == Held::Value && !self.is_lazy_local(s) && !self.cx.input.syms.sym(s).by_name
+    }
+
+    /// dotty's `m$extension` of the value class `c`'s member `s` (`ExtensionMethods`): the underlying value first, as
+    /// teq's descriptor has it; a generic signature where `c` takes type parameters or the member's own may need one.
+    pub(super) fn dotty_extension(&self, c: ClassId, s: SymId) -> Dotty {
+        Dotty::writes(self.class_and_outers_take_no_type_parameters(c) && self.dotty_writes_no_signature(s))
+    }
+
+    /// dotty's setter `x_=` of the var `s` (`x_$eq`, its name the shorter of teq's `emitted` and the source's): one
+    /// parameter, of the var's type, no generic signature where that type needs none.
+    fn dotty_setter(&mut self, s: SymId, emitted: &str) -> Dotty {
+        if self.class_folded() {
+            return Dotty::NotSure;
+        }
+        let source = format!("{}_$eq", encode(self.cx.input.interner.get(self.cx.input.syms.sym(s).name)));
+        let name = (source.len() < emitted.len()).then(|| Rc::from(source.as_str()));
+        Dotty::Writes { counted: None, name, no_generic_signature: self.declared_needs_no_java_sig(s) && self.sym_type_needs_no_java_sig(s) }
+    }
+
+    /// Whether the class being written is a local or anonymous class dotty may drop with a block it folds
+    /// (`Gen::under_folded_block`), which none of its methods is then dotty's.
+    fn class_folded(&mut self) -> bool {
+        let cx = self.cx;
+        match self.this_class {
+            Some(c) if matches!(cx.input.syms.class(c).owner, Owner::Local) => self.under_folded_block(Folded::Class(c)),
+            _ => false,
+        }
+    }
+
+    /// Whether the type the symbol `s` holds needs no generic signature (`need_no_java_sig`).
+    fn sym_type_needs_no_java_sig(&self, s: SymId) -> bool {
+        self.cx.input.syms.sym(s).sig.as_ref().is_some_and(|sig| self.need_no_java_sig(sig.ret))
+    }
+
+    /// Whether dotty writes no generic signature for the method `s` (`getGenericSignature`, BCodeHelpers.scala
+    /// 315-320 and 624-639; `javaSig`, GenericSignatures.scala 37-40 and 405-417), answered only where every arm
+    /// reads so from teq's records: a method with a parameter clause (a parameterless one's `ExprType` needs one),
+    /// no type parameter of its own or of its extension, no by-name or repeated parameter and no `@throws`, whose
+    /// parameters' and result's types each `need_no_java_sig`. Every other method may have one: teq then accepts
+    /// where dotty might refuse, never refuses where dotty compiles.
+    fn dotty_writes_no_signature(&self, s: SymId) -> bool {
+        let cx = self.cx;
+        let info = cx.input.syms.sym(s);
+        let Some(sig) = &info.sig else { return false };
+        if !sig.tparams.is_empty() || info.ext_tparams > 0 || sig.clauses.is_empty() || self.has_throws(s) {
+            return false;
+        }
+        let params = sig.clauses.iter().flat_map(|c| &c.params);
+        params.clone().all(|p| !p.by_name && !p.repeated && self.need_no_java_sig(p.ty) && self.declared_needs_no_java_sig(p.sym))
+            && self.need_no_java_sig(sig.ret)
+            && (sig.declared == NO_TYPE || self.need_no_java_sig(sig.declared))
+    }
+
+    fn declared_needs_no_java_sig(&self, s: SymId) -> bool {
+        let info = self.cx.input.syms.sym(s);
+        !info.by_name && info.sig.as_ref().map_or(true, |sig| sig.declared == NO_TYPE || self.need_no_java_sig(sig.declared))
+    }
+
+    fn has_throws(&self, s: SymId) -> bool {
+        let cx = self.cx;
+        let info = cx.input.syms.sym(s);
+        let Some(def) = info.def else { return false };
+        if info.file.0 as usize >= cx.input.asts.len() {
+            return true;
+        }
+        cx.input.asts[info.file.0 as usize].def(def).annots.iter().any(|a| cx.input.interner.get(a.name) == "throws")
+    }
+
+    /// dotty's `NeedsSigCollector` reading false (GenericSignatures.scala 498-528): no type parameter, no class with
+    /// type parameters (an `Array` too) or inside one, no polymorphic, by-name or refined type, through unions,
+    /// intersections and literal types. A type teq cannot read so reads as needing one.
+    fn need_no_java_sig(&self, t: TypeId) -> bool {
+        let cx = self.cx;
+        match cx.input.types.get(t) {
+            Type::Any | Type::Nothing | Type::Lit(_) => true,
+            Type::Annotated(t) => self.need_no_java_sig(t),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.need_no_java_sig(a) && self.need_no_java_sig(b),
+            Type::Class(c, args) => cx.input.types.items(args).is_empty() && self.class_and_outers_take_no_type_parameters(c),
+            _ => false,
+        }
+    }
+
+    /// `need_no_java_sig` over the erased types of a static forwarder of a trait's member, as dotty's statified
+    /// symbol has them (BackendUtils.scala 678-686): each a primitive, or a class that takes no type parameters. An
+    /// array (`Array` takes one) or a class teq cannot find may need one.
+    fn erased_need_no_java_sig<'t>(&self, mut types: impl Iterator<Item = &'t ErasedType>) -> bool {
+        let cx = self.cx;
+        types.all(|t| match t {
+            ErasedType::L(name) => !name.starts_with('[') && cx.class_named(name).is_some_and(|c| cx.input.syms.class(c).tparams.is_empty()),
+            _ => true,
+        })
+    }
+
+    fn class_and_outers_take_no_type_parameters(&self, c: ClassId) -> bool {
+        let info = self.cx.input.syms.class(c);
+        info.tparams.is_empty() && match info.owner {
+            Owner::Class(o) => self.class_and_outers_take_no_type_parameters(o),
+            Owner::Package(_) | Owner::Local => true,
+        }
+    }
+
     fn emit_fun(&mut self, f: FunId) {
         let cx = self.cx;
         let fun = &cx.input.prog.funs[f.idx()];
@@ -687,13 +1096,15 @@ impl<'a> Gen<'a> {
                 // A final method outside a trait is final in its class file (dotty's `javaFlags`).
                 let fin = info.mods & mods::FINAL != 0 && !self.is_interface;
                 let flags = MethodFlags { is_final: outer_accessor || fin, synthetic: outer_accessor, ..MethodFlags::PUBLIC };
-                self.begin_method(flags, &m.name, &m.desc, false, &params, m.ret.clone(), &[body]);
+                let site = MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_member(fun.sym, &m.name), ..MethodSite::default() };
+                self.begin_method_at(flags, &m.name, &m.desc, false, &params, m.ret.clone(), &[body], site);
                 self.code.line(cx.line_of(info.file, info.span.start));
                 self.method_body(fun.sym, &fun.params, body);
                 self.end_method();
                 self.emit_bridges(fun.sym, &m);
-                if self.is_interface && (info.mods & mods::PRIVATE == 0 || info.scoped_private) {
-                    self.trait_static_forwarder(&m.name, &m.params, &m.ret);
+                if self.is_interface && self.dotty_forwards(fun.sym) {
+                    let site = self.statified_site(&m.params, &m.ret, None, MethodSite::default());
+                    self.trait_static_forwarder_at(&m.name, &m.params, &m.ret, site);
                 }
             }
             // An inline method is not output; its ordinary getters below are.
@@ -701,7 +1112,8 @@ impl<'a> Gen<'a> {
             None => {
                 if self.is_interface || self.abstract_class {
                     if !self.plan.has_method(&m.name, &m.desc) {
-                        self.abstract_method(MethodFlags::ABSTRACT, &m.name, &m.desc);
+                        let site = MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_member(fun.sym, &m.name), ..MethodSite::default() };
+                        self.abstract_method_site(MethodFlags::ABSTRACT, &m.name, &m.desc, site);
                     }
                 }
             }
@@ -712,8 +1124,9 @@ impl<'a> Gen<'a> {
             let shape = self.default_getter_shape(fun.sym, i);
             let (before, ret) = (shape.before, shape.ret.clone());
             let getter = format!("{}$default${}", self.source_method_name(fun.sym), shape.index);
+            let site = MethodSite { at: cx.input.prog.span_of(d), dotty: self.dotty_default_getter(fun.sym, i, before), ..MethodSite::default() };
             if let Some(c) = self.this_class.filter(|&c| cx.vc_on_companion(c)) {
-                self.box_forwarder(c, &getter, &format!("{}$extension", getter), &params[..before], &ret);
+                self.box_forwarder(c, &getter, &format!("{}$extension", getter), &params[..before], &ret, site);
                 continue;
             }
             let desc = method_desc(&m.params[..before], &ret);
@@ -721,14 +1134,15 @@ impl<'a> Gen<'a> {
             // (`Namer.foreachDefaultGetterOf`); a method's own take its access alone
             // (`Desugar.defaultGetters`).
             let fin = !self.is_interface && cx.input.syms.is_forwarder(fun.sym);
-            self.begin_method(MethodFlags { is_final: fin, ..MethodFlags::PUBLIC }, &getter, &desc, false, &params[..before], ret.clone(), &[d]);
+            self.begin_method_at(MethodFlags { is_final: fin, ..MethodFlags::PUBLIC }, &getter, &desc, false, &params[..before], ret.clone(), &[d], site);
             self.body(|g| {
                 let value = g.lower_default_value(d, shape.by_name, &ret);
                 g.lir.ret(value)
             });
             self.end_method();
             if self.is_interface {
-                self.trait_static_forwarder(&getter, &m.params[..before], &ret);
+                let site = if self.dotty_forwards(fun.sym) { self.statified_site(&m.params[..before], &ret, None, MethodSite::default()) } else { MethodSite::default() };
+                self.trait_static_forwarder_at(&getter, &m.params[..before], &ret, site);
             }
         }
     }
@@ -754,16 +1168,33 @@ impl<'a> Gen<'a> {
         if !fun.lifted && !self.plan.has_method(&m.name, &m.desc) {
             self.abstract_method(MethodFlags::ABSTRACT, &m.name, &m.desc);
         }
-        // A default's getter reads the block's values too: the forwarders' implement it.
-        for (i, _) in fun.own_defaults() {
+        let member: Rc<str> = Rc::from(name);
+        let at = Some((info.file, info.span));
+        // dotty's static forwarder of the member, which its platform restriction counts with the trait first.
+        let forwarded = self.dotty_forwards(fun.sym);
+        // A default's getter reads the block's values too: the forwarders' implement it. dotty's getter takes what
+        // its default reads of them.
+        for (i, d) in fun.own_defaults() {
             let shape = self.default_getter_shape(fun.sym, i);
             let getter = format!("{}$default${}", self.source_method_name(fun.sym), shape.index);
             let desc = method_desc(&m.params[..shape.before], &shape.ret);
             if !self.plan.has_method(&getter, &desc) {
-                self.abstract_method(MethodFlags::ABSTRACT, &getter, &desc);
+                let (slots, count) = self.dotty_member_count(&[d], &fun.params[..k], declared, &m.params[..shape.before]);
+                // dotty's static forwarder of the getter, which teq does not write: refused at the trait as dotty's is.
+                if forwarded && slots + 1 > MAX_PARAMETER_SLOTS {
+                    let counted = if slots == count { "" } else { " (Long and Double count as 2)" };
+                    self.refuse_written(&format!("Platform restriction: a parameter list's length cannot exceed {}{}.", MAX_PARAMETER_SLOTS, counted), None);
+                }
+                let dotty = match self.dotty_default_getter(fun.sym, i, shape.before) {
+                    Dotty::Writes { name, no_generic_signature, .. } => Dotty::Writes { counted: Some((slots, count)), name, no_generic_signature: no_generic_signature && parameter_slots(&desc).0 == slots },
+                    Dotty::NotSure => Dotty::NotSure,
+                };
+                let site = MethodSite { at: cx.input.prog.span_of(d), dotty, wider: Wider::LocalTraitMember(member.clone()) };
+                self.abstract_method_site(MethodFlags::ABSTRACT, &getter, &desc, site);
             }
         }
         let Some(body) = fun.body else { return };
+        let (slots, count) = self.dotty_member_count(&[body], &fun.params[..k], declared, &m.params);
         let proxies = self.proxy_syms(&fun.params[..k]);
         let extras = self.extras_of(&fun.params[..k], None);
         let pm = self.proxied_mref(&m, &proxies, &extras);
@@ -771,13 +1202,52 @@ impl<'a> Gen<'a> {
         let extras_slot = 1 + params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
         params.extend(pm.params[proxies.len()..pm.params.len() - m.params.len()].iter().map(|t| (None, t.clone())));
         params.extend(self.class_file_params(fun.sym, declared).iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
-        self.begin_method(MethodFlags::PUBLIC, &pm.name, &pm.desc, false, &params, pm.ret.clone(), &[body]);
+        // One refusal a member: dotty's restriction where it refuses the member or its static forwarder, else teq's
+        // own, given at the member, where teq's wider shape passes the class file's bound.
+        let restricted = slots + usize::from(forwarded) > MAX_PARAMETER_SLOTS;
+        let wider = if restricted { Wider::Answered } else { Wider::LocalTraitMember(member.clone()) };
+        // Its descriptor is dotty's where teq passes it what dotty does, each value held as dotty holds it.
+        let dottys_descriptor = parameter_slots(&pm.desc).0 == slots && extras.homes.is_empty() && extras.keys.is_empty() && proxies.iter().all(|&s| self.holds_as_dotty(s));
+        // dotty reads the member's signature before LambdaLift gives it its free variables, as declared.
+        let dotty = match self.dotty_member(fun.sym, &pm.name) {
+            Dotty::Writes { name, no_generic_signature, .. } => Dotty::Writes { counted: Some((slots, count)), name, no_generic_signature: no_generic_signature && dottys_descriptor },
+            Dotty::NotSure => Dotty::NotSure,
+        };
+        let site = MethodSite { at, dotty, wider };
+        self.begin_method_at(MethodFlags::PUBLIC, &pm.name, &pm.desc, false, &params, pm.ret.clone(), &[body], site);
         self.bind_proxies(&proxies);
         self.bind_extras(&extras, extras_slot);
         self.code.line(cx.line_of(info.file, info.span.start));
         self.method_body(fun.sym, &fun.params, body);
         self.end_method();
-        self.trait_static_forwarder(&pm.name, &pm.params, &pm.ret);
+        // The static forwarder at the trait, where dotty places its error; a private member's is teq's alone. Where teq
+        // passes the member more than dotty does, its forwarder's descriptor is not dotty's to check.
+        let site = if forwarded {
+            let site = MethodSite { wider: Wider::Answered, ..MethodSite::default() };
+            if dottys_descriptor {
+                self.statified_site(&pm.params, &pm.ret, Some((slots + 1, count + 1)), site)
+            } else {
+                MethodSite { dotty: Dotty::Writes { counted: Some((slots + 1, count + 1)), name: None, no_generic_signature: false }, ..site }
+            }
+        } else {
+            MethodSite { wider: Wider::Answered, ..MethodSite::default() }
+        };
+        self.trait_static_forwarder_at(&pm.name, &pm.params, &pm.ret, site);
+    }
+
+    /// The slots and the count of a local trait member's parameters as dotty shapes its method (LambdaLift gives
+    /// a member its own free variables): the values the code `exprs` reads of the trait's captures `captured`, as
+    /// `proxy_syms` expands them, and what they carry (`extras_of`), then the parameters `types` of `declared`.
+    fn dotty_member_count(&mut self, exprs: &[TExprId], captured: &[SymId], declared: &[SymId], types: &[ErasedType]) -> (usize, usize) {
+        let cx = self.cx;
+        let free = self.an.of_exprs(cx, exprs, declared.to_vec());
+        let read: Vec<SymId> = captured.iter().copied().filter(|c| free.syms.contains(c)).collect();
+        let own = self.proxy_syms(&read);
+        let mut all: Vec<ErasedType> = own.iter().map(|&p| self.anon_capture_type(p)).collect();
+        let extras = self.extras_of(&read, None);
+        all.extend(self.extras_types(&extras));
+        all.extend(types.iter().cloned());
+        (all.iter().map(|t| if t.wide() { 2 } else { 1 }).sum(), all.len())
     }
 
     /// scalac's static forwarder `m$(T, args)` of a trait's concrete method `m`, which calls the
@@ -786,12 +1256,30 @@ impl<'a> Gen<'a> {
     /// or final one, an extension, a default getter, a lazy or constant val's getter; a private
     /// one has none.
     pub fn trait_static_forwarder(&mut self, name: &str, params: &[ErasedType], ret: &ErasedType) {
+        self.trait_static_forwarder_at(name, params, ret, MethodSite::default());
+    }
+
+    /// `site` of a static forwarder of a trait's member that dotty writes as teq does, under its name (the member's,
+    /// `$` after it), with its parameters (`counted` where dotty counts them otherwise than teq's descriptor), its
+    /// decision on a generic signature dotty's: its statified symbol has the erased method type, the trait first
+    /// (BackendUtils.scala 678-686).
+    fn statified_site(&mut self, params: &[ErasedType], ret: &ErasedType, counted: Option<(usize, usize)>, site: MethodSite) -> MethodSite {
+        if self.class_folded() {
+            return site;
+        }
+        let this = ErasedType::L(self.this_name.clone());
+        let no_generic_signature = self.erased_need_no_java_sig([&this].into_iter().chain(params).chain([ret]));
+        MethodSite { dotty: Dotty::Writes { counted, name: None, no_generic_signature }, ..site }
+    }
+
+    /// `trait_static_forwarder` of a method whose definition the writer knows (`MethodSite`).
+    pub fn trait_static_forwarder_at(&mut self, name: &str, params: &[ErasedType], ret: &ErasedType, site: MethodSite) {
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
         let mut types = vec![this];
         types.extend(params.iter().cloned());
         let typed: Vec<(Option<SymId>, ErasedType)> = types.iter().map(|t| (None, t.clone())).collect();
-        self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &format!("{}$", name), &method_desc(&types, ret), false, &typed, ret.clone(), &[]);
+        self.begin_method_at(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &format!("{}$", name), &method_desc(&types, ret), false, &typed, ret.clone(), &[], site);
         let default = method_ref(Invoke::Special, &owner, true, name, params, ret);
         self.body(|g| {
             let receiver = g.param(0);
@@ -903,8 +1391,9 @@ impl<'a> Gen<'a> {
         let u = self.vc_underlying(c);
         // The body is the companion's `m$extension` (`extension_bodies`): the box's method
         // calls it on the underlying value.
+        let site = MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_member(fun.sym, &m.name), ..MethodSite::default() };
         if cx.vc_on_companion(c) {
-            self.box_forwarder(c, &m.name, &format!("{}$extension", m.name), params, &m.ret);
+            self.box_forwarder(c, &m.name, &format!("{}$extension", m.name), params, &m.ret, site);
             return;
         }
         let mut ext_params = vec![(None, u.clone())];
@@ -912,13 +1401,14 @@ impl<'a> Gen<'a> {
         let ext_types: Vec<ErasedType> = ext_params.iter().map(|p| p.1.clone()).collect();
         let ext_desc = method_desc(&ext_types, &m.ret);
         let ext_name = format!("{}$extension", m.name);
-        self.begin_method(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &ext_name, &ext_desc, false, &ext_params, m.ret.clone(), &[body]);
+        let ext_site = MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_extension(c, fun.sym), ..MethodSite::default() };
+        self.begin_method_at(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &ext_name, &ext_desc, false, &ext_params, m.ret.clone(), &[body], ext_site);
         self.m.this_slot = Some(0);
         self.m.this_underlying = Some(u.clone());
         self.code.line(cx.line_of(info.file, info.span.start));
         self.method_body(fun.sym, &fun.params, body);
         self.end_method();
-        self.begin_method(MethodFlags::PUBLIC, &m.name, &m.desc, false, params, m.ret.clone(), &[]);
+        self.begin_method_at(MethodFlags::PUBLIC, &m.name, &m.desc, false, params, m.ret.clone(), &[], site);
         self.outside(Unlowered::ValueClassForwarder);
         let this = self.class_type(c);
         self.load(0, &this);
@@ -936,12 +1426,12 @@ impl<'a> Gen<'a> {
 
     /// A method of the box of value class `c`, `name(params)`, calling the companion's
     /// `target(u, params)` on the underlying value.
-    fn box_forwarder(&mut self, c: ClassId, name: &str, target: &str, params: &[(Option<SymId>, ErasedType)], ret: &ErasedType) {
+    fn box_forwarder(&mut self, c: ClassId, name: &str, target: &str, params: &[(Option<SymId>, ErasedType)], ret: &ErasedType, site: MethodSite) {
         let u = self.vc_underlying(c);
         let module: Rc<str> = Rc::from(self.cx.companion_name(c));
         let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|(_, t)| (None, t.clone())).collect();
         let own: Vec<ErasedType> = params.iter().map(|(_, t)| t.clone()).collect();
-        self.begin_method(MethodFlags::PUBLIC, name, &method_desc(&own, ret), false, &typed, ret.clone(), &[]);
+        self.begin_method_at(MethodFlags::PUBLIC, name, &method_desc(&own, ret), false, &typed, ret.clone(), &[], site);
         let mut types = vec![u.clone()];
         types.extend(own.iter().cloned());
         let extension = method_ref(Invoke::Virtual, &module, false, target, &types, ret);
@@ -1564,21 +2054,22 @@ impl<'a> Gen<'a> {
 
     /// The start of a module class's `<clinit>`, as scalac's: the instance is made and stored in
     /// `MODULE$` before anything of the body runs, so the body may name the object, and the
-    /// constructor has run the superclass's alone. The instance stays in a local that stands
+    /// constructor has run the superclass's alone. The instance stays in a temporary that stands
     /// for `this` in the body, which the caller writes next.
     pub fn begin_module_clinit(&mut self, flags: MethodFlags, name: &Rc<str>, roots: &[TExprId]) {
         self.begin_method(flags, "<clinit>", "()V", false, &[], ErasedType::V, roots);
-        self.outside(Unlowered::ModuleClinit);
         // The handles of the module class's lazy members come first (`MoveStatics.rebuild`'s
         // static constructor, which `genPlainClass` puts before the instance's making).
         self.var_handle_lookups();
-        let this = ErasedType::L(name.clone());
-        self.new_object(name);
-        self.invoke(Invoke::Special, name, false, "<init>", &[], &ErasedType::V);
-        self.dup();
-        self.putstatic(name, "MODULE$", &this);
-        let slot = self.store_new(&this);
-        self.m.this_slot = Some(slot);
+        let init = method_ref(Invoke::Special, name, false, "<init>", &[], &ErasedType::V);
+        let (made, temp) = self.lowering(|g| {
+            let instance = g.lir.make(&init, &[]);
+            let stored = g.lir.set_static(name, "MODULE$", instance);
+            let temp = g.lir.temp();
+            (g.lir.keep(temp, stored), temp)
+        });
+        self.write(made);
+        self.m.this_slot = Some(self.m.temps[&temp]);
     }
 
     /// `<clinit>` of an object: the instance, the values of the enum it is the companion of,
@@ -2046,6 +2537,52 @@ impl<'a> Gen<'a> {
         (params, PrimaryCtor { tc, fields, super_name, is_value_case, is_object, is_anon, java_enum, name_param, first_super_arg, route })
     }
 
+    /// Where scalac places the primary constructor of the source class `c`: `atSpan(in.lastOffset)` after the name
+    /// (dotty's Parsers.scala 4363-4368), so at the name's end where the class writes type parameters or a parameter
+    /// clause; else, its span empty, at the start of the template's envelope (Positioned.scala 89-125), the first of
+    /// its written parents and statements; else the definition's start. A self type written before the statements
+    /// is not read here: the parser keeps its place only for a file it parses for pickling.
+    /// Where the class `c`'s definition starts, its modifiers first: the place of the members dotty synthesizes for a
+    /// case class (`copy`, its companion's `apply`), whose symbols take the class's span.
+    pub(super) fn class_definition_start(&self, c: ClassId) -> Option<(crate::source::FileId, crate::source::Span)> {
+        let cx = self.cx;
+        let info = cx.input.syms.class(c);
+        let def = info.def?;
+        if info.file.0 as usize >= cx.input.asts.len() {
+            return None;
+        }
+        let start = cx.input.asts[info.file.0 as usize].def_range(def).start;
+        Some((info.file, crate::source::Span { start, end: start }))
+    }
+
+    fn primary_ctor_place(&self, c: ClassId) -> Option<(crate::source::FileId, crate::source::Span)> {
+        let cx = self.cx;
+        let info = cx.input.syms.class(c);
+        let def = info.def?;
+        if info.file.0 as usize >= cx.input.asts.len() {
+            return None;
+        }
+        let ast = &cx.input.asts[info.file.0 as usize];
+        let crate::ast::DefKind::Class(cd) = &ast.def(def).kind else { return None };
+        let at = |start: u32| Some((info.file, crate::source::Span { start, end: start }));
+        if !cd.tparams.is_empty() || cd.clauses.iter().any(|cl| cl.span != crate::source::Span::default()) {
+            return at(info.span.end);
+        }
+        let parents = cd.parents.iter().map(|p| ast.ty_spans[p.ty.idx()].start);
+        let stmts = cd.body.iter().map(|st| match *st {
+            crate::ast::Stmt::Expr(e) => ast.expr_span(e).start,
+            crate::ast::Stmt::Def(d) => ast.def_range(d).start,
+            crate::ast::Stmt::Import(i) => {
+                let r = ast.import_stmts[i as usize];
+                ast.local_imports.get(r.start as usize).map_or(u32::MAX, |im| im.tree_start)
+            }
+        });
+        match parents.chain(stmts).min() {
+            Some(start) if start != u32::MAX => at(start),
+            _ => at(ast.def_range(def).start),
+        }
+    }
+
     fn constructor(&mut self, params: &[(Option<SymId>, ErasedType)], k: &PrimaryCtor) {
         let cx = self.cx;
         let tc = k.tc;
@@ -2054,7 +2591,9 @@ impl<'a> Gen<'a> {
         // A static module is made by its own `<clinit>` only, as scalac's.
         let private = k.is_object && cx.statically_placed(tc.id) && cx.input.syms.class(tc.id).local_module.is_none();
         let visibility = if private { Visibility::Private } else { Visibility::Public };
-        self.begin_method(MethodFlags { visibility, ..MethodFlags::PUBLIC }, "<init>", &method_desc(&types, &ErasedType::V), true, params, ErasedType::V, &roots);
+        let declared: Vec<SymId> = params.iter().filter_map(|p| p.0).filter(|p| tc.ctor_params.contains(p)).collect();
+        let site = MethodSite { at: self.primary_ctor_place(tc.id), dotty: self.dotty_constructor(tc.id, &declared), ..MethodSite::default() };
+        self.begin_method_at(MethodFlags { visibility, ..MethodFlags::PUBLIC }, "<init>", &method_desc(&types, &ErasedType::V), true, params, ErasedType::V, &roots, site);
         // The constructor reads what the class captures from its parameters, which the
         // arguments of the superclass's constructor need before the fields are set.
         let mut slot = 1u16;
@@ -2394,7 +2933,10 @@ impl<'a> Gen<'a> {
         params.extend(fun.params[declared_from..].iter().map(|&s| (Some(s), self.sym_type(s))));
         self.context = format!("{}.<init>", self.this_name);
         let taken: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
-        self.begin_method(MethodFlags::PUBLIC, "<init>", &method_desc(&taken, &ErasedType::V), true, &params, ErasedType::V, &[body]);
+        let info = cx.input.syms.sym(fun.sym);
+        let declared: Vec<SymId> = fun.params[declared_from..].to_vec();
+        let site = MethodSite { at: Some((info.file, info.span)), dotty: self.this_class.map_or(Dotty::NotSure, |c| self.dotty_constructor(c, &declared)), ..MethodSite::default() };
+        self.begin_method_at(MethodFlags::PUBLIC, "<init>", &method_desc(&taken, &ErasedType::V), true, &params, ErasedType::V, &[body], site);
         if let Some((slots, extras, extras_slot)) = held {
             self.bind_extras(&extras, extras_slot);
             for &(p, cap) in &slots {
@@ -2643,7 +3185,8 @@ impl<'a> Gen<'a> {
                 desc: method_desc(&[f.ty.clone()], &ErasedType::V),
                 kind: Invoke::Virtual,
             };
-            self.begin_method(MethodFlags::PUBLIC, &setter.name, &setter.desc, false, &[(None, f.ty.clone())], ErasedType::V, &[]);
+            let site = MethodSite { dotty: self.dotty_setter(f.sym, &setter.name), ..MethodSite::default() };
+            self.begin_method_at(MethodFlags::PUBLIC, &setter.name, &setter.desc, false, &[(None, f.ty.clone())], ErasedType::V, &[], site);
             self.body(|g| {
                 let given = g.param(0);
                 g.setter_body(&f.name, given)
@@ -3795,7 +4338,7 @@ impl<'a> Gen<'a> {
         for (member, params, ret) in self.vc_synthesized(c) {
             let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|t| (None, t.clone())).collect();
             if on_companion {
-                self.box_forwarder(c, member, &format!("{}$extension", member), &typed, &ret);
+                self.box_forwarder(c, member, &format!("{}$extension", member), &typed, &ret, MethodSite::default());
                 continue;
             }
             self.begin_method(MethodFlags::PUBLIC, member, &method_desc(&params, &ret), false, &typed, ret.clone(), &[]);

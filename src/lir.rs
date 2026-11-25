@@ -264,13 +264,8 @@ pub enum Unlowered {
     /// captures, or a local trait's member call, after an earlier part of the method was left to
     /// the old generator: what it captures is asked in the order the code is written.
     AfterEscape,
-    /// An enum companion's `fromOrdinal` over its stored values.
-    EnumCompanionMembers,
     /// A value class's method forwarding to its `m$extension`, and the copies of extension methods.
     ValueClassForwarder,
-    /// An object's `<clinit>` own code: the handles of its lazy members, its instance made and
-    /// stored in `MODULE$`.
-    ModuleClinit,
 }
 
 #[derive(Clone)]
@@ -353,6 +348,12 @@ pub enum Kind {
     StaticField { owner: Rc<str>, name: Rc<str> },
     /// A class's static field assigned, the value at the field's type. No value.
     StaticFieldStore { owner: Rc<str>, name: Rc<str>, value: LirId },
+    /// A class's static field assigned `value`, at the field's type, as an expression: the node's value is the one
+    /// stored, evaluated once. A writer with an operand stack keeps a copy of it under the store (the JVM's `dup`, or
+    /// `dup2` for a `Long` or a `Double`, then `putstatic`); one that holds values in registers or variables (LLVM's
+    /// SSA values, JavaScript's variables) stores the value it computed and gives that same value on, never a read of
+    /// the field again.
+    StaticFieldSet { owner: Rc<str>, name: Rc<str>, value: LirId },
     /// A call of a method on a receiver: the receiver, then the arguments as they are written,
     /// each at the type its parameter takes. `at` is the class the reference names where that
     /// is the receiver's and not the declaring one's (dotty's `receiverClass`), with whether it
@@ -488,6 +489,13 @@ pub enum Kind {
     /// Nothing follows it: the node's type is the one its place wants. A conditional with no
     /// `otherwise` whose `then` is a `Break` without a value is a jump on the condition.
     Break { label: LabelId, value: Option<LirId> },
+    /// The body of the case one of whose keys is the scrutinee's value, else `default`'s: the scrutinee, an `Int`, is
+    /// evaluated once, then the one body chosen. No key stands in two cases (`Body::switch` makes the node). The
+    /// node's value is the chosen body's, at the node's type; a body that leaves (`Return`, `Throw`, a `Break` out)
+    /// leaves none, and no body falls into the next. A body that is a `Break` without a value is a jump to its
+    /// label. Bodies are written in the order of the cases, then the default. How the choice is spelled is the
+    /// writer's (the JVM's: `tableswitch` or `lookupswitch`, `classfile::switch_layout`).
+    Switch { scrutinee: LirId, cases: Rc<[SwitchCase]>, default: LirId },
     /// A form the target has no translation of: the program is refused here, with the
     /// refusal's message, and nothing is evaluated. No value.
     Refused(Refusal),
@@ -604,7 +612,7 @@ impl Kind {
             Kind::Helper { .. } | Kind::If { .. } | Kind::While { .. } | Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::Synchronized { .. } => false,
             Kind::Try { .. } => false,
             Kind::FieldStore { .. } | Kind::StaticField { .. } | Kind::Call { .. } | Kind::SuperCall { .. } | Kind::New { .. } | Kind::InitCall { .. } | Kind::StaticCall { .. } => false,
-            Kind::StaticFieldStore { .. } => false,
+            Kind::StaticFieldStore { .. } | Kind::StaticFieldSet { .. } => false,
             Kind::ArrayOf { .. } | Kind::ArrayLoad { .. } | Kind::Cast { .. } | Kind::StringOf { .. } | Kind::Concat { .. } => false,
             Kind::ArrayStore { .. } | Kind::ArrayLength(_) | Kind::ArrayClone(_) | Kind::NewArray { .. } => false,
             Kind::Adapt { .. } | Kind::Typed(_) => false,
@@ -613,9 +621,16 @@ impl Kind {
             // The body is queued, and the definition named: neither is written where the node stands.
             Kind::Closure { .. } | Kind::LiftedCall { .. } | Kind::ReturnKey | Kind::LazyKey(_) | Kind::GivenInstance(_) => false,
             Kind::Let { .. } | Kind::SetTemp { .. } | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Temp(_) | Kind::Is { .. } | Kind::Labeled { .. } | Kind::Break { .. } => false,
-            Kind::Refused(_) | Kind::LazyCas { .. } => false,
+            Kind::Refused(_) | Kind::LazyCas { .. } | Kind::Switch { .. } => false,
         }
     }
+}
+
+/// A case of a `Switch`: its keys, one or more, and its body.
+#[derive(Clone)]
+pub struct SwitchCase {
+    pub keys: Rc<[i32]>,
+    pub body: LirId,
 }
 
 /// A `try`'s cases as dotty's TryCatchPatterns leaves them (`Gen::lower_catch`): a handler for each
@@ -719,6 +734,7 @@ impl Body {
                 out.push(*result);
             }
             Kind::Val { init: value, .. } | Kind::Assign { value, .. } | Kind::StaticFieldStore { value, .. } | Kind::Let { init: value, .. } | Kind::SetTemp { value, .. } => out.push(*value),
+            Kind::StaticFieldSet { value, .. } => out.push(*value),
             Kind::Field { receiver: value, .. } | Kind::Neg(value) | Kind::Not(value) | Kind::Throw(value) | Kind::Return(value) => out.push(*value),
             Kind::Underlying { value, .. } | Kind::Typed(value) | Kind::ArrayLength(value) | Kind::ArrayClone(value) | Kind::NewArray { length: value } => out.push(*value),
             Kind::Cast { value, .. } | Kind::StringOf { value } | Kind::Adapt { value, .. } | Kind::Is { value, .. } => out.push(*value),
@@ -758,6 +774,11 @@ impl Body {
                 out.extend(*finalizer);
             }
             Kind::Break { value, .. } => out.extend(*value),
+            Kind::Switch { scrutinee, cases, default } => {
+                out.push(*scrutinee);
+                out.extend(cases.iter().map(|c| c.body));
+                out.push(*default);
+            }
         }
         out
     }
@@ -876,6 +897,18 @@ impl Body {
         self.push(Kind::If { cond, then, otherwise: None }, ErasedType::V)
     }
 
+    /// The `Switch` over `scrutinee` at the type `ty`: the one way a switch is made, which refuses a key that stands
+    /// in two places or a case with none, as dotty's back end does (`emitSWITCH`'s "duplicate keys in SWITCH").
+    pub fn switch(&mut self, scrutinee: LirId, cases: Vec<SwitchCase>, default: LirId, ty: ErasedType) -> LirId {
+        assert!(cases.iter().all(|c| !c.keys.is_empty()), "a switch's case with no key");
+        let mut keys: Vec<i32> = cases.iter().flat_map(|c| c.keys.iter().copied()).collect();
+        let all = keys.len();
+        keys.sort_unstable();
+        keys.dedup();
+        assert!(keys.len() == all, "a key in two places of a switch");
+        self.push(Kind::Switch { scrutinee, cases: cases.into(), default }, ty)
+    }
+
     /// `value` thrown, in a place that wants `ty`.
     pub fn throw(&mut self, value: LirId, ty: ErasedType) -> LirId {
         self.push(Kind::Throw(value), ty)
@@ -898,6 +931,12 @@ impl Body {
 
     pub fn store_static(&mut self, owner: &Rc<str>, name: &str, value: LirId) -> LirId {
         self.push(Kind::StaticFieldStore { owner: owner.clone(), name: Rc::from(name), value }, ErasedType::V)
+    }
+
+    /// `owner.name = value` as an expression whose value is the one stored (`Kind::StaticFieldSet`).
+    pub fn set_static(&mut self, owner: &Rc<str>, name: &str, value: LirId) -> LirId {
+        let ty = self.ty(value).clone();
+        self.push(Kind::StaticFieldSet { owner: owner.clone(), name: Rc::from(name), value }, ty)
     }
 
     pub fn static_field(&mut self, owner: &Rc<str>, name: &str, ty: ErasedType) -> LirId {
@@ -1079,5 +1118,37 @@ impl ClassDef {
 
     pub fn has_method_named(&self, name: &str) -> bool {
         self.methods.iter().any(|m| &*m.name == name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn case(body: &mut Body, keys: &[i32]) -> SwitchCase {
+        SwitchCase { keys: keys.into(), body: body.push(Kind::Unit, ErasedType::V) }
+    }
+
+    /// A switch's keys, one or more a case, stand once: `Body::switch` makes the node of distinct keys and refuses a key in
+    /// two cases, a key twice in one case and a case with no key.
+    #[test]
+    fn a_switch_is_made_of_distinct_keys() {
+        let mut body = Body::default();
+        let scrutinee = body.push(Kind::Int(0), ErasedType::I);
+        let cases = vec![case(&mut body, &[1, 3]), case(&mut body, &[i32::MIN, i32::MAX])];
+        let default = body.push(Kind::Unit, ErasedType::V);
+        let made = body.switch(scrutinee, cases, default, ErasedType::V);
+        assert!(matches!(body.node(made).kind, Kind::Switch { ref cases, .. } if cases.len() == 2));
+        assert_eq!(body.operands(made).len(), 4);
+        for keys in [&[&[1, 2][..], &[2][..]][..], &[&[5, 5][..]][..], &[&[1][..], &[][..]][..]] {
+            let refused = std::panic::catch_unwind(|| {
+                let mut body = Body::default();
+                let scrutinee = body.push(Kind::Int(0), ErasedType::I);
+                let cases = keys.iter().map(|k| case(&mut body, k)).collect();
+                let default = body.push(Kind::Unit, ErasedType::V);
+                body.switch(scrutinee, cases, default, ErasedType::V);
+            });
+            assert!(refused.is_err(), "keys {keys:?} made a switch");
+        }
     }
 }

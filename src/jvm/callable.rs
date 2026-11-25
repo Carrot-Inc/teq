@@ -2,7 +2,7 @@
 //! bytecode, reflection and the `java` launcher. A case class's companion with `apply`,
 //! `unapply` and `fromProduct`, the case class's `copy`.
 
-use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LirId, MethodDef, MethodFlags, MethodRef, Relation, Unlowered, Visibility};
+use crate::lir::{Catch, Caught, ClassFlags, Comparing, ErasedType, ExceptionHandler, FieldFlags, Invoke, Kind, LirId, MethodDef, MethodFlags, MethodRef, Relation, SwitchCase, TempId, Unlowered, Visibility};
 use super::classfile::*;
 use super::gen::*;
 use super::names::*;
@@ -16,6 +16,9 @@ pub const MIRROR_PRODUCT: &str = "scala/deriving/Mirror$Product";
 pub const MIRROR_SUM: &str = "scala/deriving/Mirror$Sum";
 pub const MIRROR_SINGLETON: &str = "scala/deriving/Mirror$Singleton";
 const SERIALIZABLE: &str = "java/io/Serializable";
+/// The cases from which a lookup is a switch, its default not counted: dotty's pattern matcher writes one from four
+/// cases on, the default among them.
+const SWITCH_FROM: usize = 3; // dotty: PatternMatcher.MinSwitchCases
 
 /// What a module class's file lists after `interfaces`, its parents': `java/io/Serializable`,
 /// which dotty's `BCodeSkelBuilder` gives every module class (a written object, an object nested
@@ -520,6 +523,7 @@ impl<'a> Gen<'a> {
     fn mirror(&mut self, name: &str, module: &str, table: &[MethodDef]) -> (String, Vec<u8>) {
         self.reset_class();
         self.begin_class(name, ClassFlags::FINAL, OBJECT, &[], &[], None);
+        self.writing_mirror = true;
         self.this_name = Rc::from(name);
         self.this_class = None;
         self.line_file = crate::source::FileId(u32::MAX);
@@ -532,6 +536,12 @@ impl<'a> Gen<'a> {
     /// calls it on `MODULE$`, unless the class declares a method of that name; the program's
     /// entry point is the `main(String[])` the `java` launcher calls.
     fn static_forwarders(&mut self, module: &str, table: &[MethodDef]) {
+        self.writing_forwarders = true;
+        self.static_forwarders_of(module, table);
+        self.writing_forwarders = false;
+    }
+
+    fn static_forwarders_of(&mut self, module: &str, table: &[MethodDef]) {
         let cx = self.cx;
         let mut table: Vec<(MethodFlags, String, String)> = table.iter().map(|m| (m.flags, m.name.to_string(), m.desc.clone())).collect();
         if let Some(&o) = cx.class_by_name.get(module) {
@@ -1350,7 +1360,8 @@ impl<'a> Gen<'a> {
             params.extend(self.class_file_params(fun.sym, &fun.params).iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
             let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
             if let Some(body) = fun.body {
-                self.begin_method(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", m.name), &method_desc(&types, &m.ret), false, &params, m.ret.clone(), &[body]);
+                let site = super::classes::MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_extension(c, fun.sym), ..Default::default() };
+                self.begin_method_at(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", m.name), &method_desc(&types, &m.ret), false, &params, m.ret.clone(), &[body], site);
                 self.m.this_slot = Some(1);
                 self.m.this_underlying = Some(u.clone());
                 self.code.line(cx.line_of(info.file, info.span.start));
@@ -1474,7 +1485,9 @@ impl<'a> Gen<'a> {
             }
         }
         if !written("apply", &types) && !cx.input.syms.class(c).value_class {
-            self.begin_method(MethodFlags::PUBLIC, "apply", &method_desc(&types, &case_type), false, &params, case_type.clone(), &[]);
+            // dotty's `apply` of a case class's companion: the constructor's parameters, the class's type.
+            let site = super::classes::MethodSite { at: self.class_definition_start(c), dotty: self.dotty_constructor(c, &tc.ctor_params), ..Default::default() };
+            self.begin_method_at(MethodFlags::PUBLIC, "apply", &method_desc(&types, &case_type), false, &params, case_type.clone(), &[], site);
             self.body(|g| {
                 let mut args = Vec::with_capacity(types.len());
                 for i in 0..types.len() {
@@ -1586,11 +1599,7 @@ impl<'a> Gen<'a> {
         let object_type = ErasedType::object();
         let desc = method_desc(&[enum_type.clone()], &ErasedType::I);
         self.begin_method(MethodFlags::PUBLIC, "ordinal", &desc, false, &[(None, enum_type.clone())], ErasedType::I, &[]);
-        let ordinal = if cx.is_java_enum(e) {
-            method_ref(Invoke::Virtual, &enum_name, false, "ordinal", &[], &ErasedType::I)
-        } else {
-            method_ref(Invoke::Interface, &Rc::from(ENUM), true, "ordinal", &[], &ErasedType::I)
-        };
+        let ordinal = method_ref(Invoke::Virtual, &enum_name, false, "ordinal", &[], &ErasedType::I);
         self.body(|g| {
             let value = g.param(0);
             let read = g.lir.call(&ordinal, value, &[]);
@@ -1656,38 +1665,37 @@ impl<'a> Gen<'a> {
         let value_of = method_ref(Invoke::Static, &Rc::from(STRING), false, "valueOf", &[ErasedType::I], &string);
         let no_such: Rc<str> = Rc::from("java/util/NoSuchElementException");
         let no_ordinal: Rc<str> = Rc::from(format!("enum {} has no case with ordinal: ", display));
+        // The lookups of an enum whose values are static fields of its companion, as dotty's: a match on the argument,
+        // a switch from three value cases on (`PatternMatcher`'s `MinSwitchCases`, the default among the four). An
+        // enum of values only reads `fromOrdinal` off `$values`. The others keep the chains below.
+        let placed = !instance && cx.has_enum_fields(e);
         if !written("fromOrdinal") && stored {
             let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
             let module = self.this_name.clone();
             self.begin_method(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), false, &[(None, ErasedType::I)], enum_type.clone(), &[]);
-            self.outside(Unlowered::EnumCompanionMembers);
-            let fail = self.code.new_label();
-            self.getstatic(&module, "$values", &array);
-            let store = self.store_new(&array);
-            self.load(store, &array);
-            self.jump_if(op::IFNULL, 1, fail);
-            self.load(1, &ErasedType::I);
-            self.jump_if(op::IFLT, 1, fail);
-            self.load(1, &ErasedType::I);
-            self.load(store, &array);
-            self.code.op(op::ARRAYLENGTH);
-            self.code.pop();
-            self.code.push(VT::Int);
-            self.jump_if(op::IF_ICMPGE, 2, fail);
-            self.load(store, &array);
-            self.load(1, &ErasedType::I);
-            self.code.op(op::AALOAD);
-            self.code.popn(2);
-            let vt = self.vt(&enum_type);
-            self.code.push(vt);
-            self.return_value(&enum_type);
-            self.code.bind(fail);
-            let failed = self.lowering(|g| {
+            self.body(|g| {
+                let all = g.lir.static_field(&module, "$values", array.clone());
                 let ordinal = g.param(0);
-                let shown = g.lir.static_call(&value_of, &[ordinal]);
-                g.lower_throw_with(&no_such, &no_ordinal, shown)
+                let read = g.lir.push(Kind::ArrayLoad { array: all, index: ordinal }, enum_type.clone());
+                let failed = g.lower_no_ordinal(&no_ordinal, &enum_type);
+                g.lower_try_any(read, failed, &enum_type)
             });
-            self.write(failed);
+            self.end_method();
+        } else if !written("fromOrdinal") && placed && !all_values {
+            self.begin_method(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), false, &[(None, ErasedType::I)], enum_type.clone(), &[]);
+            self.body(|g| {
+                // The switch's default, like each of its cases, leaves no value.
+                if values.len() >= SWITCH_FROM {
+                    let failed = g.lower_no_ordinal(&no_ordinal, &ErasedType::V);
+                    return g.lower_ordinal_switch(&values, failed, &enum_type);
+                }
+                let failed = g.lower_no_ordinal(&no_ordinal, &enum_type);
+                g.lower_lookup_match(&values, failed, &enum_type, |g, ordinal, _, x| {
+                    let at = g.lir.int(ordinal as i32);
+                    let given = g.lir.kept(x, ErasedType::I);
+                    g.lir.compare(Relation::Eq, Comparing::Numbers, at, given)
+                })
+            });
             self.end_method();
         } else if !written("fromOrdinal") {
             self.begin_method(MethodFlags::PUBLIC, "fromOrdinal", &method_desc(&[ErasedType::I], &enum_type), false, &[(None, ErasedType::I)], enum_type.clone(), &[]);
@@ -1744,7 +1752,24 @@ impl<'a> Gen<'a> {
             });
             self.end_method();
         }
-        if !written("valueOf") {
+        if !written("valueOf") && placed {
+            let no_name: Rc<str> = Rc::from(format!("enum {} has no case with name: ", display));
+            self.begin_method(MethodFlags::PUBLIC, "valueOf", &method_desc(&[string.clone()], &enum_type), false, &[(None, string.clone())], enum_type.clone(), &[]);
+            let equals = method_ref(Invoke::Virtual, &Rc::from(OBJECT), false, "equals", &[ErasedType::object()], &ErasedType::Z);
+            self.body(|g| {
+                let name = g.param(0);
+                let failed = g.lower_lookup_failure("java/lang/IllegalArgumentException", &no_name, name, &enum_type);
+                if values.len() >= SWITCH_FROM {
+                    return g.lower_name_switch(&values, failed, &enum_type, &equals);
+                }
+                g.lower_lookup_match(&values, failed, &enum_type, |g, _, case, x| {
+                    let text = g.lir.text(&Rc::from(case), string.clone());
+                    let given = g.lir.kept(x, string.clone());
+                    g.lir.call(&equals, text, &[given])
+                })
+            });
+            self.end_method();
+        } else if !written("valueOf") {
             let no_name: Rc<str> = Rc::from(format!("enum {} has no case with name: ", display));
             let illegal: Rc<str> = Rc::from("java/lang/IllegalArgumentException");
             self.begin_method(MethodFlags::PUBLIC, "valueOf", &method_desc(&[string.clone()], &enum_type), false, &[(None, string.clone())], enum_type.clone(), &[]);
@@ -1784,6 +1809,128 @@ impl<'a> Gen<'a> {
         let made = self.lir.make(&ctor, &[message]);
         let thrown = self.lir.throw(made, ErasedType::V);
         self.lir.seq(&[kept], thrown)
+    }
+
+    /// `throw new NoSuchElementException(prefix + ordinal.toString)`, `ordinal.toString` as dotty's erasure leaves
+    /// it (`BoxesRunTime.boxToInteger(ordinal).toString()`).
+    fn lower_no_ordinal(&mut self, prefix: &Rc<str>, want: &ErasedType) -> LirId {
+        let integer: Rc<str> = Rc::from("java/lang/Integer");
+        let boxed = method_ref(Invoke::Static, &Rc::from("scala/runtime/BoxesRunTime"), false, "boxToInteger", &[ErasedType::I], &ErasedType::L(integer.clone()));
+        let shown = method_ref(Invoke::Virtual, &integer, false, "toString", &[], &ErasedType::L(Rc::from(STRING)));
+        let ordinal = self.param(0);
+        let ordinal = self.lir.static_call(&boxed, &[ordinal]);
+        let ordinal = self.lir.call(&shown, ordinal, &[]);
+        self.lower_lookup_failure("java/util/NoSuchElementException", prefix, ordinal, want)
+    }
+
+    /// A companion's lookup failing: `throw new class(prefix + shown)`, its message one concatenation.
+    fn lower_lookup_failure(&mut self, class: &str, prefix: &Rc<str>, shown: LirId, want: &ErasedType) -> LirId {
+        let string = ErasedType::L(Rc::from(STRING));
+        let ctor = method_ref(Invoke::Special, &Rc::from(class), false, "<init>", std::slice::from_ref(&string), &ErasedType::V);
+        let text = self.lir.text(prefix, string.clone());
+        let parts = self.lir.list(&[text, shown]);
+        let message = self.lir.push(Kind::Concat { parts }, string);
+        let made = self.lir.make(&ctor, &[message]);
+        self.lir.throw(made, want.clone())
+    }
+
+    /// dotty's `try body catch { case _ => failed }`, returned: one handler of `Throwable` that drops the exception.
+    fn lower_try_any(&mut self, body: LirId, failed: LirId, want: &ErasedType) -> LirId {
+        let done = self.lir.label();
+        let handler = self.lower_handler_value(failed, Vec::new(), done, want);
+        let handlers = Rc::from([ExceptionHandler { class: Rc::from(THROWABLE), caught: Caught::Dropped, body: handler }]);
+        let protected = self.push_protected(Kind::Try { body, catch: Some(Catch { done, handlers }), finalizer: None, returns: false }, want.clone());
+        self.lir.ret(protected)
+    }
+
+    /// A lookup of a static enum's values as dotty's match on the method's argument: the argument in a temporary,
+    /// then for each value case its test (`test` of its ordinal and name over the temporary) and its value, read
+    /// through the companion's `this` and returned; `failed` where no case matches.
+    fn lower_lookup_match(&mut self, values: &[(SymId, u32, String)], failed: LirId, want: &ErasedType, test: impl Fn(&mut Self, u32, &str, TempId) -> LirId) -> LirId {
+        if values.is_empty() {
+            return failed;
+        }
+        let x = self.lir.temp();
+        let given = self.param(0);
+        let mut stmts = vec![self.lir.keep(x, given)];
+        for (v, ordinal, name) in values {
+            let cond = test(self, *ordinal, name, x);
+            let answer = self.lower_lookup_answer(*v, want);
+            stmts.push(self.lir.when(cond, answer));
+        }
+        self.lir.seq(&stmts, failed)
+    }
+
+    /// The value case `v`'s value returned by a lookup: its prefix, the companion, evaluated and dropped before its
+    /// static field is read.
+    fn lower_lookup_answer(&mut self, v: SymId, want: &ErasedType) -> LirId {
+        let this = ErasedType::L(self.this_name.clone());
+        let qualifier = self.lir.this(this.clone());
+        let qualifier = self.lower_adapt(qualifier, &this, &ErasedType::V);
+        let value = self.lower_enum_value_read(v, false);
+        let t = self.lir.ty(value).clone();
+        let value = self.lower_adapt(value, &t, want);
+        let value = self.lir.seq(&[qualifier], value);
+        self.lir.ret(value)
+    }
+
+    /// dotty's match on the ordinal as a switch: the ordinal in a temporary, then one case a value case, its ordinal
+    /// the key (distinct: each case's position among the enum's cases), returning its value; `failed` the default.
+    fn lower_ordinal_switch(&mut self, values: &[(SymId, u32, String)], failed: LirId, want: &ErasedType) -> LirId {
+        let x = self.lir.temp();
+        let given = self.param(0);
+        let kept = self.lir.keep(x, given);
+        let mut cases = Vec::with_capacity(values.len());
+        for (v, ordinal, _) in values {
+            let body = self.lower_lookup_answer(*v, want);
+            cases.push(SwitchCase { keys: Rc::from([*ordinal as i32]), body });
+        }
+        let scrutinee = self.lir.kept(x, ErasedType::I);
+        let switch = self.lir.switch(scrutinee, cases, failed, ErasedType::V);
+        self.lir.seq(&[kept], switch)
+    }
+
+    /// dotty's match on a name as its back end writes a match on a `String` (BCodeBodyBuilder.scala 1018-1093 at
+    /// 3.8.4): the name in a temporary; a switch on its `hashCode`, 0 for null; for each hash in increasing order (one
+    /// key a case: distinct) the test of each of its names, the latest first, `equals` on the name's literal, each
+    /// returning its value, then the jump to the default; the default `failed`, after the switch.
+    fn lower_name_switch(&mut self, values: &[(SymId, u32, String)], failed: LirId, want: &ErasedType, equals: &Rc<MethodRef>) -> LirId {
+        let string = ErasedType::L(Rc::from(STRING));
+        let hash_code = method_ref(Invoke::Virtual, &Rc::from(STRING), false, "hashCode", &[], &ErasedType::I);
+        let x = self.lir.temp();
+        let given = self.param(0);
+        let kept = self.lir.keep(x, given);
+        // `String.hashCode` of the name, as the JVM computes it over its UTF-16 code units.
+        let mut by_hash: std::collections::BTreeMap<i32, Vec<(SymId, &str)>> = std::collections::BTreeMap::new();
+        for (v, _, name) in values {
+            let hash = name.encode_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32));
+            by_hash.entry(hash).or_default().insert(0, (*v, name.as_str()));
+        }
+        let default = self.lir.label();
+        let mut cases = Vec::with_capacity(by_hash.len());
+        for (hash, names) in by_hash {
+            let mut tests = Vec::with_capacity(names.len());
+            for (v, name) in names {
+                let text = self.lir.text(&Rc::from(name), string.clone());
+                let named = self.lir.kept(x, string.clone());
+                let cond = self.lir.call(equals, text, &[named]);
+                let answer = self.lower_lookup_answer(v, want);
+                tests.push(self.lir.when(cond, answer));
+            }
+            let missed = self.lir.push(Kind::Break { label: default, value: None }, ErasedType::V);
+            cases.push(SwitchCase { keys: Rc::from([hash]), body: self.lir.seq(&tests, missed) });
+        }
+        let tested = self.lir.kept(x, string.clone());
+        let null = self.lir.push(Kind::Null, string.clone());
+        let is_null = self.lir.compare(Relation::Eq, Comparing::Identity, tested, null);
+        let zero = self.lir.int(0);
+        let named = self.lir.kept(x, string.clone());
+        let hashed = self.lir.call(&hash_code, named, &[]);
+        let scrutinee = self.lir.push(Kind::If { cond: is_null, then: zero, otherwise: Some(hashed) }, ErasedType::I);
+        let missed = self.lir.push(Kind::Break { label: default, value: None }, ErasedType::V);
+        let switch = self.lir.switch(scrutinee, cases, missed, ErasedType::V);
+        let matched = self.lir.labeled(default, switch);
+        self.lir.seq(&[kept, matched], failed)
     }
 
     pub(super) fn desc_of(&self, t: &ErasedType) -> String {
@@ -1833,7 +1980,10 @@ impl<'a> Gen<'a> {
                 self.end_method();
             }
         } else if !self.plan.methods.iter().any(|m| &*m.name == "copy" && m.desc.starts_with(prefix)) {
-            self.begin_method(MethodFlags::PUBLIC, "copy", &method_desc(&types, &this), false, &params, this.clone(), &[]);
+            // dotty's `copy` (Desugar.scala's case class members): the constructor's parameters, the class's own type.
+            let declared: Vec<SymId> = params.iter().filter_map(|p| p.0).collect();
+            let site = super::classes::MethodSite { at: self.class_definition_start(c), dotty: self.dotty_constructor(c, &declared), ..Default::default() };
+            self.begin_method_at(MethodFlags::PUBLIC, "copy", &method_desc(&types, &this), false, &params, this.clone(), &[], site);
             let init = method_ref(Invoke::Special, &owner, false, "<init>", &init_types, &ErasedType::V);
             self.body(|g| {
                 let mut args = Vec::with_capacity(init_types.len());

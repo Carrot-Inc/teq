@@ -549,6 +549,12 @@ pub struct MethodCx {
     pub unlowered: Vec<Unlowered>,
     /// Why instructions of the method are written with no node (`Gen::outside`).
     pub outside: Vec<Unlowered>,
+    /// Where the method is defined, where the class writer knows it: the place of the refusals of its code
+    /// (`Gen::end_method`), given with its context (`Gen::method_cx`).
+    pub at: Option<(crate::source::FileId, crate::source::Span)>,
+    /// The method where it is not the plan's: one of a name and signature the class holds already, whose code is
+    /// dropped (`Gen::open_method`, `Gen::end_method`).
+    pub repeated: Option<crate::lir::MethodDef>,
 }
 
 /// The state of a `try` that `Gen::open_try` began, for `Gen::close_try`.
@@ -618,6 +624,8 @@ impl Default for MethodCx {
             try_exits: FxMap::default(),
             unlowered: Vec::new(),
             outside: Vec::new(),
+            at: None,
+            repeated: None,
         }
     }
 }
@@ -674,9 +682,6 @@ pub struct Gen<'a> {
     pub cw: ClassWriter,
     /// The class being written as its definitions (`plan.rs`).
     pub plan: crate::lir::ClassDef,
-    /// The method being written where it is not the plan's last: one of a name and signature
-    /// the class holds already, whose code is dropped (`begin_method`, `end_method`).
-    pub repeated: Option<crate::lir::MethodDef>,
     /// The interfaces the class being written names in an `invokespecial`, each with the place
     /// of its first call (`super_call_place`): the JVM wants each among the class's direct
     /// superinterfaces, so the class's list takes them (dotty's `superCallTargets`). It is the
@@ -772,6 +777,24 @@ pub struct Gen<'a> {
     /// (`Code::relax`).
     pub relax: bool,
     pub overflow: bool,
+    /// A class of the unit being written passed the constant pool's bound (`Gen::class_too_large`):
+    /// wide jumps would not shrink it.
+    pub pool_too_large: bool,
+    /// The class being written is a module's mirror (`Gen::mirror`), whose names scalac checks as
+    /// a mirror's.
+    pub writing_mirror: bool,
+    /// The class being written has a name or a method's signature past a text constant's bytes,
+    /// refused where dotty refuses it (`Gen::name_too_long`).
+    pub long_name_refused: bool,
+    /// The name and descriptor of each method of the class that passed `Gen::check_method`, the one gate of a
+    /// method of the class file: `Gen::finish_writer` writes no class that holds another.
+    pub checked_methods: FxMap<(Rc<str>, String), ()>,
+    /// The static forwarders of a module's methods are being written (`Gen::static_forwarders`), which
+    /// dotty adds to a class file apart from the methods it checks.
+    pub writing_forwarders: bool,
+    /// The first method of each class of the unit whose code passed what a jump of the pass reaches
+    /// (`Code::finish`): its class, its name, its descriptor and its definition where the writer knows it.
+    pub too_large_methods: Vec<(Rc<str>, String, String, Option<(crate::source::FileId, crate::source::Span)>)>,
     /// The statistics lines of the methods written (`TEQ_LIR_STATS`, `Gen::end_method`), printed
     /// once a unit is kept: a unit written again to widen its jumps prints its methods once.
     pub gaps_lines: Vec<String>,
@@ -816,7 +839,6 @@ impl<'a> Gen<'a> {
             trait_fields: FxMap::default(),
             cw: ClassWriter::new(0, "x", OBJECT, &[]),
             plan: Default::default(),
-            repeated: None,
             super_targets: Vec::new(),
             super_call_at: None,
             lifted_body: None,
@@ -861,6 +883,12 @@ impl<'a> Gen<'a> {
             forward_from: None,
             relax: false,
             overflow: false,
+            pool_too_large: false,
+            writing_mirror: false,
+            long_name_refused: false,
+            checked_methods: FxMap::default(),
+            writing_forwarders: false,
+            too_large_methods: Vec::new(),
             gaps_lines: Vec::new(),
             vc_object: Rc::from(OBJECT),
             vc_marks: FxMap::default(),
@@ -887,9 +915,12 @@ impl<'a> Gen<'a> {
     /// not reach widened (`Code::widen`).
     pub fn emit_unit(&mut self, unit: Unit) -> (String, Vec<u8>) {
         self.relax = false;
+        self.pool_too_large = false;
+        self.too_large_methods.clear();
         let (errors, refused, gaps) = (self.errors.len(), self.refused.len(), self.gaps_lines.len());
         let out = self.emit_unit_once(unit);
-        if !self.overflow {
+        if !self.overflow || self.pool_too_large {
+            self.overflow = false;
             self.print_gaps();
             return out;
         }
@@ -898,9 +929,16 @@ impl<'a> Gen<'a> {
         self.gaps_lines.truncate(gaps);
         self.relax = true;
         self.overflow = false;
+        self.too_large_methods.clear();
         let out = self.emit_unit_once(unit);
-        if self.overflow {
-            self.unsupported("a method whose code exceeds what the JVM allows");
+        // With wide jumps a method still past the bound has more than 65,535 bytes of code: scalac's error
+        // (dotty's PostProcessor.sendToDisk reporting ASM's MethodTooLargeException), at the method.
+        for (class, name, desc, at) in std::mem::take(&mut self.too_large_methods) {
+            let message = format!("Error while emitting {}\nMethod too large: {}.{} {}", class, class, name, desc);
+            match at.or_else(|| self.class_place(&class)) {
+                Some((file, span)) => self.refused.push((file, span, message)),
+                None => self.unsupported(&message),
+            }
         }
         self.relax = false;
         self.overflow = false;
