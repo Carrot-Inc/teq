@@ -70,3 +70,10 @@ incremental = true
 inherits = "release"
 debug-assertions = true
 debug = "line-tables-only"
+
+# The same assertions over the fast profile, the build tests/jvm-assertions.sh takes at every gate: a stack's change
+# rebuilds in about a minute where the checks profile's thin LTO, or opt-level 1, takes three to six.
+[profile.fast-checks]
+inherits = "fast"
+debug-assertions = true
+debug = "line-tables-only"

@@ -11,8 +11,8 @@ suite that names its failures alone, a generated set) is said as not checked her
 pinned scala3 checkout where it is present (tests/board/dotty.py's corpus), else said as not checked.
 
 The last line names every list with a stale entry, or none; the exit status is 1 when one has, 0 when none, 2 for a
-command it cannot read. --self-test runs the checker over planted trees (a stale name in a list, in a board list;
-interop's checks, which are no files, not stale).
+command it cannot read. --self-test runs the checker over planted trees (a stale name in a list, in a board list, in the
+assertions row's list; interop's checks, which are no files, not stale).
 """
 import os
 import re
@@ -51,6 +51,9 @@ def inventories(root):
     inv = {}
     for s in ("cases", "interp", "jvm"):
         inv[s] = (cases, {"cases": "tests/run.sh --update", "interp": "tests/run_interp.sh --update", "jvm": "tests/run_jvm.sh --update"}[s])
+    # the assertions row builds every case; its list is under --fails-only, where a name no run judges is kept, so the
+    # list's line goes by hand and the board's row with the next --pending-update
+    inv["jvm-assertions"] = (cases, "by hand from tests/pending/jvm-assertions.txt, then tests/jvm-assertions.sh --pending-update")
     inv["pending-cases"] = (entries(os.path.join(root, "tests", "pending-cases")), "tests/run.sh --dir=tests/pending-cases --update")
 
     def stdlib_runs(n):
@@ -218,6 +221,7 @@ def self_test():
         open(os.path.join(d, "tests/board/suites/interop.tsv"), "w").write("# test\tverdict\none\tpass\t-\t\nimports with the default output path\tpass\t-\t\n"
                                                                             "first line of imports\tpass\t-\t\n")
         open(os.path.join(d, "tests/pending/tasty.txt"), "w").write("some check\tnote\n")
+        open(os.path.join(d, "tests/pending/jvm-assertions.txt"), "w").write("dir_case\tabstractness-changed\ngone_panic\tabstractness-changed\n")
         out, stale = check(d)
         text = "\n".join(out)
         if not stale:
@@ -226,11 +230,14 @@ def self_test():
             failures.append(f"the pending list's stale name: {text}")
         if "stale: tests/board/suites/interp.tsv: 1 of no test of interp's: also_gone (take them out: tests/run_interp.sh --update)" not in out:
             failures.append(f"the board list's stale row: {text}")
+        if ("stale: tests/pending/jvm-assertions.txt: 1 of no test of jvm-assertions's: gone_panic (take them out: by hand from "
+                "tests/pending/jvm-assertions.txt, then tests/jvm-assertions.sh --pending-update)") not in out:
+            failures.append(f"the assertions row's stale name: {text}")
         if "interop" in " ".join(l for l in out if l.startswith("stale:")):
             failures.append(f"interop's check, which is no file, read as stale: {text}")
         if "not checked here: tasty: a suite that names its failures alone (its run fails a listed check no line names)" not in out:
             failures.append(f"a list named at run time alone: {text}")
-        if out[-1] != "stale entries: tests/pending/cases.txt tests/board/suites/interp.tsv":
+        if out[-1] != "stale entries: tests/pending/cases.txt tests/board/suites/interp.tsv tests/pending/jvm-assertions.txt":
             failures.append(f"the last line: {out[-1]}")
     for f in failures:
         print("FAIL stale_entries self-test: " + f)

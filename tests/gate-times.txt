@@ -102,6 +102,10 @@ jvm@16 94
 jvm-21 147
 # estimated: jvm-21 on sixteen CPUs, from its 86 s on eight by its family jvm's ratio 1.02 (1 lines)
 jvm-21@16 88
+# estimated: jvm-assertions, before a gate measured it: its two passes on sixteen CPUs at eight jobs (223 s by the
+# assertions binary, 40 s by the release, 25 Nov), and on eight CPUs the more for its build's minute beside them
+jvm-assertions 330
+jvm-assertions@16 270
 java-sources 13
 # measured: java-sources on sixteen CPUs, in the gates of 25 Nov that preceded these rows
 java-sources@16 10

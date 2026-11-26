@@ -80,7 +80,10 @@
 #            stand-in of six units, its four pieces dealt as lines of their own under the suite's merged row, their
 #            times recorded and the suite's left, then read again by the dealer and the comparison's planner beside a
 #            planted failure, a killed piece, one past the suite's bound and a skip for want of a jar, each failing
-#            the suite, nothing recorded.
+#            the suite, nothing recorded; and a shard whose list holds jvm-assertions builds the assertion-enabled
+#            binary beside its suites (the cargo stand-in honours --profile and CARGO_TARGET_DIR) and hands it to the
+#            suite as TEQ_CHECKS with its build's log and seconds, cold on a fresh mirror and warm on one holding the
+#            binary, a failed build failing the row with the suite not run.
 #   outcomes the board counts no check that did not run (docs/DEVELOPING.md): tests/support/pending.py over a copy of
 #            its lists, a skipped listed check kept on the list, no pass and `cannot run`; one outcome a test (a
 #            failure, then not run, then a pass), a `known` one a failure on the board held by its own list; another
@@ -146,7 +149,7 @@ cd "$(dirname "$0")/.." || exit 1
 # The units, in the order this script runs them: a group of cells, or one run of the gate's driver that its cells read.
 # A piece of them (--piece <k>/<n>; --pieces <n> lists them) runs its units alone, each building the trees it reads
 # (need_stand, need_driver); the gate deals the pieces as lines of their own (tests/gate.sh's `pieced`).
-suite_units() { printf '%s\n' early pieces-lists pieces-stamps pieces-merge records setup pieces-mutants driver-ship driver-unheld driver-record driver-wait driver-cpus driver-steps driver-kind driver-off driver-guest-compare driver-holders driver-held-later driver-unnamed driver-without driver-two-holders driver-record-step driver-compare driver-pieces board board-cap outcomes tools tail; }
+suite_units() { printf '%s\n' early pieces-lists pieces-stamps pieces-merge records setup pieces-mutants driver-ship driver-unheld driver-record driver-wait driver-cpus driver-steps driver-checks driver-kind driver-off driver-guest-compare driver-holders driver-held-later driver-unnamed driver-without driver-two-holders driver-record-step driver-compare driver-pieces board board-cap outcomes tools tail; }
 ! pieces_option gate-scripts "$1" "$2" || shift 2
 pieces_refuse gate-scripts "$@"
 [ $# = 0 ] || { echo "tests/gate-scripts.sh: no argument $1" >&2; pieces_usage; }
@@ -997,9 +1000,11 @@ agent=$work/agent
 mkdir -p "$agent/bin" "$agent/scala3/tests"
 printf '%s\n' '#!/bin/bash' 'case $1 in' \
   '  -V) echo "cargo 1.0.0 (stand-in)" ;;' \
-  '  build) dir=target; prev=; for a in "$@"; do [ "$prev" != --target-dir ] || dir=$a; prev=$a; done' \
-  '    mkdir -p "$dir/release" && printf "#!/bin/bash\\n[ \"\$1\" != --version ] || { echo \"teq 0.1.8 %s\"; exit 0; }\\nexec \"%s\" \"\$@\"\\n" "$TEQ_REVISION" "$GATE_AGENT_TEQ" > "$dir/release/teq" && chmod +x "$dir/release/teq"' \
-  '    echo "    Finished \`release\` profile [optimized] target(s) in 0.01s (stand-in)" ;;' \
+  '  build) dir=${CARGO_TARGET_DIR:-target}; profile=release; prev=; for a in "$@"; do [ "$prev" != --target-dir ] || dir=$a; [ "$prev" != --profile ] || profile=$a; prev=$a; done' \
+  '    case $profile in *checks) [ ! -e checks-fail ] || { echo "error: a planted failure of the assertion-enabled build" >&2; exit 101; } ;; esac' \
+  '    kind=; case $profile in *checks) kind=" assertions"; [ -e "$dir/$profile/teq" ] || echo "   Compiling a-dependency v0.0.0 (stand-in)"; echo "   Compiling teq v0.1.8 (stand-in)" ;; esac' \
+  '    mkdir -p "$dir/$profile" && printf "#!/bin/bash\\n[ \"\$1\" != --version ] || { echo \"teq 0.1.8 %s%s\"; exit 0; }\\nexec \"%s\" \"\$@\"\\n" "$TEQ_REVISION" "$kind" "$GATE_AGENT_TEQ" > "$dir/$profile/teq" && chmod +x "$dir/$profile/teq"' \
+  '    echo "    Finished \`$profile\` profile [optimized] target(s) in 0.01s (stand-in)" ;;' \
   '  *) echo "cargo stand-in: no $1" >&2; exit 1 ;;' 'esac' > "$agent/bin/cargo"
 printf '%s\n' '#!/bin/bash' 'printf "rustc 1.0.0 (stand-in)\nbinary: rustc\ncommit-hash: 0\nhost: x86_64-unknown-linux-gnu\nrelease: 1.0.0\nLLVM version: 0\n"' > "$agent/bin/rustc"
 chmod +x "$agent/bin/cargo" "$agent/bin/rustc"
@@ -1213,6 +1218,60 @@ check "driver: a shard's zig step is a line the gate declares, a step it does no
   [ $code3 = 1 ] && [ "$(grep -c -E "^warmup +m[12] .* FAIL +not a line of the gate.s" "$work/driver-step.log")" = 2 ] &&
   [ $code4 = 0 ] && [ "$(row zig "m[12]" "$log" | grep -c " ok .*zig 0.0.0-stand-in at ")" = 1 ] && row idna "m[12]" "$log" | grep -q " ok .*idna: 1 passed" &&
   ! grep -q "not a line of the gate.s" "$log"'
+fi
+if piece_has driver-checks; then
+piece_ran driver-checks
+need_driver
+# The assertion-enabled build a shard starts beside its other suites when its list holds jvm-assertions
+# (tests/gate-shard.sh, by the script's own --build): over a stand-in of the suite's row that says what it was handed,
+# the row passes with TEQ_CHECKS the shard's target/gate-checks/<the script's CHECKS_PROFILE>/teq, an assertions
+# binary, with the build's cargo log and seconds: cold (the stand-in cargo compiles a dependency where the directory
+# holds no binary of a profile named *checks) on a fresh mirror, warm (teq alone) on one whose tree holds the binary;
+# a build that fails fails the row with its own line, the suite not run. And the directory is kept between gates as
+# target/gate-test is: a machine's mirror takes the tree's files by tests/gate-agent/sync.sh, which names git's files
+# alone (target/ is ignored) and deletes nothing. The row dealt by planted times to the shard that is not the
+# builder's passes the same; a shard whose environment sets the row's selector, JVM_ASSERTIONS_CASES, fails the row.
+# Each gate holds the row and at most fold (a second of work), so that the five stay well within gate()'s bound on a
+# loaded host.
+checks_profile=$(sed -n 's/^CHECKS_PROFILE=//p' tests/jvm-assertions.sh)
+base=$(git -C "$landing" rev-parse HEAD)
+git -C "$landing" mv tests/jvm-assertions.sh tests/jvm-assertions-real.sh
+printf '%s\n' '#!/bin/bash' '[ "$1" != --build ] || exec bash "$(dirname "$0")/jvm-assertions-real.sh" "$@"' \
+  'echo "handed ${TEQ_CHECKS#$PWD/} ($("$TEQ_CHECKS" --version)), $(grep -c "^ *Compiling " "$TEQ_CHECKS_BUILD_LOG") crates, built $(grep -o "in [0-9]* s$" "$TEQ_CHECKS_BUILD_LOG") (a stand-in)"' > "$landing/tests/jvm-assertions.sh"
+chmod +x "$landing/tests/jvm-assertions.sh"
+git -C "$landing" add tests/jvm-assertions.sh
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "a stand-in of jvm-assertions"
+gate "$work/driver-checks.log" "m1 free" --only jvm-assertions
+code=$?
+mkdir -p "$landing/target/gate-checks/$checks_profile"
+echo kept > "$landing/target/gate-checks/$checks_profile/teq"
+git -C "$landing" add -f target/gate-checks/$checks_profile/teq
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "a kept assertion-enabled binary"
+gate "$work/driver-checks-warm.log" "m1 free" --only jvm-assertions
+code3=$?
+# the row dealt to a shard that is not the builder's (planted times: fold the longer, the builder's), and a shard
+# whose environment sets the row's selector
+printf '%s\n' "fold 1000" "jvm-assertions 10" "head-wait 40" > "$landing/tests/gate-times.txt"
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "the row's deal planted"
+gate "$work/driver-checks-dealt.log" "$(printf 'm1 free\nm2 free')" --only fold,jvm-assertions
+code4=$?
+GATE_ENV_m1="export JVM_ASSERTIONS_CASES=one" gate "$work/driver-checks-selected.log" "m1 free" --only jvm-assertions
+code5=$?
+: > "$landing/checks-fail"
+git -C "$landing" add checks-fail
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "a failing assertion-enabled build"
+gate "$work/driver-checks-fail.log" "m1 free" --only jvm-assertions
+code2=$?
+git -C "$landing" reset -q --hard "$base"
+check "driver: a shard whose list holds jvm-assertions builds the assertion-enabled binary beside its suites and hands it to the suite, a failed build failing the row unrun" "$work/driver-checks.log" eval '[ $code = 0 ] &&
+  row jvm-assertions "m[12]" "$work/driver-checks.log" | grep -q " ok .*handed target/gate-checks/$checks_profile/teq (teq 0.1.8 [0-9a-f]* assertions), 2 crates, built in [0-9][0-9]* s (a stand-in)" &&
+  [ $code3 = 0 ] && row jvm-assertions "m[12]" "$work/driver-checks-warm.log" | grep -q " ok .*handed target/gate-checks/$checks_profile/teq (teq 0.1.8 [0-9a-f]* assertions), 1 crates, built in [0-9][0-9]* s (a stand-in)" &&
+  [ $code4 = 0 ] && row jvm-assertions m2 "$work/driver-checks-dealt.log" | grep -q " ok .*handed target/gate-checks/$checks_profile/teq (teq 0.1.8 [0-9a-f]* assertions), 1 crates, built in [0-9][0-9]* s (a stand-in)" &&
+  row fold m1 "$work/driver-checks-dealt.log" | grep -q " ok " && row build m2 "$work/driver-checks-dealt.log" | grep -q " ok .*the head.s binary from m1" &&
+  [ $code5 = 1 ] && row jvm-assertions m1 "$work/driver-checks-selected.log" | grep -q " FAIL .*FAIL jvm-assertions: JVM_ASSERTIONS_CASES is set in the shard.s environment" &&
+  [ $code2 = 1 ] && row jvm-assertions "m[12]" "$work/driver-checks-fail.log" | grep -q " FAIL .*FAIL jvm-assertions: the assertion-enabled build failed" &&
+  ! grep -q "handed target/gate-checks" "$work/driver-checks-fail.log" &&
+  (cd "$landing" && git check-ignore -q target/gate-checks/$checks_profile/teq) && ! grep -q -- "--delete" tests/gate-agent/sync.sh'
 fi
 if piece_has driver-kind; then
 piece_ran driver-kind
@@ -2568,20 +2627,29 @@ printf 'pass unrowed\n' > "$oc/fo.txt"
 pend fo fo.txt --fails-only --passed=1
 code=$?
 check "outcomes: a suite under --fails-only, which keeps no row of a pass, is not held to its board list" "$oc/pending.log" eval '[ $code = 0 ] && ! grep -q "no row in" "$oc/pending.log"'
-# The suites whose checks are listed by their failures (tests/support/pending.sh's pending_fails_begin) refuse an
-# argument they do not take, named, before they run anything: --add or --update for the list's flags would otherwise
-# run them whole and write nothing; tasty's own --update stays its expectations'.
+# The suites whose checks are listed by their failures (tests/support/pending.sh's pending_fails_begin, and
+# tests/jvm-assertions.sh's list in the same form) refuse an argument they do not take, named, before they run
+# anything: --add or --update for the list's flags would otherwise run them whole and write nothing; tasty's own
+# --update stays its expectations'. The assertions row refuses --pending-add too (no run writes a panic in), and its
+# --pending-update with a selection of its programs.
 : > "$oc/flags.log"
-for run in "workers --add" "workers --update" "split-watch --add" "tasty --add" "tasty --pending-updates"; do
+for run in "workers --add" "workers --update" "split-watch --add" "tasty --add" "tasty --pending-updates" "jvm-assertions --add" "jvm-assertions --update"; do
   read -r fs fa <<< "$run"
   said=$(timeout 30 bash "tests/$fs.sh" "$fa" 2>&1 < /dev/null)
   code=$?
   [ $code = 2 ] && [ "$said" = "$fs: no argument $fa: its list takes --pending-update and --pending-add$([ "$fs" != tasty ] || echo ", the suite itself --update")" ] ||
     echo "$run: exit $code, $said" >> "$oc/flags.log"
 done
+said=$(timeout 30 bash tests/jvm-assertions.sh --pending-add 2>&1 < /dev/null)
+code=$?
+[ $code = 2 ] && [[ $said == "jvm-assertions: --pending-add refused: a new panic is a failure to mend, "* ]] || echo "jvm-assertions --pending-add: exit $code, $said" >> "$oc/flags.log"
+said=$(JVM_ASSERTIONS_CASES=one timeout 30 bash tests/jvm-assertions.sh --pending-update 2>&1 < /dev/null)
+code=$?
+[ $code = 2 ] && [ "$said" = "jvm-assertions: --pending-update takes the whole corpus, not the programs JVM_ASSERTIONS_CASES names" ] ||
+  echo "JVM_ASSERTIONS_CASES=one jvm-assertions --pending-update: exit $code, $said" >> "$oc/flags.log"
 check "outcomes: a suite of listed failures refuses an argument it does not take, naming it and the list's flags" "$oc/flags.log" eval '[ ! -s "$oc/flags.log" ] &&
   grep -q -x -F "pending_fails_args workers \"\" \"\$@\"" tests/workers.sh && grep -q -x -F "pending_fails_args split-watch \"\" \"\$@\"" tests/split-watch.sh &&
-  grep -q -x -F "pending_fails_args tasty --update \"\$@\"" tests/tasty.sh'
+  grep -q -x -F "pending_fails_args tasty --update \"\$@\"" tests/tasty.sh && grep -q -x -F "pending_fails_args jvm-assertions \"\" \"\$@\"" tests/jvm-assertions.sh'
 # A deleted test's entry (tests/support/pending.py): a whole run whose list or board list names a test it did not
 # judge fails, naming them; under --update they leave both lists, said. A piece given --inventory (every test of its
 # suite) does so for what is outside it and keeps another piece's (in the inventory, not judged here); a piece

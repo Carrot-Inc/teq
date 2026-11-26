@@ -107,6 +107,7 @@ the output.
 cargo build --release            # thin LTO, target/release/teq: what the suites and the gate run
 cargo build --profile fast       # for iterating: an edit rebuilds in seconds, the binary types ~8x slower
 cargo build --profile checks     # release with debug assertions, target/checks/teq (below)
+cargo build --profile fast-checks  # fast with debug assertions, target/fast-checks/teq: the JVM assertions row's
 ./bench/pgo.sh                   # profile-guided, target/pgo/use/release/teq: what bench/budget.sh measures
 cargo test --release             # unit tests
 ./tests/rust-warnings.sh         # cargo check of every target, release and checks profiles, warnings denied
@@ -135,7 +136,9 @@ but a box the reader of scalac's boxes does not read, which the reader cannot de
 `tests/board/dotty.py`. Three suites name their failures on `FAIL` lines and count their passes unnamed
 (`tests/tasty.sh`, `workers.sh`, `split-watch.sh`): their lists hold those names, a listed check that names no
 failure in a run counts as passing, so they are held whole, never in part, and their flags are `--pending-update`
-and `--pending-add` (`tests/tasty.sh --update` is its expectations' own). A suite over what another passes skips
+and `--pending-add` (`tests/tasty.sh --update` is its expectations' own). `tests/jvm-assertions.sh` keeps its list in
+their form (no board row for a program that builds) and takes those flags, `--pending-add` refused: its panics are
+listed by hand, each with its class. A suite over what another passes skips
 what that one expects to fail (`split.sh`, `split-watch.sh`, `analysis-bytes.sh`, `analysis.sh`), and
 `jvm-watch.sh` runs the cases `tests/board/suites/jvm.tsv` says pass. `tests/board/copied.tsv` names the stopped
 branch's fixtures whose scenarios are not ported yet.
@@ -278,6 +281,16 @@ and checked against the serial walk's order under `TEQ_MERGE_TRACE=1` (`TEQ_MERG
 build, runs the serial walk, the check's reference); `TEQ_SESSION_INVENTORY=<file>` lists what a
 session holds across builds. `cargo test --profile checks` runs the unit tests with the checks' refusals.
 This build checks correctness only: the budgets and the instruction rule are the plain release's.
+`cargo build --profile fast-checks` compiles the same assertions over the fast profile (`target/fast-checks/teq`,
+`assertions` too): a cold build in about a minute and a half and an edit's in seconds, a binary several times slower.
+`tests/jvm-assertions.sh` builds every program of `tests/cases` for the JVM with it and with the release (built, not
+run): a panic, a kill, a timeout, or a refusal the release does not share fails the run, and so does a program left
+without an outcome, but for the panics `tests/pending/jvm-assertions.txt` lists, each held to its assertion's
+message. The landing gate's shard builds the binary beside its other suites into `target/gate-checks` of its mirror
+of the landing worktree, a directory kept between gates (about 2.5 GB, the profile being incremental; the suite
+prints its size), and hands it to the suite as `TEQ_CHECKS`, which must be the tree's build: its revision, and newer
+than the tree's compiler inputs. `JVM_ASSERTIONS_CASES="<name> ..."` builds those programs alone (a gate's shard
+refuses it).
 Not every assertion holds today: the emitter's `class Function1 is referred to but not numbered`
 (`src/emit/mod.rs`) fires on most programs built with `--std=scala-library`, so a run is compared with
 the same build's baseline.

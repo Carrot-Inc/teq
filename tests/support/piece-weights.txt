@@ -60,8 +60,8 @@ lsp sourcesPaths 9
 # tests/gate-scripts.sh's are each unit's seconds in one run of its three pieces on one machine of sixteen CPUs
 # (1289 s), the time from its body's start to the next unit's (the suite's own `each unit's seconds` line); driver-kind's
 # and outcomes' from a later such run, once the record's floor, the named programs' filter and the deleted tests'
-# entries had added their cells to them;
-# its driver's runs over stand-in machines are most of them. A unit of no seconds weighs 1.
+# entries had added their cells to them; driver-checks' from a run of the piece that held it on another machine of
+# sixteen CPUs; its driver's runs over stand-in machines are most of them. A unit of no seconds weighs 1.
 gate-scripts early 25
 gate-scripts pieces-lists 27
 gate-scripts pieces-stamps 71
@@ -75,6 +75,7 @@ gate-scripts driver-record 79
 gate-scripts driver-wait 39
 gate-scripts driver-cpus 31
 gate-scripts driver-steps 62
+gate-scripts driver-checks 23
 gate-scripts driver-kind 330
 gate-scripts driver-off 47
 gate-scripts driver-guest-compare 83

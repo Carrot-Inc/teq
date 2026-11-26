@@ -234,6 +234,7 @@ machine=(
   "java-lang-names ./tests/java-lang-names.sh"
   "jvm ./tests/run_jvm.sh"
   "jvm-21 ./tests/run_jvm.sh --java-output-version=21"
+  "jvm-assertions ./tests/jvm-assertions.sh"
   "pairs-twin ./tests/pairs-twin.sh"
   "constants ./tests/constants/run.sh"
   "right-assoc ./tests/right-assoc/run.sh"

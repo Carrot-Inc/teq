@@ -134,6 +134,7 @@ suite std-kinds     ./tests/std-kinds.sh
 suite java-lang-names ./tests/java-lang-names.sh
 suite jvm           ./tests/run_jvm.sh
 suite jvm-21        ./tests/run_jvm.sh --java-output-version=21
+suite jvm-assertions ./tests/jvm-assertions.sh
 suite pairs-twin    ./tests/pairs-twin.sh
 suite interp        ./tests/run_interp.sh
 suite interp-script ./tests/interp-script.sh

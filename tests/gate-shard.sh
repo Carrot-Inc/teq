@@ -2,7 +2,10 @@
 # One shard of tests/gate.sh, on a remote machine: the gate copies this file into out/gate/ of its mirror of the
 # landing worktree and starts it there under nohup with the shard's list (one suite a line: its name, then its
 # command, run from the mirror's root as tests/all.sh runs it). It takes the head's binary, and beside it builds what
-# the list needs (the unit tests' build for cargo-test; for split-determinism, master's binary from the mirror
+# the list needs (the unit tests' build for cargo-test; for jvm-assertions the assertion-enabled build, by
+# `tests/jvm-assertions.sh --build` into target/gate-checks, kept between gates as target/gate-test is, stamped with
+# GATE_REVISION, its binary and output handed to the row as TEQ_CHECKS and TEQ_CHECKS_BUILD_LOG; for
+# split-determinism, master's binary from the mirror
 # GATE_REF names, when the gate has synced one), then runs the suites one after another, each under TEQ=the head's
 # binary and a bound of GATE_SUITE_SECONDS (default 1800), its output in out/gate/<name>.log (a piece's, `lsp.1/4`, in
 # out/gate/lsp.1of4.log); a suite that exits 0 but says it skipped for want of something (a line matching GATE_SKIPS
@@ -32,6 +35,10 @@ started=$(now)
 if grep -q '^cargo-test ' "$list"; then
   CARGO_TARGET_DIR=target/gate-test cargo test --release --no-run > $gate/cargo-test.build.log 2>&1 &
   test_build=$!
+fi
+if grep -q '^jvm-assertions ' "$list"; then
+  TEQ_REVISION=$GATE_REVISION bash tests/jvm-assertions.sh --build target/gate-checks > $gate/jvm-assertions.build.log 2>&1 &
+  checks_build=$!
 fi
 if [ -n "$GATE_REF" ] && grep -q '^split-determinism ' "$list"; then
   (cd "$GATE_REF" && cargo build --release) > $gate/ref.build.log 2>&1 &
@@ -98,6 +105,20 @@ while read -r name cmd; do
     cp $gate/cargo-test.build.log $log
     step $name 1 $started $log
     continue
+  fi
+  if [ "$name" = jvm-assertions ]; then
+    if [ -n "${JVM_ASSERTIONS_CASES+set}" ]; then
+      echo "FAIL jvm-assertions: JVM_ASSERTIONS_CASES is set in the shard's environment (\"$JVM_ASSERTIONS_CASES\"): a gate builds the whole corpus" > $log
+      step $name 1 $started $log
+      continue
+    fi
+    if ! wait $checks_build; then
+      { tail -20 $gate/jvm-assertions.build.log; echo "FAIL jvm-assertions: the assertion-enabled build failed"; } > $log
+      step $name 1 $started $log
+      continue
+    fi
+    export TEQ_CHECKS=$PWD/$(sed -n 's/^jvm-assertions: built \(.*\) in [0-9]* s$/\1/p' $gate/jvm-assertions.build.log)
+    export TEQ_CHECKS_BUILD_LOG=$PWD/$gate/jvm-assertions.build.log
   fi
   if [ "$name" = split-determinism ] && [ -n "$ref_build" ]; then
     if ! wait $ref_build; then
