@@ -1833,10 +1833,21 @@ library_quote_pattern_nested_fresh	fail	-	error: cannot resolve import: qnest no
 library_quote_pattern_outer_type	fail	-	error: cannot resolve import: qnest not found
 library_type_pattern_from_above	fail	-	error: cannot resolve import: qnest not found
 library_val_overridden	fail	-	error: cannot resolve import: lvlib not found
+lifted_applied_inline_lambda	pass	-	
+lifted_applied_lambda	pass	-	
 lifted_block_arguments	pass	-	
+lifted_case_apply_block	pass	-	
+lifted_class_literal_block	pass	-	
+lifted_dead_branch_return	pass	-	
+lifted_dead_branch_this_capture	pass	-	
+lifted_dead_branch_var_capture	pass	-	
 lifted_encoded_name_overloads	pass	-	
+lifted_local_class_dead_branch_capture	pass	-	
 lifted_names_shared_thunk	fail	-	TypeError: Cannot read properties of undefined (reading 'getMethodName')
+lifted_pure_closure_return	pass	-	
+lifted_pure_closure_var_box	pass	-	
 lifted_receiver_default	pass	-	
+lifted_written_dollar_names	pass	-	
 line_continued_by_bracket	pass	-	
 list_class_ancestors	pass	-	
 list_fill_order	pass	-	

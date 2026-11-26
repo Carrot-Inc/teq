@@ -187,6 +187,7 @@ splice_conversion_ambiguous.check	< tests/errors/splice_conversion_ambiguous.sca
 store_reducer_contra_member_alias	missing '16:57: error: Found: (x : h.KC[Nothing])'
 strict_equality_null_classes	missing '3:48: error: values of types Const[Any][Int] and Null cannot be compared with == or !='
 super_rebind_incompatible_result	exit code 0
+tailrec_folded_call	exit code 0
 target_name_parenthesized	exit code 0
 time_stopped_in_inline	missing 'stopped in inline: 1 error'
 time_stopped_in_type	missing 'error: Found: (1 : Int)'

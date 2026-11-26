@@ -1,0 +1,11 @@
+Main class public,final extends java/lang/Object
+Main main([Ljava/lang/String;)V public,static
+Main run(I)I public,static
+Main$ <clinit>()V public,static
+Main$ <init>()V private
+Main$ MODULE$:LMain$; public,static,final
+Main$ class public,final extends java/lang/Object
+Main$ implements java/io/Serializable
+Main$ main([Ljava/lang/String;)V public
+Main$ run(I)I public
+Main$ writeReplace()Ljava/lang/Object; private

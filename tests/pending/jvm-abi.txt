@@ -1,2 +1,13 @@
+lifted_applied_inline_lambda	not in scalac's layout: < Main$ <clinit>()V public,static
+lifted_applied_lambda	not in scalac's layout: < Main$ <clinit>()V public,static
+lifted_case_apply_block	not in scalac's layout: < Main$ <clinit>()V public,static
+lifted_class_literal_block	not in scalac's layout: > Local$1oeca1o_376 <init>()V public
+lifted_dead_branch_return	not in scalac's layout: < Main$ $anonfun$1()I private,static,final,synthetic
+lifted_dead_branch_this_capture	not in scalac's layout: < Box $anonfun$1()I private,static,final,synthetic
+lifted_dead_branch_var_capture	not in scalac's layout: < Main$ $anonfun$1()I private,static,final,synthetic
+lifted_local_class_dead_branch_capture	not in scalac's layout: > Local$1sz2dkb_313 <init>(I)V public
+lifted_pure_closure_return	not in scalac's layout: < Main$ <clinit>()V public,static
+lifted_pure_closure_var_box	not in scalac's layout: < Main$ <clinit>()V public,static
+lifted_written_dollar_names	not in scalac's layout: < Main$ <clinit>()V public,static
 member_meet	not in scalac's layout: < meetmin/Api threeResult(Lmeetmin/A;Ljava/lang/String;)Ljava/lang/String; public,static
 target_name_units	not in scalac's layout: < targetnameunits/TN $uD83D()I public

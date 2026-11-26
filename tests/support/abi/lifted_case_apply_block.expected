@@ -1,0 +1,43 @@
+Main class public,final extends java/lang/Object
+Main main([Ljava/lang/String;)V public,static
+Main run(I)I public,static
+Main$ <clinit>()V public,static
+Main$ <init>()V private
+Main$ MODULE$:LMain$; public,static,final
+Main$ class public,final extends java/lang/Object
+Main$ implements java/io/Serializable
+Main$ main([Ljava/lang/String;)V public
+Main$ run(I)I public
+Main$ writeReplace()Ljava/lang/Object; private
+Value <init>(I)V public
+Value _1()I public
+Value apply(I)LValue; public,static
+Value canEqual(Ljava/lang/Object;)Z public
+Value class public extends java/lang/Object
+Value copy$default$1()I public
+Value copy(I)LValue; public
+Value equals(Ljava/lang/Object;)Z public
+Value fromProduct(Lscala/Product;)LValue; public,static
+Value hashCode()I public
+Value implements scala/Product, java/io/Serializable
+Value n()I public
+Value n:I private
+Value productArity()I public
+Value productElement(I)Ljava/lang/Object; public
+Value productElementName(I)Ljava/lang/String; public
+Value productElementNames()Lscala/collection/Iterator; public
+Value productIterator()Lscala/collection/Iterator; public
+Value productPrefix()Ljava/lang/String; public
+Value toString()Ljava/lang/String; public
+Value unapply(LValue;)LValue; public,static
+Value$ <clinit>()V public,static
+Value$ <init>()V private
+Value$ MODULE$:LValue$; public,static,final
+Value$ apply(I)LValue; public
+Value$ class public,final extends java/lang/Object
+Value$ fromProduct(Lscala/Product;)LValue; public
+Value$ fromProduct(Lscala/Product;)Ljava/lang/Object; public,bridge,synthetic
+Value$ implements scala/deriving/Mirror$Product, java/io/Serializable
+Value$ toString()Ljava/lang/String; public
+Value$ unapply(LValue;)LValue; public
+Value$ writeReplace()Ljava/lang/Object; private

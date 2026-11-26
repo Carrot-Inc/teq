@@ -1,0 +1,17 @@
+Box $anonfun$1()I private,static,final,synthetic
+Box $deserializeLambda$(Ljava/lang/invoke/SerializedLambda;)Ljava/lang/Object; private,static,synthetic
+Box <init>(I)V public
+Box class public extends java/lang/Object
+Box deadThis$1()I private,static,final
+Box n()I public
+Box n:I private
+Box run()I public
+Main class public,final extends java/lang/Object
+Main main([Ljava/lang/String;)V public,static
+Main$ <clinit>()V public,static
+Main$ <init>()V private
+Main$ MODULE$:LMain$; public,static,final
+Main$ class public,final extends java/lang/Object
+Main$ implements java/io/Serializable
+Main$ main([Ljava/lang/String;)V public
+Main$ writeReplace()Ljava/lang/Object; private

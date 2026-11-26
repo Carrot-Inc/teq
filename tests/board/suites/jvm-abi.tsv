@@ -13,6 +13,17 @@ lazy_descriptors	pass	-
 lazy_local_class_names	pass	-	
 lazy_nested_objects	pass	-	
 lazy_vals	pass	-	
+lifted_applied_inline_lambda	fail	-	not in scalac's layout: < Main$ <clinit>()V public,static
+lifted_applied_lambda	fail	-	not in scalac's layout: < Main$ <clinit>()V public,static
+lifted_case_apply_block	fail	-	not in scalac's layout: < Main$ <clinit>()V public,static
+lifted_class_literal_block	fail	-	not in scalac's layout: > Local$1oeca1o_376 <init>()V public
+lifted_dead_branch_return	fail	-	not in scalac's layout: < Main$ $anonfun$1()I private,static,final,synthetic
+lifted_dead_branch_this_capture	fail	-	not in scalac's layout: < Box $anonfun$1()I private,static,final,synthetic
+lifted_dead_branch_var_capture	fail	-	not in scalac's layout: < Main$ $anonfun$1()I private,static,final,synthetic
+lifted_local_class_dead_branch_capture	fail	-	not in scalac's layout: > Local$1sz2dkb_313 <init>(I)V public
+lifted_pure_closure_return	fail	-	not in scalac's layout: < Main$ <clinit>()V public,static
+lifted_pure_closure_var_box	fail	-	not in scalac's layout: < Main$ <clinit>()V public,static
+lifted_written_dollar_names	fail	-	not in scalac's layout: < Main$ <clinit>()V public,static
 member_meet	fail	-	not in scalac's layout: < meetmin/Api threeResult(Lmeetmin/A;Ljava/lang/String;)Ljava/lang/String; public,static
 mirror_forwarders	pass	-	
 nested_objects	pass	-	

@@ -1070,6 +1070,7 @@ synthesized_collision_after_typer_error	pass	-
 synthesized_erased_collision	pass	-	
 synthesized_target_name_collision	pass	-	
 tailrec	pass	-	
+tailrec_folded_call	fail	-	exit code 0
 tailrec_guarded	pass	-	
 tailrec_guarded_monitor	pass	-	
 tailrec_inline_by_name	pass	-	
