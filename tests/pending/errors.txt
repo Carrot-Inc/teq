@@ -160,6 +160,19 @@ right_assoc_read_default_scope	exit code 0
 right_assoc_read_dependent	exit code 0
 right_assoc_read_forward_reference	missing '2:15: error: right-associative extension method cannot have a forward reference to r'
 right_assoc_read_override	missing '6:18: error: error overriding method +: in trait Ordinary of type (r: String)(l: Int): Int;'
+right_assoc_swap_default_scope	exit code 0
+right_assoc_swap_dep_bound	exit code 0
+right_assoc_swap_evidence_eta	missing '11:32: error: method apply in trait Function1 does not take type parameters'
+right_assoc_swap_evidence_leading	missing '9:39: error: Too many type arguments for Lib.%:[A]'
+right_assoc_swap_forward_annotation	exit code 0
+right_assoc_swap_forward_default	missing '3:23: error: right-associative extension method cannot have a forward reference to y'
+right_assoc_swap_forward_noswap	exit code 0
+right_assoc_swap_forward_type	exit code 0
+right_assoc_swap_forward_unswapped	missing '4:39: error: Found: (x : Int)'
+right_assoc_swap_implicit2	missing '4:28: error: '=' expected, but '(' found'
+right_assoc_swap_implicit_given	exit code 0
+right_assoc_swap_named	missing '4:33: error: Found: (x : Int)'
+right_assoc_swap_using_receiver	missing '4:1: error: '(' expected, but 'end of statement' found'
 scala3_i2887c	missing '21:71: error: Found: (1 : Int)'
 scala3_i2887c.check	< tests/errors/scala3_i2887c.scala:21:71: error: Found: (1 : Int)
 scalajs_anonymous_js_objects	missing '19:5: error: object creation impossible, since val name: String in trait JsTrait in package app is not defined'

@@ -971,6 +971,20 @@ right_assoc_read_dependent	fail	-	exit code 0
 right_assoc_read_forward_reference	fail	-	missing '2:15: error: right-associative extension method cannot have a forward reference to r'
 right_assoc_read_override	fail	-	missing '6:18: error: error overriding method +: in trait Ordinary of type (r: String)(l: Int): Int;'
 right_assoc_read_single_parameter	pass	-	
+right_assoc_swap_arity	pass	-	
+right_assoc_swap_default_scope	fail	-	exit code 0
+right_assoc_swap_dep_bound	fail	-	exit code 0
+right_assoc_swap_evidence_eta	fail	-	missing '11:32: error: method apply in trait Function1 does not take type parameters'
+right_assoc_swap_evidence_leading	fail	-	missing '9:39: error: Too many type arguments for Lib.%:[A]'
+right_assoc_swap_forward_annotation	fail	-	exit code 0
+right_assoc_swap_forward_default	fail	-	missing '3:23: error: right-associative extension method cannot have a forward reference to y'
+right_assoc_swap_forward_noswap	fail	-	exit code 0
+right_assoc_swap_forward_type	fail	-	exit code 0
+right_assoc_swap_forward_unswapped	fail	-	missing '4:39: error: Found: (x : Int)'
+right_assoc_swap_implicit2	fail	-	missing '4:28: error: '=' expected, but '(' found'
+right_assoc_swap_implicit_given	fail	-	exit code 0
+right_assoc_swap_named	fail	-	missing '4:33: error: Found: (x : Int)'
+right_assoc_swap_using_receiver	fail	-	missing '4:1: error: '(' expected, but 'end of statement' found'
 sam_by_name_declared	pass	-	
 sam_context_function_result	pass	-	
 sam_lambda_declared_param	pass	-	

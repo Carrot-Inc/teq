@@ -956,6 +956,88 @@ r-typeclass-given.js	run b1 g,n1,b
 r-typeclass-given.jvm	crash 1 Exception in thread "main" java.lang.AbstractMethodError: Receiver class Test$package$$anon$1h0pdax_483 does not define or inherit an implementation of the reso
 r-typeclass-given.split	crash 1 Exception in thread "main" java.lang.AbstractMethodError: Receiver class Lib$package$$anon$n1im7s_483 does not define or inherit an implementation of the resolv
 r-typeclass-given.workers	run b1 g,n1,b
+s-ext-tparam-recv-ra.check	run
+s-ext-tparam-recv-ra.desc	library refused
+s-ext-tparam-recv-ra.interp	run ok
+s-ext-tparam-recv-ra.js	run ok
+s-ext-tparam-recv-ra.jvm	run ok
+s-ext-tparam-recv-ra.split	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local x in Lib.%:
+s-ext-tparam-recv-ra.workers	run ok
+s-leading-using-bound-ra.desc	library refused
+s-leading-using-bound-ra.split	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local u in Lib.%:
+s-lower-recv-ra.check	run
+s-lower-recv-ra.desc	library refused
+s-lower-recv-ra.interp	run ok
+s-lower-recv-ra.js	run ok
+s-lower-recv-ra.jvm	run ok
+s-lower-recv-ra.split	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local x in Lib.%:
+s-lower-recv-ra.workers	run ok
+s-own-param-plain.check	run
+s-own-param-plain.desc	library refused
+s-own-param-plain.interp	run ok
+s-own-param-plain.js	run ok
+s-own-param-plain.jvm	run ok
+s-own-param-plain.split	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local y in Lib.plus
+s-own-param-plain.workers	run ok
+s-own-param-ra.check	run
+s-own-param-ra.desc	library refused
+s-own-param-ra.interp	run ok
+s-own-param-ra.js	run ok
+s-own-param-ra.jvm	run ok
+s-own-param-ra.split	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local y in Lib.%:
+s-own-param-ra.workers	run ok
+s-recv-reads-own-plain.check	run
+s-recv-reads-own-plain.interp	run ok
+s-recv-reads-own-plain.js	run ok
+s-recv-reads-own-plain.jvm	run ok
+s-recv-reads-own-plain.split	run ok
+s-recv-reads-own-plain.workers	run ok
+s-recv-reads-own-ra.check	run
+s-recv-reads-own-ra.interp	run ok
+s-recv-reads-own-ra.js	run ok
+s-recv-reads-own-ra.jvm	run ok
+s-recv-reads-own-ra.split	run ok
+s-recv-reads-own-ra.workers	run ok
+s-trailing-using-bound-ra.check	run
+s-trailing-using-bound-ra.desc	library refused
+s-trailing-using-bound-ra.interp	run ok
+s-trailing-using-bound-ra.js	run ok
+s-trailing-using-bound-ra.jvm	run ok
+s-trailing-using-bound-ra.split	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local u in Lib.%:
+s-trailing-using-bound-ra.workers	run ok
+s-trailing-using-reads-own-plain.check	run
+s-trailing-using-reads-own-plain.interp	run ok
+s-trailing-using-reads-own-plain.js	run ok
+s-trailing-using-reads-own-plain.jvm	run ok
+s-trailing-using-reads-own-plain.split	run ok
+s-trailing-using-reads-own-plain.workers	run ok
+s-trailing-using-reads-own-ra.check	run
+s-trailing-using-reads-own-ra.interp	run ok
+s-trailing-using-reads-own-ra.js	run ok
+s-trailing-using-reads-own-ra.jvm	run ok
+s-trailing-using-reads-own-ra.split	run ok
+s-trailing-using-reads-own-ra.workers	run ok
+s-trailing-using-value-ra.check	run
+s-trailing-using-value-ra.desc	library refused
+s-trailing-using-value-ra.interp	run ok
+s-trailing-using-value-ra.js	run ok
+s-trailing-using-value-ra.jvm	run ok
+s-trailing-using-value-ra.split	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local u in Lib.%:
+s-trailing-using-value-ra.workers	run ok
+s-upper-recv-ra.check	run
+s-upper-recv-ra.desc	library refused
+s-upper-recv-ra.interp	run ok
+s-upper-recv-ra.js	run ok
+s-upper-recv-ra.jvm	run ok
+s-upper-recv-ra.split	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local x in Lib.%:
+s-upper-recv-ra.workers	run ok
+s-value-recv-ra.check	run
+s-value-recv-ra.desc	library refused
+s-value-recv-ra.interp	run ok
+s-value-recv-ra.js	run ok
+s-value-recv-ra.jvm	run ok
+s-value-recv-ra.split	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local x in Lib.%:
+s-value-recv-ra.workers	run ok
 v-ra_inst_one_written.interp	run c_imp_imp_kept a17 a,n1 | c_imp_imp_any a17 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_i
 v-ra_inst_one_written.js	run c_imp_imp_kept a17 a,n1 | c_imp_imp_any a17 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_i
 v-ra_inst_one_written.jvm	run c_imp_imp_kept a17 a,n1 | c_imp_imp_any a17 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_i

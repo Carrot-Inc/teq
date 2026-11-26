@@ -636,6 +636,30 @@ r-selection-function	run	b1 b,made,n1
 r-this-receiver	run	t1 n1
 r-throw-pure-written	run	npe
 r-typeclass-given	run	b1 n1,g,b
+s-ext-tparam-plain	run	ok
+s-ext-tparam-ra	run	ok
+s-ext-tparam-recv-plain	run	ok
+s-ext-tparam-recv-ra	refused	12:17: Not found: x
+s-fbound-plain	run	ok
+s-fbound-ra	run	ok
+s-leading-using-bound-plain	run	ok
+s-leading-using-bound-ra	run	ok
+s-lower-recv-plain	run	ok
+s-lower-recv-ra	refused	12:17: Not found: x
+s-own-param-plain	refused	12:19: Not found: y
+s-own-param-ra	refused	12:17: Not found: y
+s-recv-reads-own-plain	refused	11:22: Not found: type A
+s-recv-reads-own-ra	refused	11:22: right-associative extension method cannot have a forward reference to A
+s-trailing-using-bound-plain	run	ok
+s-trailing-using-bound-ra	refused	12:17: Not found: u
+s-trailing-using-reads-own-plain	refused	11:36: Not found: type A
+s-trailing-using-reads-own-ra	refused	11:36: right-associative extension method cannot have a forward reference to A
+s-trailing-using-value-plain	run	ok
+s-trailing-using-value-ra	refused	12:15: Not found: u
+s-upper-recv-plain	run	ok
+s-upper-recv-ra	refused	12:17: Not found: x
+s-value-recv-plain	run	ok
+s-value-recv-ra	refused	12:15: Not found: x
 v-ra_inst_one_written	run	c_imp_imp_kept a17 a,n1 | c_imp_imp_any a17 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a17 a | c_lit_imp_any a17 a | c_lit_imp_dropped a | c_lit_lit_kept a17 | c_lit_lit_any a17 | c_lit_lit_dropped | c_val_val_kept a17 | c_val_val_any a17 | c_val_val_dropped | c_fld_imp_kept a17 a | c_fld_imp_any a17 a | c_fld_imp_dropped a | c_fld_fld_kept a17 | c_fld_fld_any a17 | c_fld_fld_dropped | c_var_imp_kept a17 a | c_var_imp_any a17 a | c_var_imp_dropped a | c_mod_imp_kept a17 a,mi | c_mod_imp_any a17 a,mi | c_mod_imp_dropped a,mi | c_imp_mod_kept a17 ms,n1 | c_imp_mod_any a17 ms,n1 | c_imp_mod_dropped ms,n1
 v-ra_inst_two_written	run	c_imp_imp_kept a127 a,n1,n2 | c_imp_imp_any a127 a,n1,n2 | c_imp_imp_dropped a,n1,n2 | c_imp_lit_kept a127 n1,n2 | c_imp_lit_any a127 n1,n2 | c_imp_lit_dropped n1,n2 | c_imp_val_kept a127 n1,n2 | c_imp_val_any a127 n1,n2 | c_imp_val_dropped n1,n2 | c_lit_imp_kept a127 a,n2 | c_lit_imp_any a127 a,n2 | c_lit_imp_dropped a,n2 | c_lit_lit_kept a127 n2 | c_lit_lit_any a127 n2 | c_lit_lit_dropped n2 | c_val_val_kept a127 n2 | c_val_val_any a127 n2 | c_val_val_dropped n2 | c_fld_imp_kept a127 a,n2 | c_fld_imp_any a127 a,n2 | c_fld_imp_dropped a,n2 | c_fld_fld_kept a127 n2 | c_fld_fld_any a127 n2 | c_fld_fld_dropped n2 | c_var_imp_kept a127 a,n2 | c_var_imp_any a127 a,n2 | c_var_imp_dropped a,n2 | c_mod_imp_kept a127 a,mi,n2 | c_mod_imp_any a127 a,mi,n2 | c_mod_imp_dropped a,mi,n2 | c_imp_mod_kept a127 ms,n1,n2 | c_imp_mod_any a127 ms,n1,n2 | c_imp_mod_dropped ms,n1,n2
 v-ra_inst_using_written	run	c_imp_imp_kept a157 a,n1 | c_imp_imp_any a157 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a157 n1 | c_imp_lit_any a157 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a157 n1 | c_imp_val_any a157 n1 | c_imp_val_dropped n1 | c_lit_imp_kept a157 a | c_lit_imp_any a157 a | c_lit_imp_dropped a | c_lit_lit_kept a157 | c_lit_lit_any a157 | c_lit_lit_dropped | c_val_val_kept a157 | c_val_val_any a157 | c_val_val_dropped | c_fld_imp_kept a157 a | c_fld_imp_any a157 a | c_fld_imp_dropped a | c_fld_fld_kept a157 | c_fld_fld_any a157 | c_fld_fld_dropped | c_var_imp_kept a157 a | c_var_imp_any a157 a | c_var_imp_dropped a | c_mod_imp_kept a157 a,mi | c_mod_imp_any a157 a,mi | c_mod_imp_dropped a,mi | c_imp_mod_kept a157 ms,n1 | c_imp_mod_any a157 ms,n1 | c_imp_mod_dropped ms,n1

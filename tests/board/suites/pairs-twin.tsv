@@ -2710,6 +2710,29 @@ cases/right_assoc_read_pure_throw	pass	-
 cases/right_assoc_read_receiver_default	cannot run	-	no leg builds
 cases/right_assoc_read_repeated	pass	-	
 cases/right_assoc_read_selections	cannot run	-	no leg builds
+cases/right_assoc_sibling_leading_using	pass	-	
+cases/right_assoc_sibling_leading_using_operator	pass	-	
+cases/right_assoc_sibling_operator_call	pass	-	
+cases/right_assoc_sibling_operator_qualifier	pass	-	
+cases/right_assoc_sibling_plain	pass	-	
+cases/right_assoc_sibling_trailing_using	pass	-	
+cases/right_assoc_sibling_unswapped	pass	-	
+cases/right_assoc_swap_conversion	cannot run	-	no leg builds
+cases/right_assoc_swap_evidence_after	cannot run	-	no leg builds
+cases/right_assoc_swap_evidence_between	cannot run	-	no leg builds
+cases/right_assoc_swap_evidence_default	cannot run	-	no leg builds
+cases/right_assoc_swap_export_colon	cannot run	-	no leg builds
+cases/right_assoc_swap_export_in_extension	cannot run	-	no leg builds
+cases/right_assoc_swap_export_plain	cannot run	-	no leg builds
+cases/right_assoc_swap_export_selected	cannot run	-	no leg builds
+cases/right_assoc_swap_implicit	cannot run	-	no leg builds
+cases/right_assoc_swap_implicit_poly	cannot run	-	no leg builds
+cases/right_assoc_swap_implicit_selected	cannot run	-	no leg builds
+cases/right_assoc_swap_interleaved	cannot run	-	no leg builds
+cases/right_assoc_swap_lambda	cannot run	-	no leg builds
+cases/right_assoc_swap_lift_type	pass	-	
+cases/right_assoc_swap_lift_type_equality	pass	-	
+cases/right_assoc_swap_local_receiver_default	pass	-	
 cases/right_assoc_throwing_operand_order	pass	-	
 cases/root_method_calls	pass	-	
 cases/root_method_singleton_chain	pass	-	

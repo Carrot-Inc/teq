@@ -28,6 +28,9 @@ Families:
   generators, guards and yields, `+=:` and a compound assignment whose right side is such a call, a mutable receiver
   changed by the left operand, `this` as the receiver, a chain `a +: b +: c`, an operator found through a type-class
   given whose initialisation logs;
+- S, the scopes of the type and term clauses once the clauses are compiled: a bound or a parameter's type reading the
+  receiver, a using clause's parameter, the extension's type parameter or the method's own, each in a right-associative
+  method and in a plain one of the same clauses; each cell defines and prints `ok`;
 - F, lifted (tests/right-assoc/lifted, one program a cell, each printing a line a case): a local trait's member and a
   local extension def, capturing or not, in one, two and a using clause, infix and written out;
 - V, value-class (tests/right-assoc/value-class and gen_erase.py, one program a cell): an instance's, an object's and
@@ -165,6 +168,36 @@ def sub_program(written_super):
                   '  trait T { extension (x: Num) def +:(y: String): String = y + x.i + k }\n'
                   + '\n'.join(call) + '\n  println(res.toString + " " + L.b)\n')
 
+
+
+def s_programs():
+    """S, the scopes of the type and term clauses once a right-associative extension's clauses are compiled: a bound
+    or a parameter's type reading the receiver, a using clause's parameter, the extension's type parameter or the
+    method's own, each in a right-associative method (`%:`) and in a plain one of the same clauses (`plus`), which
+    the swap leaves as written. Each cell defines and prints `ok`: whether the definition is accepted is the cell."""
+    box = 'trait Box { type T }\n'
+    forms = {
+        # form: (the extension's clauses, the method's clauses after its name)
+        'upper-recv': ('(x: Box)', '[A <: x.T](y: A)'),
+        'lower-recv': ('(x: Box)', '[A >: x.T](y: A)'),
+        'value-recv': ('(x: Box)', '(y: x.T)'),
+        'ext-tparam': ('[E](x: List[E])', '[A <: E](y: A)'),
+        'ext-tparam-recv': ('[E <: Box](x: E)', '[A <: x.T](y: A)'),
+        'fbound': ('(x: Box)', '[A <: Ordered[A]](y: A)'),
+        'own-param': ('(x: Box)', '[A <: y.T](y: Box)'),
+        'trailing-using-bound': ('(x: Box)(using u: Box)', '[A <: u.T](y: A)'),
+        'trailing-using-value': ('(x: Box)(using u: Box)', '(y: u.T)'),
+        'leading-using-bound': ('(using u: Box)(x: Box)', '[A <: u.T](y: A)'),
+        'trailing-using-reads-own': ('(x: Box)(using u: List[A])', '[A](y: A)'),
+        'recv-reads-own': ('(x: List[A])', '[A](y: A)'),
+    }
+    out = []
+    for form, (ext, own) in forms.items():
+        for kind, name in (('ra', '%:'), ('plain', 'plus')):
+            text = (PRE + box + f'object Lib {{\n  extension {ext}\n    def {name}{own}: String = "d"\n}}\n'
+                    '@main def run(): Unit = println("ok " + L.b)\n')
+            out.append((f's-{form}-{kind}', form, text))
+    return out
 
 
 def r_programs():
@@ -329,6 +362,8 @@ def generate():
     put('g-sub-super', 'G:sub', sub_program(True))
     for name, text in r_programs():
         put(name, 'R:' + name.split('-', 1)[1], text)
+    for name, form, text in s_programs():
+        put(name, 'S:' + form, text)
     # M: an extension defined in one file and called from eight, for the workers' merge of one module's files: a
     # file a worker at 8 workers, the definitions' file another's.
     many = {'Defs.scala': PRE + 'object Q { L.log("q"); extension (x: Num) def +:(y: String): String = y + x.i }\n'}

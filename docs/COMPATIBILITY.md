@@ -256,6 +256,13 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   the first read of either variable, a local's element at the first read of its variable. scalac 3.8.4
   evaluates the element at every read (its `makePatDef` makes each variable a `def` of its element), a defect
   dotty fixed after 3.8.4.
+- A sibling extension named bare in an extension method's body is selected on the group's receiver whatever the
+  group's clauses (`extension (using b: B)(c: C)` with `def other = "o" + tag` is `c.tag`). scalac 3.8.4 finds the
+  receiver by a pattern over the clauses (Typer.leadParamOf and SymDenotations.extensionParam: the first clause of
+  one parameter, or the second for a name ending in `:`, a using clause counted). So where a group starts with a
+  using clause, or a right-associative method's own first clause is a using clause, it takes a using parameter or
+  the method's own for the receiver: it refuses the program above ("value tag is not a member of B"), and in a
+  right-associative method of such a group it eta-expands `tag` into a function where the value is written.
 - A name the compiler makes is numbered by its place in what makes it, the same at any worker count and in any
   split of a build: a placeholder's parameter by its place in its lambda (`_ + _` is `(_$0, _$1) => _$0 + _$1`), a
   context bound's evidence by its place in its definition, where scalac numbers a placeholder's per file; no program

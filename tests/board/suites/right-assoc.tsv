@@ -4458,6 +4458,174 @@ r-typeclass-given.js	fail	-	run b1 g,n1,b
 r-typeclass-given.jvm	fail	-	crash 1 Exception in thread "main" java.lang.AbstractMethodError: Receiver class Test$package$$anon$1h0pdax_483 does not define or inherit an implementation of the reso
 r-typeclass-given.split	fail	-	crash 1 Exception in thread "main" java.lang.AbstractMethodError: Receiver class Lib$package$$anon$n1im7s_483 does not define or inherit an implementation of the resolv
 r-typeclass-given.workers	fail	-	run b1 g,n1,b
+s-ext-tparam-plain.check	pass	-	
+s-ext-tparam-plain.desc	pass	-	
+s-ext-tparam-plain.interp	pass	-	
+s-ext-tparam-plain.js	pass	-	
+s-ext-tparam-plain.jvm	pass	-	
+s-ext-tparam-plain.split	pass	-	
+s-ext-tparam-plain.workers	pass	-	
+s-ext-tparam-ra.check	pass	-	
+s-ext-tparam-ra.desc	pass	-	
+s-ext-tparam-ra.interp	pass	-	
+s-ext-tparam-ra.js	pass	-	
+s-ext-tparam-ra.jvm	pass	-	
+s-ext-tparam-ra.split	pass	-	
+s-ext-tparam-ra.workers	pass	-	
+s-ext-tparam-recv-plain.check	pass	-	
+s-ext-tparam-recv-plain.desc	pass	-	
+s-ext-tparam-recv-plain.interp	pass	-	
+s-ext-tparam-recv-plain.js	pass	-	
+s-ext-tparam-recv-plain.jvm	pass	-	
+s-ext-tparam-recv-plain.split	pass	-	
+s-ext-tparam-recv-plain.workers	pass	-	
+s-ext-tparam-recv-ra.check	fail	-	run
+s-ext-tparam-recv-ra.desc	fail	-	library refused
+s-ext-tparam-recv-ra.interp	fail	-	run ok
+s-ext-tparam-recv-ra.js	fail	-	run ok
+s-ext-tparam-recv-ra.jvm	fail	-	run ok
+s-ext-tparam-recv-ra.split	fail	-	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local x in Lib.%:
+s-ext-tparam-recv-ra.workers	fail	-	run ok
+s-fbound-plain.check	pass	-	
+s-fbound-plain.desc	pass	-	
+s-fbound-plain.interp	pass	-	
+s-fbound-plain.js	pass	-	
+s-fbound-plain.jvm	pass	-	
+s-fbound-plain.split	pass	-	
+s-fbound-plain.workers	pass	-	
+s-fbound-ra.check	pass	-	
+s-fbound-ra.desc	pass	-	
+s-fbound-ra.interp	pass	-	
+s-fbound-ra.js	pass	-	
+s-fbound-ra.jvm	pass	-	
+s-fbound-ra.split	pass	-	
+s-fbound-ra.workers	pass	-	
+s-leading-using-bound-plain.check	pass	-	
+s-leading-using-bound-plain.desc	pass	-	
+s-leading-using-bound-plain.interp	pass	-	
+s-leading-using-bound-plain.js	pass	-	
+s-leading-using-bound-plain.jvm	pass	-	
+s-leading-using-bound-plain.split	pass	-	
+s-leading-using-bound-plain.workers	pass	-	
+s-leading-using-bound-ra.check	pass	-	
+s-leading-using-bound-ra.desc	fail	-	library refused
+s-leading-using-bound-ra.interp	pass	-	
+s-leading-using-bound-ra.js	pass	-	
+s-leading-using-bound-ra.jvm	pass	-	
+s-leading-using-bound-ra.split	fail	-	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local u in Lib.%:
+s-leading-using-bound-ra.workers	pass	-	
+s-lower-recv-plain.check	pass	-	
+s-lower-recv-plain.desc	pass	-	
+s-lower-recv-plain.interp	pass	-	
+s-lower-recv-plain.js	pass	-	
+s-lower-recv-plain.jvm	pass	-	
+s-lower-recv-plain.split	pass	-	
+s-lower-recv-plain.workers	pass	-	
+s-lower-recv-ra.check	fail	-	run
+s-lower-recv-ra.desc	fail	-	library refused
+s-lower-recv-ra.interp	fail	-	run ok
+s-lower-recv-ra.js	fail	-	run ok
+s-lower-recv-ra.jvm	fail	-	run ok
+s-lower-recv-ra.split	fail	-	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local x in Lib.%:
+s-lower-recv-ra.workers	fail	-	run ok
+s-own-param-plain.check	fail	-	run
+s-own-param-plain.desc	fail	-	library refused
+s-own-param-plain.interp	fail	-	run ok
+s-own-param-plain.js	fail	-	run ok
+s-own-param-plain.jvm	fail	-	run ok
+s-own-param-plain.split	fail	-	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local y in Lib.plus
+s-own-param-plain.workers	fail	-	run ok
+s-own-param-ra.check	fail	-	run
+s-own-param-ra.desc	fail	-	library refused
+s-own-param-ra.interp	fail	-	run ok
+s-own-param-ra.js	fail	-	run ok
+s-own-param-ra.jvm	fail	-	run ok
+s-own-param-ra.split	fail	-	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local y in Lib.%:
+s-own-param-ra.workers	fail	-	run ok
+s-recv-reads-own-plain.check	fail	-	run
+s-recv-reads-own-plain.desc	pass	-	
+s-recv-reads-own-plain.interp	fail	-	run ok
+s-recv-reads-own-plain.js	fail	-	run ok
+s-recv-reads-own-plain.jvm	fail	-	run ok
+s-recv-reads-own-plain.split	fail	-	run ok
+s-recv-reads-own-plain.workers	fail	-	run ok
+s-recv-reads-own-ra.check	fail	-	run
+s-recv-reads-own-ra.desc	pass	-	
+s-recv-reads-own-ra.interp	fail	-	run ok
+s-recv-reads-own-ra.js	fail	-	run ok
+s-recv-reads-own-ra.jvm	fail	-	run ok
+s-recv-reads-own-ra.split	fail	-	run ok
+s-recv-reads-own-ra.workers	fail	-	run ok
+s-trailing-using-bound-plain.check	pass	-	
+s-trailing-using-bound-plain.desc	pass	-	
+s-trailing-using-bound-plain.interp	pass	-	
+s-trailing-using-bound-plain.js	pass	-	
+s-trailing-using-bound-plain.jvm	pass	-	
+s-trailing-using-bound-plain.split	pass	-	
+s-trailing-using-bound-plain.workers	pass	-	
+s-trailing-using-bound-ra.check	fail	-	run
+s-trailing-using-bound-ra.desc	fail	-	library refused
+s-trailing-using-bound-ra.interp	fail	-	run ok
+s-trailing-using-bound-ra.js	fail	-	run ok
+s-trailing-using-bound-ra.jvm	fail	-	run ok
+s-trailing-using-bound-ra.split	fail	-	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local u in Lib.%:
+s-trailing-using-bound-ra.workers	fail	-	run ok
+s-trailing-using-reads-own-plain.check	fail	-	run
+s-trailing-using-reads-own-plain.desc	pass	-	
+s-trailing-using-reads-own-plain.interp	fail	-	run ok
+s-trailing-using-reads-own-plain.js	fail	-	run ok
+s-trailing-using-reads-own-plain.jvm	fail	-	run ok
+s-trailing-using-reads-own-plain.split	fail	-	run ok
+s-trailing-using-reads-own-plain.workers	fail	-	run ok
+s-trailing-using-reads-own-ra.check	fail	-	run
+s-trailing-using-reads-own-ra.desc	pass	-	
+s-trailing-using-reads-own-ra.interp	fail	-	run ok
+s-trailing-using-reads-own-ra.js	fail	-	run ok
+s-trailing-using-reads-own-ra.jvm	fail	-	run ok
+s-trailing-using-reads-own-ra.split	fail	-	run ok
+s-trailing-using-reads-own-ra.workers	fail	-	run ok
+s-trailing-using-value-plain.check	pass	-	
+s-trailing-using-value-plain.desc	pass	-	
+s-trailing-using-value-plain.interp	pass	-	
+s-trailing-using-value-plain.js	pass	-	
+s-trailing-using-value-plain.jvm	pass	-	
+s-trailing-using-value-plain.split	pass	-	
+s-trailing-using-value-plain.workers	pass	-	
+s-trailing-using-value-ra.check	fail	-	run
+s-trailing-using-value-ra.desc	fail	-	library refused
+s-trailing-using-value-ra.interp	fail	-	run ok
+s-trailing-using-value-ra.js	fail	-	run ok
+s-trailing-using-value-ra.jvm	fail	-	run ok
+s-trailing-using-value-ra.split	fail	-	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local u in Lib.%:
+s-trailing-using-value-ra.workers	fail	-	run ok
+s-upper-recv-plain.check	pass	-	
+s-upper-recv-plain.desc	pass	-	
+s-upper-recv-plain.interp	pass	-	
+s-upper-recv-plain.js	pass	-	
+s-upper-recv-plain.jvm	pass	-	
+s-upper-recv-plain.split	pass	-	
+s-upper-recv-plain.workers	pass	-	
+s-upper-recv-ra.check	fail	-	run
+s-upper-recv-ra.desc	fail	-	library refused
+s-upper-recv-ra.interp	fail	-	run ok
+s-upper-recv-ra.js	fail	-	run ok
+s-upper-recv-ra.jvm	fail	-	run ok
+s-upper-recv-ra.split	fail	-	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local x in Lib.%:
+s-upper-recv-ra.workers	fail	-	run ok
+s-value-recv-plain.check	pass	-	
+s-value-recv-plain.desc	pass	-	
+s-value-recv-plain.interp	pass	-	
+s-value-recv-plain.js	pass	-	
+s-value-recv-plain.jvm	pass	-	
+s-value-recv-plain.split	pass	-	
+s-value-recv-plain.workers	pass	-	
+s-value-recv-ra.check	fail	-	run
+s-value-recv-ra.desc	fail	-	library refused
+s-value-recv-ra.interp	fail	-	run ok
+s-value-recv-ra.js	fail	-	run ok
+s-value-recv-ra.jvm	fail	-	run ok
+s-value-recv-ra.split	fail	-	crash 1 Lib.scala: cannot write TASTy for the singleton type of the local x in Lib.%:
+s-value-recv-ra.workers	fail	-	run ok
 v-ra_inst_one_written.check	pass	-	
 v-ra_inst_one_written.desc	pass	-	
 v-ra_inst_one_written.interp	fail	-	run c_imp_imp_kept a17 a,n1 | c_imp_imp_any a17 a,n1 | c_imp_imp_dropped a,n1 | c_imp_lit_kept a17 n1 | c_imp_lit_any a17 n1 | c_imp_lit_dropped n1 | c_imp_val_kept a17 n1 | c_imp_val_any a17 n1 | c_i

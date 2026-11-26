@@ -29,7 +29,7 @@ def refused_line(cell, text):
     first `f:L:C: error: msg` (its column from 1)."""
     lines = text.splitlines()
     for i, l in enumerate(lines):
-        m = re.match(r'^-- (?:\[E\d+\] )?.*Error: .*?:(\d+):(\d+) -+', l)
+        m = re.match(r'^-- (?:\[E\d+\] )?.*Error: .*?:(\d+):(\d+)(?: -+)?\s*$', l)
         if m:
             line, col = int(m.group(1)), int(m.group(2)) + 1
             for b in lines[i + 1:]:
@@ -88,6 +88,9 @@ def self_test():
     box = ('-- [E006] Not Found Error: /w/Test.scala:4:18 -----------\n4 |  def +:(r: Int = l): Int = l + r\n'
            '  |                  ^\n  |                  Not found: l\n  |\n  | longer explanation available\n1 error found\n')
     assert refused_line('c', box) == 'c\trefused\t4:19: Not found: l', refused_line('c', box)
+    # A path long enough that scalac writes the box's header with no dashes after the place.
+    long = box.replace('/w/Test.scala:4:18 -----------', '/w/' + 'd' * 80 + '/Test.scala:4:18')
+    assert refused_line('c', long) == 'c\trefused\t4:19: Not found: l', refused_line('c', long)
     teq = '/w/Test.scala:4:19: error: Not found: l\n    def +:(r: Int = l)\n1 error found\n'
     assert refused_line('c', teq) == 'c\trefused\t4:19: Not found: l'
     assert run_line('c', 'a\nb  \n') == 'c\trun\ta | b'
@@ -96,13 +99,13 @@ def self_test():
     jp = '  public java.lang.String $plus$colon(java.lang.String, Num);\n    descriptor: (Ljava/lang/String;LNum;)Ljava/lang/String;\n  public int other();\n    descriptor: ()I\n'
     assert descriptors('c', jp) == 'c\t$plus$colon (Ljava/lang/String;LNum;)Ljava/lang/String;'
     assert lib('object A\n@main def run(): Unit = ()\n') == 'object A\n'
-    return 7
+    return 8
 
 
 if __name__ == '__main__':
     a = sys.argv[1:]
     if a[:1] == ['--self-test']:
-        print(f'lines: self-test: {self_test()} of 7 planted inputs read as planted')
+        print(f'lines: self-test: {self_test()} of 8 planted inputs read as planted')
     elif a[0] == 'run':
         code = a[2] if len(a) > 2 else '0'
         print(run_line(a[1], sys.stdin.read(), code if code == 'timeout' else int(code)))

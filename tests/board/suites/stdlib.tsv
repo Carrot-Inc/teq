@@ -2724,6 +2724,29 @@ right_assoc_read_pure_throw	fail	-	TypeError: Cannot read properties of null (re
 right_assoc_read_receiver_default	fail	-	error: value +: is not a member of E
 right_assoc_read_repeated	pass	-	
 right_assoc_read_selections	fail	-	error: value +: is not a member of the parents of class C
+right_assoc_sibling_leading_using	pass	-	
+right_assoc_sibling_leading_using_operator	pass	-	
+right_assoc_sibling_operator_call	pass	-	
+right_assoc_sibling_operator_qualifier	pass	-	
+right_assoc_sibling_plain	pass	-	
+right_assoc_sibling_trailing_using	pass	-	
+right_assoc_sibling_unswapped	pass	-	
+right_assoc_swap_conversion	fail	-	error: missing parameter type
+right_assoc_swap_evidence_after	fail	-	error: type T not found
+right_assoc_swap_evidence_between	fail	-	error: type T not found
+right_assoc_swap_evidence_default	fail	-	error: type T not found
+right_assoc_swap_export_colon	fail	-	error: extension method %: is not applicable to Int
+right_assoc_swap_export_in_extension	fail	-	error: extension method %: is not applicable to Int
+right_assoc_swap_export_plain	fail	-	error: extension method plus is not applicable to Int
+right_assoc_swap_export_selected	fail	-	error: value %: is not a member of String
+right_assoc_swap_implicit	fail	-	error: extension method %: is not applicable to Int
+right_assoc_swap_implicit_poly	fail	-	error: value %: is not a member of Lib
+right_assoc_swap_implicit_selected	fail	-	error: value %: is not a member of Int
+right_assoc_swap_interleaved	fail	-	error: this value does not take type arguments
+right_assoc_swap_lambda	fail	-	error: missing parameter type
+right_assoc_swap_lift_type	fail	-	output differs
+right_assoc_swap_lift_type_equality	fail	-	output differs
+right_assoc_swap_local_receiver_default	pass	-	
 right_assoc_throwing_operand_order	fail	-	TypeError: Cannot read properties of null (reading 'value')
 root_method_calls	pass	-	
 root_method_singleton_chain	pass	-	

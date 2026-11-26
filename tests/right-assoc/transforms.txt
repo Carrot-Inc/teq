@@ -1,0 +1,16 @@
+# The clause-index transformations of src/ (a clause list or order swapped, rotated, reversed, an element moved, arithmetic
+# over ext_clauses), each read once with its disposition (closure.txt's words). tests/right-assoc/readers.py holds the
+# tree to the census: a transformation added unseen fails it, and so does a line here no longer found.
+# file<TAB>function<TAB>line<TAB>kind<TAB>why
+src/fix/engine.rs	order	Schedule::Reverse => order.reverse(),	ORDER-FREE	no clause order: a spine collected backwards and put back, a class order, an atomic flag, or a fix schedule
+src/fix/engine.rs	order	order.swap(i, (x % (i as u64 + 1)) as usize);	ORDER-FREE	no clause order: a spine collected backwards and put back, a class order, an atomic flag, or a fix schedule
+src/interp/quoted.rs	application_spine	clauses.reverse();	ORDER-FREE	no clause order: a spine collected backwards and put back, a class order, an atomic flag, or a fix schedule
+src/symbols.rs	right_assoc_order	let first = order.remove(ext_clauses);	DELETE	the declared order's permutation
+src/symbols.rs	right_assoc_order	order.insert(receiver, first);	DELETE	the declared order's permutation
+src/tasty/show.rs	def_head	reordered.swap(first, second);	BOUNDARY	display: the source view put back for a definition's head
+src/typer/loader/bodies.rs	extension_clauses	clauses.reverse();	ORDER-FREE	no clause order: a spine collected backwards and put back, a class order, an atomic flag, or a fix schedule
+src/typer/loader/mod.rs	extension_shape	clauses.swap(first, second);	DELETE	the declared order's permutation
+src/typer/loader/mod.rs	loaded_sig_reading	clauses.swap(first, second);	DELETE	the declared order's permutation
+src/typer/quoted.rs	stored_class	order.insert(ae, k);	ORDER-FREE	no clause order: a spine collected backwards and put back, a class order, an atomic flag, or a fix schedule
+src/typer/quoted.rs	stored_class	order.remove(at);	ORDER-FREE	no clause order: a spine collected backwards and put back, a class order, an atomic flag, or a fix schedule
+src/typer/resolve.rs	order_alias_readers	if !order.first.swap(true, std::sync::atomic::Ordering::AcqRel) || crate::shared::lock_depth() > 0 {	ORDER-FREE	no clause order: a spine collected backwards and put back, a class order, an atomic flag, or a fix schedule

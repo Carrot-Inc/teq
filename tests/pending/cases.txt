@@ -213,6 +213,21 @@ right_assoc_read_poly_export	< using
 right_assoc_read_pure_throw	< caught
 right_assoc_read_receiver_default	< right
 right_assoc_read_selections	< right
+right_assoc_swap_conversion	< convert
+right_assoc_swap_evidence_after	< r78
+right_assoc_swap_evidence_between	< r7
+right_assoc_swap_evidence_default	< r7
+right_assoc_swap_export_colon	< x7
+right_assoc_swap_export_in_extension	< x7
+right_assoc_swap_export_plain	< x7
+right_assoc_swap_export_selected	< x7
+right_assoc_swap_implicit	< x7
+right_assoc_swap_implicit_poly	< x7
+right_assoc_swap_implicit_selected	< x7
+right_assoc_swap_interleaved	< 1yz
+right_assoc_swap_lambda	< 42
+right_assoc_swap_lift_type	< C
+right_assoc_swap_lift_type_equality	< wide
 string_constant_fold_surrogates	< folded to the pair
 super_rebind_result	< text
 trait_empty_parameters	< empty

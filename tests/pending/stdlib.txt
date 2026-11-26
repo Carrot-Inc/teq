@@ -399,6 +399,21 @@ right_assoc_read_poly_export	error: this value does not take type arguments
 right_assoc_read_pure_throw	TypeError: Cannot read properties of null (reading 'value')
 right_assoc_read_receiver_default	error: value +: is not a member of E
 right_assoc_read_selections	error: value +: is not a member of the parents of class C
+right_assoc_swap_conversion	error: missing parameter type
+right_assoc_swap_evidence_after	error: type T not found
+right_assoc_swap_evidence_between	error: type T not found
+right_assoc_swap_evidence_default	error: type T not found
+right_assoc_swap_export_colon	error: extension method %: is not applicable to Int
+right_assoc_swap_export_in_extension	error: extension method %: is not applicable to Int
+right_assoc_swap_export_plain	error: extension method plus is not applicable to Int
+right_assoc_swap_export_selected	error: value %: is not a member of String
+right_assoc_swap_implicit	error: extension method %: is not applicable to Int
+right_assoc_swap_implicit_poly	error: value %: is not a member of Lib
+right_assoc_swap_implicit_selected	error: value %: is not a member of Int
+right_assoc_swap_interleaved	error: this value does not take type arguments
+right_assoc_swap_lambda	error: missing parameter type
+right_assoc_swap_lift_type	output differs
+right_assoc_swap_lift_type_equality	output differs
 right_assoc_throwing_operand_order	TypeError: Cannot read properties of null (reading 'value')
 runtime_objects	error: not supported on JavaScript: method equals of scala.runtime.BoxesRunTime (a Java definition without an implementation in the std's pl
 sam_conversion_after_overloaded_apply	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)

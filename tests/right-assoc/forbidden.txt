@@ -1,0 +1,33 @@
+# What the swap at the definition deletes (closure.txt's DELETE rows and the compensations for the declared clause
+# order), named whatever it reads: a function, an enum, or an exact text. PENDING: present until the swap lands;
+# GONE: absent. tests/right-assoc/readers.py holds the tree to each line, independent of the order's markers.
+# kind<TAB>file<TAB>name or text<TAB>state<TAB>why
+fn	src/typer/apply.rs	apply_right_assoc_method	PENDING	a call's clauses put in the declared order, or the swapped selection's family
+fn	src/typer/apply.rs	right_assoc_declared_order	PENDING	a call's clauses put in the declared order, or the swapped selection's family
+fn	src/typer/apply.rs	right_assoc_selection	PENDING	a call's clauses put in the declared order, or the swapped selection's family
+fn	src/typer/apply.rs	right_assoc_written_lists	PENDING	a call's clauses put in the declared order, or the swapped selection's family
+fn	src/typer/apply.rs	selection_swaps	PENDING	a call's clauses put in the declared order, or the swapped selection's family
+fn	src/typer/apply.rs	signature_param_index	PENDING	a call's clauses put in the declared order, or the swapped selection's family
+fn	src/typer/apply.rs	swapped_prefix_fits	PENDING	a call's clauses put in the declared order, or the swapped selection's family
+fn	src/typer/apply.rs	swapped_receiver_error	PENDING	a call's clauses put in the declared order, or the swapped selection's family
+fn	src/symbols.rs	right_assoc_order	PENDING	the forward permutation
+fn	src/tasty/write/pickle.rs	declared_clause_order	PENDING	the pickle writer's permutation
+fn	src/typer/loader/bodies.rs	filled_clause	PENDING	a pickled body's compiled clause read as declared
+fn	src/typer/loader/mod.rs	extension_shape	PENDING	the loader's second inversion
+fn	src/typer/loader/mod.rs	loaded_sig_reading	PENDING	the loader's inversion of a pickled signature
+fn	src/jvm/gen.rs	jvm_param_order	PENDING	the JVM's descriptor permutation and its inverse
+fn	src/jvm/gen.rs	declared_clauses	PENDING	the JVM's descriptor permutation and its inverse
+fn	src/jvm/gen.rs	signature_order	PENDING	the JVM's descriptor permutation and its inverse
+fn	src/jvm/lower.rs	class_file_params	PENDING	the JVM's lowered path's reordering of a call's operands
+fn	src/jvm/lower.rs	extension_order	PENDING	the JVM's lowered path's reordering of a call's operands
+fn	src/jvm/lower.rs	reordered_operands	PENDING	the JVM's lowered path's reordering of a call's operands
+fn	src/jvm/lower.rs	operand_has_effect	PENDING	the JVM's lowered path's reordering of a call's operands
+fn	src/jvm/lower.rs	operand_may_throw	PENDING	the JVM's lowered path's reordering of a call's operands
+fn	src/jvm/lower.rs	object_inits	PENDING	the JVM's lowered path's reordering of a call's operands
+fn	src/jvm/lower.rs	reads_initialising_object	PENDING	the JVM's lowered path's reordering of a call's operands
+fn	src/jvm/lower.rs	extension_call_in_list_order	PENDING	the JVM's lowered path's reordering of a call's operands
+enum	src/jvm/lower.rs	ObjectInits	PENDING	object_inits's answer
+text	src/jvm/lower.rs	the default of a right-associative extension's receiver, whose getter takes the arguments of a clause the call gives after it	PENDING	lower_local_default's refusal, which the declared order alone makes
+text	src/typer/prims.rs	self.try_extensions(tl, lty, rty, op, None, &mut lists, span, expected)	PENDING	type_right_assoc's extension arm: the left operand typed first and passed as the receiver
+text	src/typer/prims.rs	!self.is_inert_path(tr)	PENDING	the member route's elision of the left operand's binding
+text	src/typer/substitution.rs	let lifted_go = !w.lifted_args.is_empty()	PENDING	unhoist's taking back of a right-associative operand's binding
