@@ -2,7 +2,7 @@
 //! stack, brought to the static type the typer recorded for it (a cast or an unboxing where a
 //! generic result is used at a concrete type), and then to the type its consumer wants.
 
-use crate::lir::{Adaptation, Capture, Comparing, ErasedType, Invoke, Kind, LiftedShape, LirId, MethodParam, MethodRef, ParamRole, Relation};
+use crate::lir::{Adaptation, Capture, Comparing, ErasedType, FieldRole, Invoke, Kind, LiftedShape, LirId, MethodParam, MethodRef, ParamRole, Relation};
 use super::classfile::*;
 use super::free::{Analysis, Free};
 use super::lifted::{Asker, LiftedBody, Placed};
@@ -460,7 +460,7 @@ pub struct Pending {
 pub enum ReturnTarget {
     Def(ErasedType),
     /// The closure stands in code no def holds (a parameter's default, a field's initialiser), where scalac refuses a
-    /// `return`: teq's typer refuses it, or the method reading the closure that makes no key (`Gen::load_lazy_key`,
+    /// `return`: teq's typer refuses it, or the method reading the closure that makes no key (`Gen::lower_lazy_key`,
     /// `load_return_key`).
     NoDef,
     /// A closure the walk of the program's code did not meet (`Cx::return_def`).
@@ -512,9 +512,6 @@ pub struct MethodCx {
     /// In a class's copy of a local def or lazy val declared in another class's code, `this` is that
     /// class's instance (`Lifted::home`).
     pub this_home: Option<ClassId>,
-    /// The slots of the parameters holding the keys that travel with local lazy vals' holders (`ParamRole::Key`'s
-    /// holder, `ParamRole::CapturedKey`).
-    pub lazy_keys: FxMap<SymId, u16>,
     /// The `try` blocks with a finalizer and the `synchronized` blocks the code being generated
     /// stands in, innermost last: a `return` leaves through each one's finalizer or monitor exit
     /// (`Gen::write_try`, `Gen::monitor_block`).
@@ -588,7 +585,6 @@ impl Default for MethodCx {
             return_target: ReturnTarget::Unknown,
             this_module: None,
             this_home: None,
-            lazy_keys: FxMap::default(),
             finalizers: Vec::new(),
             exits_taken: Vec::new(),
             early_return: None,
@@ -640,8 +636,6 @@ pub enum PhasedField {
     CheckedMethods,
     LongNameRefused,
     ModuleTree,
-    ClassHomes,
-    ClassKeys,
 }
 
 thread_local! {
@@ -807,10 +801,6 @@ pub struct Gen<'a> {
     pub lambdas: FxMap<Placed, ()>,
     /// The locals an anonymous class holds in fields: symbol, field name, type, and how.
     pub class_captures: Vec<(SymId, String, ErasedType, Held)>,
-    /// The fields of the class being written holding its `Extras`: the other classes' instances and
-    /// the keys of the lazy vals.
-    pub class_homes: Phased<Vec<(ClassId, String)>>,
-    pub class_keys: Phased<Vec<(SymId, String)>>,
     pub code: Code,
     /// The lowered nodes of the method being generated (`crate::lir`).
     pub lir: crate::lir::Body,
@@ -821,6 +811,10 @@ pub struct Gen<'a> {
     /// The planned method whose code is being lowered, from its context's making (`Gen::held_context`,
     /// `Gen::lower_lifted`) until it is held (`Gen::hold_method`): what the lowering reads of its parameters' roles.
     pub(super) planned: Option<crate::lir::MethodDef>,
+    /// The key the keyed body being lowered makes (`Gen::lower_keyed_body`), its code's own key of non-local returns.
+    pub(super) body_key: Option<crate::lir::TempId>,
+    /// A method's code is being written, from `Gen::open_method` to `Gen::end_method`: no lowering runs then.
+    pub(super) method_open: bool,
     /// The local defs the lowering running met, queued when it ends (`Gen::queue_local_defs`).
     pub(super) local_defs: Vec<SymId>,
     /// The templates read, by their text (`Gen::template`).
@@ -933,12 +927,12 @@ impl<'a> Gen<'a> {
             an: Analysis::default(),
             lambdas: FxMap::default(),
             class_captures: Vec::new(),
-            class_homes: Phased::new(PhasedField::ClassHomes, Vec::new()),
-            class_keys: Phased::new(PhasedField::ClassKeys, Vec::new()),
             code: Code::new(Vec::new()),
             lir: crate::lir::Body::default(),
             lower_declared: FxMap::default(),
             planned: None,
+            body_key: None,
+            method_open: false,
             local_defs: Vec::new(),
             templates: FxMap::default(),
             module_tree: Phased::new(PhasedField::ModuleTree, None),
@@ -1036,8 +1030,6 @@ impl<'a> Gen<'a> {
         self.an = Analysis::default();
         self.lambdas.clear();
         self.class_captures.clear();
-        self.class_homes.clear();
-        self.class_keys.clear();
         *self.module_tree = None;
     }
 
@@ -4240,12 +4232,6 @@ impl<'a> Gen<'a> {
         })
     }
 
-    pub fn load_this(&mut self) -> ErasedType {
-        let instance = self.lowering(|g| g.lower_instance());
-        self.write(instance);
-        self.lir.ty(instance).clone()
-    }
-
     /// Where the scope keeps what it holds for a local: its value, its cell where a closure
     /// shares it, a lazy val's holder. None for a local out of scope, and for a local class's
     /// capture in code with no instance.
@@ -5838,6 +5824,14 @@ impl<'a> Gen<'a> {
         out
     }
 
+    /// The fields of the class being written holding its `Extras` (`FieldRole`), the instances first, in their order,
+    /// each with its type.
+    pub fn extras_fields(&self) -> Vec<(Rc<str>, ErasedType)> {
+        let instances = self.plan.fields.iter().filter(|f| matches!(f.role, Some(FieldRole::Enclosing(_))));
+        let keys = self.plan.fields.iter().filter(|f| matches!(f.role, Some(FieldRole::CapturedKey(_))));
+        instances.chain(keys).map(|f| (f.name.clone(), f.ty.clone())).collect()
+    }
+
     /// The field of a lifted class holding the instance of `h`, the `i`th of its `Extras::homes` (numbered as the
     /// captures' fields are, two homes of one name apart).
     pub fn home_field(&self, h: ClassId, i: usize) -> String {
@@ -5848,32 +5842,6 @@ impl<'a> Gen<'a> {
     /// class's `Extras::keys`.
     pub fn key_field(&self, x: SymId, i: usize) -> String {
         format!("{}$lzyKey{}", encode(self.cx.input.interner.get(self.cx.input.syms.sym(x).name)), i)
-    }
-
-    /// Pushes the key travelling with the holder of the local lazy val `x`: a parameter or a field of the
-    /// code holding the holder, or in the method declaring the val, that method's own key.
-    pub fn load_lazy_key(&mut self, x: SymId) {
-        let object = ErasedType::object();
-        if let Some(&slot) = self.m.lazy_keys.get(&x) {
-            self.load(slot, &object);
-            return;
-        }
-        if self.m.this_home.is_none() && self.m.this_module.is_none() {
-            if let Some(field) = self.class_keys.iter().find(|(s, _)| *s == x).map(|(_, f)| f.clone()) {
-                let owner = self.this_name.clone();
-                self.load_this();
-                self.getfield(&owner, &field, &object);
-                return;
-            }
-        }
-        match self.m.return_key {
-            Some(slot) => self.load(slot, &object),
-            None => {
-                self.unsupported("a non-local return of a lazy val whose method makes no key");
-                self.code.op(op::ACONST_NULL);
-                self.code.push(VT::Null);
-            }
-        }
     }
 
     pub fn is_local_def(&self, s: SymId) -> bool {

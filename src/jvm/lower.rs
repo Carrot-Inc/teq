@@ -3,7 +3,7 @@
 //! constant pool refuse a write while one runs (`Gen::lowering`), since the order of what is
 //! written is the output's bytes.
 
-use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LiftedFrom, LiftedShape, LirId, List, MethodRef, ParamRole, Refusal, Relation, TempId};
+use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, FieldRole, Invoke, Kind, LiftedFrom, LiftedShape, LirId, List, MethodRef, ParamRole, Refusal, Relation, TempId};
 use super::gen::{rank_type, CallRoute, CaptureArgument, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, ReturnTarget, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::lifted::{Asker, Placed};
 use super::names::*;
@@ -47,21 +47,16 @@ impl<'a> Gen<'a> {
         self.planned.as_ref()?.params.iter().position(|p| p.role == *role)
     }
 
-    /// Runs a lowering with the writers refusing.
+    /// Runs a lowering with the writers refusing. No lowering runs while a method's code is written: every tree is
+    /// lowered when its method is held, before the writer meets it.
     pub(super) fn lowering<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        assert!(!self.method_open, "a lowering runs while a method's code is written");
         let was = self.code.frozen;
-        // A lowering the writer starts stands where the writer is: the locals an earlier lowering
-        // declared are in its scope only once the writer has stored them (`Gen::declared_by_lowering`).
-        let earlier = (!was).then(|| std::mem::take(&mut self.lower_declared));
         self.code.frozen = true;
         self.cw.cp.frozen = true;
         let out = f(self);
         self.code.frozen = was;
         self.cw.cp.frozen = was;
-        if let Some(earlier) = earlier {
-            let own = std::mem::replace(&mut self.lower_declared, earlier);
-            self.lower_declared.extend(own);
-        }
         // The local defs the lowering met are queued once it ends, in the context of the method it lowered for.
         if !was {
             self.queue_local_defs();
@@ -1288,7 +1283,9 @@ impl<'a> Gen<'a> {
         let ctor = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
         let made = self.lir.make(&ctor, &[]);
         let kept = self.lir.keep(key, made);
+        let outer = self.body_key.replace(key);
         let value = self.lower_expr(body, &ret);
+        self.body_key = outer;
         // A def that loops returns its body's value from inside the loop, as TailRec wraps the body it loops in a
         // return to the method (TailRec.scala 219-221) before NonLocalReturns wraps the whole in its `try`.
         let value = match self.m.tail {
@@ -2015,10 +2012,12 @@ impl<'a> Gen<'a> {
             return self.param(i);
         }
         if let Some(k) = current.filter(|_| self.m.this_module.is_none()) {
-            let held = if self.m.this_home.is_none() { self.class_homes.iter().position(|(c, _)| *c == h) } else { self.class_extras(k).homes.iter().position(|&c| c == h) };
-            if let Some(i) = held {
+            let held: Option<Rc<str>> = match self.m.this_home {
+                None => self.role_field(&FieldRole::Enclosing(h)).map(|f| f.name.clone()),
+                Some(_) => self.class_extras(k).homes.iter().position(|&c| c == h).map(|i| Rc::from(self.home_field(h, i))),
+            };
+            if let Some(name) = held {
                 let owner = self.class_name(k);
-                let name: Rc<str> = Rc::from(self.home_field(h, i));
                 let receiver = self.lower_instance();
                 return self.lir.push(Kind::Field { receiver, owner, name }, t);
             }
@@ -2063,14 +2062,55 @@ impl<'a> Gen<'a> {
         }
         if key {
             nodes.push(match key_of {
-                Some(x) => self.lir.push(Kind::LazyKey(x), object.clone()),
+                Some(x) => self.lower_lazy_key(x),
                 None => self.lir.push(Kind::ReturnKey, object.clone()),
             });
         }
         for c in captures {
-            nodes.push(if c.key { self.lir.push(Kind::LazyKey(c.sym), object.clone()) } else { self.lower_capture(c.sym) });
+            nodes.push(if c.key { self.lower_lazy_key(c.sym) } else { self.lower_capture(c.sym) });
         }
         nodes
+    }
+
+    /// The key that travels with the holder of the local lazy val `x`, as the code holds it: the parameter it was
+    /// given (`ParamRole::Key`'s holder, `ParamRole::CapturedKey`), the field of the instance that holds it
+    /// (`FieldRole::CapturedKey`) where the instance is the class's own, or in the code declaring the val the key of
+    /// that code's own non-local returns (`Gen::lower_own_key`); reported where the code holds none.
+    pub(super) fn lower_lazy_key(&mut self, x: SymId) -> LirId {
+        let object = ErasedType::object();
+        let given = self.planned.as_ref().and_then(|m| {
+            m.params.iter().position(|p| match p.role {
+                ParamRole::Key { holder } => holder == Some(x),
+                ParamRole::CapturedKey(k) => k == x,
+                _ => false,
+            })
+        });
+        if let Some(i) = given {
+            return self.param(i);
+        }
+        if self.m.this_home.is_none() && self.m.this_module.is_none() {
+            if let Some(name) = self.role_field(&FieldRole::CapturedKey(x)).map(|f| f.name.clone()) {
+                let owner = self.this_name.clone();
+                let receiver = self.lower_instance();
+                return self.lir.push(Kind::Field { receiver, owner, name }, object);
+            }
+        }
+        if let Some(own) = self.lower_own_key() {
+            return own;
+        }
+        self.unsupported("a non-local return of a lazy val whose method makes no key");
+        self.lir.push(Kind::Null, object)
+    }
+
+    /// The key of the non-local returns of the code being lowered: the one a closure (or a local lazy val's accessor
+    /// or initialiser) was given, or the one the def's keyed body makes (`Gen::lower_keyed_body`).
+    fn lower_own_key(&mut self) -> Option<LirId> {
+        let given = self.planned.as_ref().and_then(|m| m.params.iter().position(|p| matches!(p.role, ParamRole::Key { .. })));
+        match (given, self.body_key) {
+            (Some(i), _) => Some(self.param(i)),
+            (None, Some(key)) => Some(self.lir.push(Kind::Temp(key), ErasedType::object())),
+            (None, None) => None,
+        }
     }
 
     /// A function value: its body `code` lifted to a method over what it captures, named where it is lowered
@@ -2701,7 +2741,7 @@ impl<'a> Gen<'a> {
     /// The `Extras` `e` as the code holds them.
     pub(super) fn lower_extras(&mut self, e: &Extras) -> Vec<LirId> {
         let mut nodes: Vec<LirId> = e.homes.iter().map(|&h| self.lower_instance_of(h)).collect();
-        nodes.extend(e.keys.iter().map(|&x| self.lir.push(Kind::LazyKey(x), ErasedType::object())));
+        nodes.extend(e.keys.iter().map(|&x| self.lower_lazy_key(x)));
         nodes
     }
 

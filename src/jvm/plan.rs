@@ -2,7 +2,7 @@
 //! takes it: a member's facts as a class file's access flags, the members recorded as they are
 //! declared, and what the emitters ask of the class's members.
 
-use crate::lir::{ClassDef, ClassFlags, ErasedType, FieldDef, FieldFlags, MethodDef, MethodFlags, MethodParam, Visibility};
+use crate::lir::{ClassDef, ClassFlags, ErasedType, FieldDef, FieldFlags, FieldRole, MethodDef, MethodFlags, MethodParam, Visibility};
 use crate::types::ClassId;
 use super::classfile::*;
 use super::gen::Gen;
@@ -89,14 +89,20 @@ impl<'a> Gen<'a> {
         self.checked_methods.clear();
     }
 
-    /// Declares a field of the class, after those declared so far.
-    pub fn field(&mut self, flags: FieldFlags, name: &str, ty: &ErasedType) {
+    /// Declares a field of the class, after those declared so far, holding what its `role` says where it holds a
+    /// hidden value of the class's code.
+    pub fn field(&mut self, flags: FieldFlags, name: &str, ty: &ErasedType, role: Option<FieldRole>) {
         let mut desc = String::new();
         ty.desc(&mut desc);
         let planning = std::mem::replace(&mut self.cw.cp.plan_frozen, false);
         self.cw.field(field_access(flags), name, &desc);
         self.cw.cp.plan_frozen = planning;
-        self.plan.fields.push(FieldDef { name: Rc::from(name), ty: ty.clone(), flags });
+        self.plan.fields.push(FieldDef { name: Rc::from(name), ty: ty.clone(), flags, role });
+    }
+
+    /// The class's field of the role `role`.
+    pub fn role_field(&self, role: &FieldRole) -> Option<&FieldDef> {
+        self.plan.fields.iter().find(|f| f.role.as_ref() == Some(role))
     }
 
     /// Declares a field of the class before those declared so far, as dotty's
@@ -107,7 +113,7 @@ impl<'a> Gen<'a> {
         let planning = std::mem::replace(&mut self.cw.cp.plan_frozen, false);
         self.cw.field_first(field_access(flags), name, &desc);
         self.cw.cp.plan_frozen = planning;
-        self.plan.fields.insert(0, FieldDef { name: Rc::from(name), ty: ty.clone(), flags });
+        self.plan.fields.insert(0, FieldDef { name: Rc::from(name), ty: ty.clone(), flags, role: None });
     }
 
     /// A method the class declares without a body.

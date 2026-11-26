@@ -1,6 +1,6 @@
 //! Classes, traits, objects, enums and the module class of a file's top-level definitions.
 
-use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedFrom, LiftedShape, LirId, MethodDef, MethodFlags, MethodParam, MethodRef, ParamRole, Refusal, Relation, TempId, Visibility};
+use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, FieldRole, Invoke, Kind, LiftedFrom, LiftedShape, LirId, MethodDef, MethodFlags, MethodParam, MethodRef, ParamRole, Refusal, Relation, TempId, Visibility};
 use super::classfile::*;
 use super::free;
 use super::gen::*;
@@ -314,16 +314,8 @@ impl<'a> Gen<'a> {
                     syms.push(*sym);
                 }
                 ParamRole::Instance | ParamRole::Underlying(_) => m.this_slot = Some(slot),
-                ParamRole::Key { holder } => {
-                    m.return_key = Some(slot);
-                    if let Some(x) = holder {
-                        m.lazy_keys.insert(*x, slot);
-                    }
-                }
-                ParamRole::CapturedKey(x) => {
-                    m.lazy_keys.insert(*x, slot);
-                }
-                ParamRole::Declared(None) | ParamRole::Enclosing(_) => {}
+                ParamRole::Key { .. } => m.return_key = Some(slot),
+                ParamRole::Declared(None) | ParamRole::CapturedKey(_) | ParamRole::Enclosing(_) => {}
             }
             m.params.push((slot, p.ty.clone()));
             slot += if p.ty.wide() { 2 } else { 1 };
@@ -355,6 +347,7 @@ impl<'a> Gen<'a> {
         self.code = Code::new(locals);
         self.code.relax = self.relax;
         self.m = m;
+        self.method_open = true;
     }
 
     /// The one gate of a method of the class file, whatever writes it (`Gen::held_context`,
@@ -424,6 +417,7 @@ impl<'a> Gen<'a> {
     /// (`super_targets`), the function arities it names and what it reports. It asks for no
     /// second writing of the class with wide jumps (`overflow`).
     fn end_method(&mut self, m: MethodDef, entered: bool) {
+        self.method_open = false;
         let at = self.m.at;
         let code = std::mem::replace(&mut self.code, Code::new(Vec::new()));
         if code.underflow || code.misreserved {
@@ -1787,6 +1781,8 @@ impl<'a> Gen<'a> {
         self.line_file = info.file;
 
         let n_captures = if is_anon { tc.ctor_params.len() } else { tc.captures };
+        // The instances and keys its copies of local defs and lazy vals read (`Gen::class_extras`).
+        let extras = if n_captures > 0 { self.class_extras(c) } else { Extras::default() };
         if n_captures > 0 {
             // A given class's or object's enclosing instance is scalac's field `$outer`.
             let given_class = cx.given_class_classes.contains_key(&c) || cx.inner_given_object_classes.contains_key(&c);
@@ -1798,16 +1794,6 @@ impl<'a> Gen<'a> {
                 let held = self.held(s);
                 let field = if given_class && i == 0 { "$outer".to_string() } else { format!("{}$c{}", base, i) };
                 self.class_captures.push((s, field, ty, held));
-            }
-            // The instances and keys its copies of local defs and lazy vals read (`Gen::class_extras`).
-            let extras = self.class_extras(c);
-            for (i, &h) in extras.homes.iter().enumerate() {
-                let field = self.home_field(h, i);
-                self.class_homes.push((h, field));
-            }
-            for (i, &x) in extras.keys.iter().enumerate() {
-                let field = self.key_field(x, i);
-                self.class_keys.push((x, field));
             }
         }
 
@@ -1826,32 +1812,33 @@ impl<'a> Gen<'a> {
                 // `@threadUnsafe`: the container of the member's type and its flag, no handle
                 // (`transformMemberDefThreadUnsafe`, `Gen::thread_unsafe_getter`).
                 let (container, flag) = self.thread_unsafe_names(&f.name);
-                self.field(FieldFlags::PRIVATE, &container, &f.ty);
-                self.field(FieldFlags::PRIVATE, &flag, &ErasedType::Z);
+                self.field(FieldFlags::PRIVATE, &container, &f.ty, None);
+                self.field(FieldFlags::PRIVATE, &flag, &ErasedType::Z, None);
                 continue;
             }
             if f.lazy {
                 // `private @volatile var x$lzyN: AnyRef` (`transformMemberDefThreadSafeNew`).
                 let h = self.lazy_holder(&f.name, &f.ty);
-                self.field(FieldFlags { volatile: true, ..FieldFlags::PRIVATE }, &h.container, &ErasedType::object());
+                self.field(FieldFlags { volatile: true, ..FieldFlags::PRIVATE }, &h.container, &ErasedType::object(), None);
                 continue;
             }
             let volatile = self.is_volatile(f.sym);
             let is_final = !volatile && cx.private_params.contains_key(&f.sym);
-            self.field(FieldFlags { is_final, volatile, ..FieldFlags::PRIVATE }, &f.name, &f.ty);
+            self.field(FieldFlags { is_final, volatile, ..FieldFlags::PRIVATE }, &f.name, &f.ty, None);
         }
         for (s, field, _, _) in self.class_captures.clone() {
             let ty = self.anon_capture_type(s);
             let outer = field == "$outer";
-            self.field(FieldFlags { is_final: outer, synthetic: outer, ..FieldFlags::PRIVATE }, &field, &ty);
+            self.field(FieldFlags { is_final: outer, synthetic: outer, ..FieldFlags::PRIVATE }, &field, &ty, None);
         }
         // An instance of another class is read by the copies of the classes made here too.
-        for (h, field) in self.class_homes.clone() {
-            let ty = self.class_type(h);
-            self.field(FieldFlags { visibility: Visibility::Package, is_final: true, synthetic: true, ..FieldFlags::PRIVATE }, &field, &ty);
+        for (i, &h) in extras.homes.iter().enumerate() {
+            let (field, ty) = (self.home_field(h, i), self.class_type(h));
+            self.field(FieldFlags { visibility: Visibility::Package, is_final: true, synthetic: true, ..FieldFlags::PRIVATE }, &field, &ty, Some(FieldRole::Enclosing(h)));
         }
-        for (_, field) in self.class_keys.clone() {
-            self.field(FieldFlags::PRIVATE, &field, &ErasedType::object());
+        for (i, &x) in extras.keys.iter().enumerate() {
+            let field = self.key_field(x, i);
+            self.field(FieldFlags::PRIVATE, &field, &ErasedType::object(), Some(FieldRole::CapturedKey(x)));
         }
         // Decided before an object's `<clinit>` is written, which writes its constructor's body.
         let primary = (!is_trait).then(|| self.primary_ctor(tc, &fields, &super_name, enum_class.or(superclass), is_value_case, is_object || given_module, is_anon));
@@ -1888,9 +1875,9 @@ impl<'a> Gen<'a> {
             made.sort_by(|a, b| (&a.0, format!("L{};", a.1)).cmp(&(&b.0, format!("L{};", b.1))));
             module_fields.extend(made.into_iter().map(|(field, class)| (MODULE_FIELD, field, ErasedType::L(class))));
             for (flags, field, ty) in module_fields {
-                self.field(flags, &field, &ty);
+                self.field(flags, &field, &ty, None);
             }
-            self.field(MODULE_FIELD, "MODULE$", &ErasedType::L(name.clone()));
+            self.field(MODULE_FIELD, "MODULE$", &ErasedType::L(name.clone()), None);
             if clinit_first {
                 self.module_clinit(&primary.as_ref().expect("an object's constructor").1);
                 early_lookups = Some(self.lazy_holders.len());
@@ -1903,7 +1890,7 @@ impl<'a> Gen<'a> {
         // runs the superclass's alone, stores it in `MODULE$`, then runs the body, which may read
         // the given through `MODULE$`.
         if given_module {
-            self.field(MODULE_FIELD, "MODULE$", &ErasedType::L(name.clone()));
+            self.field(MODULE_FIELD, "MODULE$", &ErasedType::L(name.clone()), None);
             if clinit_first {
                 self.module_clinit(&primary.as_ref().expect("an object's constructor").1);
                 early_lookups = Some(self.lazy_holders.len());
@@ -1914,10 +1901,10 @@ impl<'a> Gen<'a> {
         self.given_object_fields(&tc.init);
         let instance_enum = cx.enum_of_case(c).or(is_enum.then_some(c)).is_some_and(|e| cx.instance_enum(e));
         if is_value_case {
-            self.field(FieldFlags::PRIVATE, "$name", &ErasedType::L(Rc::from(STRING)));
-            self.field(FieldFlags::PRIVATE, "$ordinal", &ErasedType::I);
+            self.field(FieldFlags::PRIVATE, "$name", &ErasedType::L(Rc::from(STRING)), None);
+            self.field(FieldFlags::PRIVATE, "$ordinal", &ErasedType::I, None);
             if !instance_enum {
-                self.field(FieldFlags { visibility: Visibility::Public, is_static: true, ..FieldFlags::PRIVATE }, "$instance", &ErasedType::L(name.clone()));
+                self.field(FieldFlags { visibility: Visibility::Public, is_static: true, ..FieldFlags::PRIVATE }, "$instance", &ErasedType::L(name.clone()), None);
             }
         }
         if is_enum && !instance_enum {
@@ -2132,7 +2119,7 @@ impl<'a> Gen<'a> {
             let Some(&k) = cx.given_objects.get(&s) else { continue };
             let name = self.field_name(s);
             let class = self.class_name(k);
-            self.field(MODULE_FIELD, &name, &ErasedType::L(class));
+            self.field(MODULE_FIELD, &name, &ErasedType::L(class), None);
         }
     }
 
@@ -2844,8 +2831,7 @@ impl<'a> Gen<'a> {
     fn held_fields(&self) -> (Option<(usize, String)>, Vec<(usize, String)>) {
         let outer = self.direct_outer();
         let mut held: Vec<(usize, String)> = self.class_captures.iter().enumerate().filter(|&(i, _)| Some(i) != outer).map(|(i, c)| (i, c.1.clone())).collect();
-        let extras = self.class_homes.iter().map(|h| h.1.clone()).chain(self.class_keys.iter().map(|x| x.1.clone()));
-        held.extend(extras.enumerate().map(|(j, field)| (self.class_captures.len() + j, field)));
+        held.extend(self.extras_fields().into_iter().enumerate().map(|(j, (field, _))| (self.class_captures.len() + j, field.to_string())));
         (outer.map(|i| (i, self.class_captures[i].1.clone())), held)
     }
 
@@ -3665,7 +3651,7 @@ impl<'a> Gen<'a> {
 
     /// A private field of the class being written and its public getter.
     fn plain_field(&mut self, field: &str, ty: &ErasedType) {
-        self.field(FieldFlags::PRIVATE, field, ty);
+        self.field(FieldFlags::PRIVATE, field, ty, None);
         self.hold_member(MethodFlags::PUBLIC, field, &method_desc(&[], ty), &[], ty.clone(), &[], MethodSite::default(), "jar trait field's storage", |g| g.getter_body(field, ty));
     }
 
@@ -4878,9 +4864,9 @@ impl<'a> Gen<'a> {
             let field = encode(cx.input.interner.get(syms.class(k).name));
             let ty = ErasedType::L(self.class_name(k));
             let flags = syms.class(k).module_sym.map_or(MODULE_FIELD, |m| module_field_flags(syms, m));
-            self.field(flags, &field, &ty);
+            self.field(flags, &field, &ty, None);
         }
-        self.field(MODULE_FIELD, "MODULE$", &ErasedType::L(name.clone()));
+        self.field(MODULE_FIELD, "MODULE$", &ErasedType::L(name.clone()), None);
 
         let group = cx.file_group[file.0 as usize];
         let vals: &[(SymId, TExprId)] = if group == u32::MAX { &[] } else { &cx.layout.file_groups[group as usize].1 };
@@ -4912,20 +4898,20 @@ impl<'a> Gen<'a> {
             if f.lazy && self.is_thread_unsafe(f.sym) {
                 // `@threadUnsafe`: its container and flag (`emit_class`).
                 let (container, flag) = self.thread_unsafe_names(&f.name);
-                self.field(FieldFlags::PRIVATE, &container, &f.ty);
-                self.field(FieldFlags::PRIVATE, &flag, &ErasedType::Z);
+                self.field(FieldFlags::PRIVATE, &container, &f.ty, None);
+                self.field(FieldFlags::PRIVATE, &flag, &ErasedType::Z, None);
                 continue;
             }
             if f.lazy {
                 // `private @volatile var x$lzyN: AnyRef` (`emit_class`).
                 let h = self.lazy_holder(&f.name, &f.ty);
-                self.field(FieldFlags { volatile: true, ..FieldFlags::PRIVATE }, &h.container, &ErasedType::object());
+                self.field(FieldFlags { volatile: true, ..FieldFlags::PRIVATE }, &h.container, &ErasedType::object(), None);
                 continue;
             }
             if f.constant.is_some() {
                 continue;
             }
-            self.field(FieldFlags { volatile: self.is_volatile(f.sym), ..FieldFlags::PRIVATE }, &f.name, &f.ty);
+            self.field(FieldFlags { volatile: self.is_volatile(f.sym), ..FieldFlags::PRIVATE }, &f.name, &f.ty, None);
         }
         let given_inits: Vec<TInit> = vals.iter().map(|&(s, e)| TInit::Field(s, e)).collect();
         self.given_object_fields(&given_inits);

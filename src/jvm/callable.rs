@@ -752,7 +752,7 @@ impl<'a> Gen<'a> {
         self.line_file = info.file;
         let this = ErasedType::L(name.clone());
         let outer = self.sym_type(tc.ctor_params[0]);
-        self.field(FieldFlags { is_final: true, ..FieldFlags::PRIVATE }, "$outer", &outer);
+        self.field(FieldFlags { is_final: true, ..FieldFlags::PRIVATE }, "$outer", &outer, None);
         self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), &[MethodParam::declared(None, outer.clone())], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
         self.hold_tree("inner companion's constructor", |g| {
@@ -1052,7 +1052,7 @@ impl<'a> Gen<'a> {
         let this = ErasedType::L(name.clone());
         let outer_name = self.class_name(o);
         let outer = ErasedType::L(outer_name.clone());
-        self.field(FieldFlags { is_final: true, synthetic: true, ..FieldFlags::PRIVATE }, "$outer", &outer);
+        self.field(FieldFlags { is_final: true, synthetic: true, ..FieldFlags::PRIVATE }, "$outer", &outer, None);
         self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), &[MethodParam::declared(None, outer.clone())], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
         self.hold_tree("instance companion's constructor", |g| {
@@ -1305,7 +1305,7 @@ impl<'a> Gen<'a> {
         self.abstract_class = false;
         self.line_file = info.file;
         let this = ErasedType::L(name.clone());
-        self.field(super::plan::MODULE_FIELD, "MODULE$", &this);
+        self.field(super::plan::MODULE_FIELD, "MODULE$", &this, None);
 
         // Its constructor's tree: `Object`'s constructor, then the enum's values it holds, which
         // the class file runs in the `<clinit>` (`Gen::write_module_part`), written first.
@@ -1804,11 +1804,7 @@ impl<'a> Gen<'a> {
         // from the field holding it.
         let mut captured: Vec<(String, ErasedType)> = self.class_captures.clone().into_iter().map(|(s, f, _, _)| (f, self.anon_capture_type(s))).collect();
         // Its `Extras` after them, from their fields too.
-        for (h, f) in self.class_homes.clone() {
-            let t = self.class_type(h);
-            captured.push((f, t));
-        }
-        captured.extend(self.class_keys.iter().map(|(_, f)| (f.clone(), ErasedType::object())));
+        captured.extend(self.extras_fields().into_iter().map(|(f, t)| (f.to_string(), t)));
         if captured.len() < tc.captures || tc.captures > all.len() {
             return;
         }

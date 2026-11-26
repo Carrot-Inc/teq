@@ -256,7 +256,7 @@ impl<'a> Gen<'a> {
     /// initialiser computing `init`.
     pub fn thread_safe_member(&mut self, getter: &str, ty: &ErasedType, init: super::classes::HolderInit, flags: MethodFlags) {
         let h = self.lazy_holder(getter, ty);
-        self.field(FieldFlags { volatile: true, ..FieldFlags::PRIVATE }, &h.container, &ErasedType::object());
+        self.field(FieldFlags { volatile: true, ..FieldFlags::PRIVATE }, &h.container, &ErasedType::object(), None);
         let desc = method_desc(&[], ty);
         self.hold_member(flags, getter, &desc, &[], ty.clone(), &[], super::classes::MethodSite::default(), "lazy member's getter", |g| g.lower_thread_safe_getter(&h));
         self.thread_safe_init(&h, &init);

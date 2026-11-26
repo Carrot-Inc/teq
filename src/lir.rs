@@ -414,11 +414,6 @@ pub enum Kind {
     /// The key of the non-local returns of the def the code stands in, a reference: the one the
     /// def made, or the one the code was given where it is a closure's.
     ReturnKey,
-    /// The key of the non-local returns that travels with the holder of a local lazy val, where
-    /// the code holds it: given to the method, held by the instance, or the def's own
-    /// (`ReturnKey`). Transitional: the symbol ends when a method's hidden parameters are
-    /// parameters of the class-level plan's method.
-    LazyKey(SymId),
     /// The temporary declared with the value of `init`; it lives to the end of the block that
     /// holds this node. No value.
     Let { temp: TempId, init: LirId },
@@ -657,7 +652,7 @@ impl Body {
         match &self.node(id).kind {
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => {}
             Kind::Local(_) | Kind::Param(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This | Kind::StaticField { .. } => {}
-            Kind::ReturnKey | Kind::LazyKey(_) | Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
+            Kind::ReturnKey | Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
             Kind::Block { stmts, result } => {
                 out.extend(self.items(*stmts));
                 out.push(*result);
@@ -1039,12 +1034,24 @@ impl FieldFlags {
     pub const PRIVATE: FieldFlags = FieldFlags { visibility: Visibility::Private, is_static: false, is_final: false, volatile: false, synthetic: false, enum_value: false };
 }
 
+/// What a field of a lifted class holds for the copies of local definitions its code makes, beside its captures: the
+/// hidden values its methods' parameters of the same roles are given (`ParamRole`), held for its other methods.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FieldRole {
+    /// The instance of the class whose code the copies were made from.
+    Enclosing(ClassId),
+    /// The key that travels with the holder of the local lazy val.
+    CapturedKey(SymId),
+}
+
 /// A field a class defines.
 #[derive(Debug)]
 pub struct FieldDef {
     pub name: Rc<str>,
     pub ty: ErasedType,
     pub flags: FieldFlags,
+    /// What it holds, where it holds a hidden value of the class's code.
+    pub role: Option<FieldRole>,
 }
 
 /// What kind of class a class is. Every class the back ends write is public.

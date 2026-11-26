@@ -411,7 +411,6 @@ impl<'a> Gen<'a> {
                 self.invoke_mref(&method);
             }
             Kind::ReturnKey => self.load_return_key(),
-            Kind::LazyKey(holder) => self.load_lazy_key(holder),
             Kind::Let { temp, init } => {
                 self.write(init);
                 let held = self.lir.ty(init).clone();
@@ -731,14 +730,14 @@ impl<'a> Gen<'a> {
         for i in part {
             if !init {
                 for f in fields.iter().filter(|f| f.at == i) {
-                    self.field(f.flags, &f.name, &f.ty);
+                    self.field(f.flags, &f.name, &f.ty, None);
                 }
             }
             self.write(all[i]);
         }
         if !init {
             for f in fields.iter().filter(|f| f.at >= all.len()) {
-                self.field(f.flags, &f.name, &f.ty);
+                self.field(f.flags, &f.name, &f.ty, None);
             }
         }
         let ret = self.m.ret.clone();
