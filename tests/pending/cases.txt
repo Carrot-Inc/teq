@@ -41,7 +41,6 @@ const_trait_parent_argument	< 42
 const_unary_operand_before_init	< -42
 const_unary_plus_block_before_init	< 42
 const_unary_plus_effect_before_init	< 42
-constant_edges	< 8
 constant_top_level_reads	> file init
 conversion_open_var_lock	< list of double
 conversion_open_var_prefix	< list of double

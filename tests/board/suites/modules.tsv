@@ -60,7 +60,7 @@ companionvalue	pass	-
 compoundlift	pass	-	
 compoundpaths	pass	-	
 concretesetter	pass	-	
-constant_chain	fail	-	constant_chain classes
+constant_chain	pass	-	
 constantpickle	pass	-	
 constantproducts	pass	-	
 copyextractors	pass	-	

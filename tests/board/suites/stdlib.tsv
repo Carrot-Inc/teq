@@ -535,7 +535,7 @@ const_trait_parent_argument	fail	-	output differs
 const_unary_operand_before_init	fail	-	output differs
 const_unary_plus_block_before_init	fail	-	output differs
 const_unary_plus_effect_before_init	fail	-	output differs
-constant_edges	fail	-	error: inline value must have a literal constant type
+constant_edges	pass	-	
 constant_final_val_accessor	pass	-	
 constant_final_val_early	pass	-	
 constant_final_vals	pass	-	
@@ -1587,6 +1587,8 @@ inline_type_test_null	pass	-
 inline_unchanged_structures	pass	-	
 inline_unused_effectful_argument	pass	-	
 inline_val_const_value_fold	pass	-	
+inline_val_declared_path_chain	pass	-	
+inline_val_declared_path_reads	pass	-	
 inline_val_declared_singletons	pass	-	
 inline_val_expansion_check	pass	-	
 inline_val_pure_path	pass	-	

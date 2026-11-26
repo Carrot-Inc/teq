@@ -4109,8 +4109,9 @@ impl<'a> Worker<'a> {
     }
 
     /// A `final` or `inline` val of a literal type (`final val x: 1 = 1`, a lazy or an implicit
-    /// one too, and a pickle's `final val x = 1`, which scalac pickles with its constant type) is
-    /// a constant by its signature, whichever worker types its initialiser. A given is none.
+    /// one too, and a pickle's `final val x = 1`, which scalac pickles with its constant type), or
+    /// of a singleton path that widens to one, is a constant by its signature, whichever worker
+    /// types its initialiser. A given is none.
     fn constant_by_signature(&mut self, s: SymId) -> Option<TExpr> {
         use crate::ast::mods;
         let info = self.syms.sym(s);
@@ -4129,7 +4130,16 @@ impl<'a> Worker<'a> {
         } else {
             self.sig_of(s);
         }
-        let crate::types::Type::Lit(l) = self.types.get(self.syms.sig(s).ret) else { return None };
+        // A written singleton path (`inline val b: Int.MaxValue.type`, `c: t.type` of a constant `t`) is the constant
+        // its path widens to, as dotty's `constToLiteral` reads the reference's `widenTermRefExpr`: a fact of the
+        // declarations, each val on the way through its signature, whichever worker types the initialiser and
+        // whenever it publishes it.
+        let ret = self.syms.sig(s).ret;
+        let ret = match self.types.get(ret) {
+            crate::types::Type::Term(_) | crate::types::Type::Select(..) => self.widen_path(ret),
+            _ => ret,
+        };
+        let crate::types::Type::Lit(l) = self.types.get(ret) else { return None };
         Some(match self.types.lit_val(l) {
             crate::types::LitVal::Int(v) => TExpr::Int(v),
             crate::types::LitVal::Byte(v) => TExpr::Int(v as i32),

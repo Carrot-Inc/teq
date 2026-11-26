@@ -45,7 +45,6 @@ const_trait_parent_argument	output
 const_unary_operand_before_init	output
 const_unary_plus_block_before_init	output
 const_unary_plus_effect_before_init	output
-constant_edges	compile
 constant_top_level_reads	output
 conversion_open_var_lock	compile
 conversion_open_var_prefix	compile

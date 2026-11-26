@@ -1,15 +1,3 @@
 # The pairs (cell target) of tests/constants/gen.py that are not one form under TEQ_FORCE_CONST=unpublished: a
 # constant val of a declared singleton type, read from another file, as the reader's typing met its initialiser
 # unpublished.
-inl-single-lib-companion js
-inl-single-lib-companion jvm
-inl-single-lib-export js
-inl-single-lib-export jvm
-inl-single-lib-object js
-inl-single-lib-object jvm
-inl-single-loc-companion js
-inl-single-loc-companion jvm
-inl-single-loc-export js
-inl-single-loc-export jvm
-inl-single-loc-object js
-inl-single-loc-object jvm

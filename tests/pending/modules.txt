@@ -1,7 +1,6 @@
 arraychaininline	arraychaininline classes
 companionprivateequality	classes, subset, jvm-run, scalac-b, scalac-run, over-scalac; queued: a companion's inline call of a private member, over the products and over a scalac-built library
 companionprivatenamed	classes, subset, jvm-run, scalac-b, scalac-run, over-scalac; queued: a companion's inline call of a private member, over the products and over a scalac-built library
-constant_chain	constant_chain classes
 ctoraccess	ctoraccess bundle
 defaultsimpurereceiver	defaultsimpurereceiver js-run
 exportinlinedefaults	exportinlinedefaults build

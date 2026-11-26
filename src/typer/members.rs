@@ -1531,14 +1531,18 @@ impl<'a> Worker<'a> {
                 let class = self.given_object_type(s).unwrap();
                 self.nested_type(p, class)
             }
+            // A val declared as a singleton path widens through that declaration, never its initialiser, which
+            // another worker may not have published (`widenTermRefExpr` reads the info alone).
             Type::Term(s) => {
                 let ret = self.sig_of(s).ret;
-                self.constant_type(s, ret).unwrap_or_else(|| self.deref(ret))
+                let path = matches!(self.types.get(ret), Type::Term(_) | Type::Select(..));
+                if path { self.deref(ret) } else { self.constant_type(s, ret).unwrap_or_else(|| self.deref(ret)) }
             }
             Type::Select(p, s) => {
                 if self.may_be_constant(s) {
                     let declared = self.sig_of(s).ret;
-                    if let Some(lit) = self.constant_type(s, declared) {
+                    let path = matches!(self.types.get(declared), Type::Term(_) | Type::Select(..));
+                    if let Some(lit) = (!path).then(|| self.constant_type(s, declared)).flatten() {
                         return lit;
                     }
                 }

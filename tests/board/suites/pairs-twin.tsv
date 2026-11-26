@@ -531,7 +531,7 @@ cases/const_trait_parent_argument	pass	-
 cases/const_unary_operand_before_init	pass	-	
 cases/const_unary_plus_block_before_init	pass	-	
 cases/const_unary_plus_effect_before_init	pass	-	
-cases/constant_edges	cannot run	-	no leg builds
+cases/constant_edges	pass	-	
 cases/constant_final_val_accessor	pass	-	
 cases/constant_final_val_early	pass	-	
 cases/constant_final_vals	pass	-	
@@ -1575,6 +1575,8 @@ cases/inline_type_test_null	pass	-
 cases/inline_unchanged_structures	pass	-	
 cases/inline_unused_effectful_argument	pass	-	
 cases/inline_val_const_value_fold	pass	-	
+cases/inline_val_declared_path_chain	pass	-	
+cases/inline_val_declared_path_reads	pass	-	
 cases/inline_val_declared_singletons	pass	-	
 cases/inline_val_expansion_check	pass	-	
 cases/inline_val_pure_path	pass	-	

@@ -5111,10 +5111,14 @@ impl<'a> Worker<'a> {
         let in_body = self.checks_inline_definition();
         let declared_ty = self.deref(ty);
         // A declared type has to be a literal type, or the singleton type of a constant
-        // (`Int.MaxValue.type`).
+        // (`Int.MaxValue.type`, another inline val's `m.type`): its path widened through the
+        // signatures to a literal, as dotty's `widenTermRefExpr` reads it, not the initialiser.
         let declared_constant = match self.types.get(declared_ty) {
             Type::Lit(_) => true,
-            Type::Term(s) => self.fold_value(s).is_some(),
+            Type::Term(_) | Type::Select(..) => {
+                let widened = self.widen_path(declared_ty);
+                matches!(self.types.get(widened), Type::Lit(_))
+            }
             _ => false,
         };
         if declared && !declared_constant && !in_body {
