@@ -323,6 +323,7 @@ leading_infix_backquoted
 list_map_conserve
 list_reverse_prepend
 local_alias_path
+local_case_class_mirror
 local_class_capture_body
 local_extensions
 local_given_conversion

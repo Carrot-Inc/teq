@@ -1936,6 +1936,13 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.enclosing.push(c);
         self.parents(c, &info);
+        // A local case class's companion, a local object, is its `Mirror.Product`, as an object's case companion is
+        // (`object_template`; dotty's `SyntheticMembers.addMirrorSupport`).
+        let product_mirror = self.local_case_of(&info).filter(|&k| self.has_product_mirror(k));
+        if product_mirror.is_some() {
+            self.mark_tree();
+            self.mirror_parent("Product");
+        }
         if let Some(self_ty) = info.declared_self {
             self.buf.byte(SELFDEF);
             let n = if info.self_alias == crate::names::EMPTY { self.names.simple("_") } else { self.simple_name(info.self_alias) };
@@ -1980,6 +1987,13 @@ impl<'w, 'a> P<'w, 'a> {
             self.case_companion_head(k, &case_info, info.synthetic_companion);
         }
         self.members(c, &info);
+        if let Some(k) = product_mirror {
+            let ki = self.class_info(k);
+            if ki.mods & mods::ABSTRACT == 0 {
+                let tparams: Vec<TParamId> = ki.tparams.to_vec();
+                self.mirror_members(k, &tparams);
+            }
+        }
         if let Some(e) = local_enum {
             self.enum_tail(e);
         }

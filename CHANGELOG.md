@@ -7,6 +7,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A product's TASTy gives a local case class's companion the `scala.deriving.Mirror.Product` parent and its
+  `MirroredMonoType` and `fromProduct`, as scalac's does: a program compiled from teq's TASTy that summons the mirror
+  of a case class local to a block ran into "ClassCastException: L$ cannot be cast to scala.deriving.Mirror$Product".
 - On the JVM a constructor's by-name parameter left to its default (`class X(f: => String = "d")`, then `new X()`)
   reads the default's value, as scalac, where reading it threw `ClassCastException` ("String cannot be cast to
   Function0"); a local class's secondary constructor with one builds, where it was refused.

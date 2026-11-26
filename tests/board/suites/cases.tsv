@@ -1907,6 +1907,7 @@ literal_union_members	pass	-
 local_alias_after_path	pass	-	
 local_alias_path	pass	-	
 local_case_class_equals_outer	pass	-	
+local_case_class_mirror	pass	-	
 local_case_classes	pass	-	
 local_case_companion	pass	-	
 local_class_capture_body	pass	-	

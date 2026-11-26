@@ -1872,6 +1872,7 @@ cases/literal_union_members	pass	-
 cases/local_alias_after_path	pass	-	
 cases/local_alias_path	pass	-	
 cases/local_case_class_equals_outer	pass	-	
+cases/local_case_class_mirror	pass	-	
 cases/local_case_classes	pass	-	
 cases/local_case_companion	pass	-	
 cases/local_class_capture_body	pass	-	
