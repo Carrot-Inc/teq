@@ -66,6 +66,7 @@ given_coherent_intersection_ambiguous	missing '15:44: error: ambiguous given ins
 given_empty_params_with	missing '6:63: error: given instance g does not take parameters'
 given_failed_heal_reports_original	missing '19:26: error: ambiguous given instances for TC: a, b'
 given_not_imported_note	missing 'was not considered because it was not imported with `import given`.'
+given_object_alias_ambiguous	missing '5:88: error: Ambiguous given instances: both object G in object O and given instance a in object O match type T of parameter x of method summon in object Predef'
 given_opaque_pair_ambiguous	exit code 0
 given_scope_gadt_bounds	exit code 0
 given_value_class_empty_clause	exit code 0

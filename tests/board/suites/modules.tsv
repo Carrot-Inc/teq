@@ -187,6 +187,8 @@ givenobjectsingleton	pass	-
 givenopaqueprefix	pass	-	
 givenprivate	pass	-	
 givenpublication	pass	-	
+givenrankalias	fail	-	givenrankalias over-scalac
+givenrankambiguous	fail	-	givenrankambiguous over-scalac-errors
 givenrankedreceiver	pass	-	
 givenstructuralctor	pass	-	
 givensummon	pass	-	

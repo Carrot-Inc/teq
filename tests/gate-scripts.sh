@@ -7,6 +7,9 @@
 #   workers  tests/modules.sh over two cases at two at once, the first case's worker killed by its first build: the
 #            case fails as one whose worker ended without its counts, the other's lines and counts still printed in
 #            the cases' order, and the run exits 1.
+#   overerrors  tests/modules.sh over givenrankambiguous with a teq whose build of module b over scalac's module a
+#            prints that case's over-scalac-errors.txt (the case passes) and one that prints another refusal (the case
+#            fails, the check's difference printed), whether tests/pending/modules.txt lists the case or not.
 #   parts    tests/tasty-exec.scala over six programs of its closure with a java whose first part of the
 #            regenerations is killed at once: the suite fails, naming the part, its status and its stderr, and keeps
 #            its work directory.
@@ -253,6 +256,20 @@ JOBS=2 TEQ=$work/killer/teq timeout 300 tests/modules.sh enumorder misuse > "$wo
 code=$?
 check "workers: a killed worker fails its case and the run" "$work/workers.log" \
   eval '[ $code = 1 ] && [ "$(head -1 "$work/workers.log")" = "FAIL enumorder worker: the case'"'"'s worker ended without its counts (exit 137)" ] && grep -q "^modules: 2 passed, 1 failed, .* refused 1 misuses" "$work/workers.log"'
+
+# A refusal over scalac's classes is held to its file: the right one passes the check, a wrong one fails it. A listed
+# case's FAIL lines are not printed, so its failure is read from the list's line and the check's difference.
+mkdir -p "$work/overright" "$work/overwrong"
+want=tests/modules/givenrankambiguous/over-scalac-errors.txt
+printf '#!/bin/bash\ncase " $* " in *"/overe-b "*) cat "%s"; exit 1 ;; esac\nexec "%s" "$@"\n' "$PWD/$want" "$TEQ" > "$work/overright/teq"
+printf '#!/bin/bash\ncase " $* " in *"/overe-b "*) echo "stand-in: a wrong refusal"; exit 1 ;; esac\nexec "%s" "$@"\n' "$TEQ" > "$work/overwrong/teq"
+chmod +x "$work/overright/teq" "$work/overwrong/teq"
+TEQ=$work/overright/teq timeout 300 tests/modules.sh givenrankambiguous > "$work/overright.log" 2>&1
+TEQ=$work/overwrong/teq timeout 300 tests/modules.sh givenrankambiguous > "$work/overwrong.log" 2>&1
+check "overerrors: the expected refusal over scalac's classes passes the check" "$work/overright.log" \
+  eval 'grep -qE "^modules: (1 pass, 0 fail as tests/pending/modules.txt lists|1 listed in tests/pending/modules.txt pass now \(take them out: --update\): givenrankambiguous)$" "$work/overright.log"'
+check "overerrors: a wrong refusal over scalac's classes fails the check" "$work/overwrong.log" \
+  eval 'grep -qx "FAIL givenrankambiguous over-scalac-errors" "$work/overwrong.log" || { grep -qx "modules: 0 pass, 1 fail as tests/pending/modules.txt lists" "$work/overwrong.log" && grep -qx "> stand-in: a wrong refusal" "$work/overwrong.log"; }'
 
 # A part of tasty-exec's regenerations that dies is reported with its status and stderr.
 mkdir -p "$work/parts"

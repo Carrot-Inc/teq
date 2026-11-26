@@ -1,0 +1,4 @@
+tests/modules/givenrankambiguous/b/Main.scala:2:88: error: ambiguous given instances for T: G, a
+  object Main { def main(args: Array[String]): Unit = { import O.given; println(summon[T].n) } }
+                                                                                         ^
+1 error found

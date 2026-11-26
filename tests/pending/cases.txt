@@ -89,6 +89,7 @@ given_init_cycle	< 7
 given_inline_val_class	< 21
 given_nested_init_cycle	< 7
 given_object_several_parents_mixed	< 3.6: 12; default: 12 (teq: 10 in both, a compilation with a file at 3.6 typed as before; queued: the part that ports 3.6 and 3.7-migration's comparison of givens)
+given_object_singleton_scope	< 42
 given_owners	< 21
 given_publish_during_init	< 7
 impure_function_alias	< 42

@@ -416,6 +416,7 @@ given_named_condition_type	pass	-
 given_names	pass	-	
 given_not_given_user	pass	-	
 given_not_imported_note	fail	-	missing 'was not considered because it was not imported with `import given`.'
+given_object_alias_ambiguous	fail	-	missing '5:88: error: Ambiguous given instances: both object G in object O and given instance a in object O match type T of parameter x of method summon in object Predef'
 given_opaque_pair_ambiguous	fail	-	exit code 0
 given_open_variable_refusals	pass	-	
 given_pattern_val	pass	-	

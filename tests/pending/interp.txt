@@ -99,6 +99,7 @@ given_index_dependent_parameter_later_clause	compile
 given_index_dependent_parameter_same_clause	compile
 given_inline_val_class	compile
 given_object_several_parents_mixed	< 3.6: 12; default: 12 (teq: 10 in both, a compilation with a file at 3.6 typed as before; queued: the part that ports 3.6 and 3.7-migration's comparison of givens)
+given_object_singleton_scope	compile
 impure_function_alias	compile
 inferred_result_tracked	compile
 inferred_result_types	compile

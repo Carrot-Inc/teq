@@ -1088,6 +1088,7 @@ given_import_bounds	pass	-
 given_import_context_chain	pass	-	
 given_import_empty_contexts	pass	-	
 given_import_file_contexts	pass	-	
+given_import_implicit_object	pass	-	
 given_import_index_export_forwarder	pass	-	
 given_import_index_match_part	pass	-	
 given_import_index_match_part_alone	pass	-	
@@ -1154,9 +1155,11 @@ given_not_given_fallback	pass	-
 given_not_given_negation	pass	-	
 given_not_given_shadowed	pass	-	
 given_object_extension_import	pass	-	
+given_object_inherited_outer_accessor	pass	-	
 given_object_instance_lazy	pass	-	
 given_object_instance_recursion_js	cannot run	-	its expectation is Scala.js's
 given_object_module	pass	-	
+given_object_owner_identity	pass	-	
 given_object_publication	pass	-	
 given_object_publication_super	pass	-	
 given_object_publication_super_js	cannot run	-	its expectation is Scala.js's
@@ -1164,6 +1167,8 @@ given_object_several_parents_generic_owner	pass	-
 given_object_several_parents_mixed	fail	-	output
 given_object_several_parents_unported	pass	-	
 given_object_singleton_reference	pass	-	
+given_object_singleton_scope	fail	-	compile
+given_object_super_argument_reads	pass	-	
 given_one_symbol_two_receivers_by_type	pass	-	
 given_opaque_scope_prefix	pass	-	
 given_open_variable_chain	pass	-	

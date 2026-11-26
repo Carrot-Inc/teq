@@ -105,6 +105,9 @@
 #            over those upstream modules, its pickles read by scalac 3.8.4 for Scala.js
 #            (`readjs` of tests/tasty/fromtasty/Gate.scala): what the lean std binds keeps the
 #            upstream declaration's names in a selection's signature.
+#   over-scalac-errors  (a case with expect-errors.txt, over-scalac.txt and over-scalac-errors.txt) the
+#            over-scalac leg's builds, the last module by teq failing with the diagnostics of
+#            over-scalac-errors.txt: a refusal held over scalac's classes as over teq's.
 #   scalac-client  (a case with client/ and client.txt) scalac 3.8.4 compiles client/ over
 #            every module's products, teq's (their views; `scalac-client-teq`), and over the
 #            modules scalac built in the over-scalac leg (`scalac-client-scalac`, a case with
@@ -1124,6 +1127,33 @@ PY
         fi
       fi
     fi
+  fi
+  # over-scalac-errors: a case with expect-errors.txt, over-scalac.txt and over-scalac-errors.txt has its last module,
+  # built by teq over scalac's builds of the modules over-scalac.txt names, fail with that file's diagnostics, so that
+  # teq's reading of scalac's classes is held to a refusal as over-scalac holds a running case's to its output.
+  if [ -f "$dir/over-scalac.txt" ] && [ -f "$expect" ] && [ -f "$dir/over-scalac-errors.txt" ]; then
+    ok=1
+    detail=""
+    cp=""
+    last=${mods[${#mods[@]}-1]}
+    for m in "${mods[@]}"; do
+      srcs=()
+      if grep -qx "$m" "$dir/over-scalac.txt"; then
+        while IFS= read -r f; do srcs+=("$(at_root "$f")"); done < <(sources "$dir/$m")
+        log=$(scalac "${cp:-$SL}" "$out/$name/overe-$m" "${srcs[@]}") || { ok=0; detail="$detail$m by scalac: $log"$'\n'; break; }
+      else
+        while IFS= read -r f; do srcs+=("$f"); done < <(sources "$dir/$m")
+        if "$teq" compiler build --target jvm --products "$out/$name/overe-$m" --sourceroot "$(sroot "$m")" --classpath "$SL${cp:+:$cp}" "${srcs[@]}" > "$out/$name.overe-$m.log" 2>&1; then
+          [ "$m" = "$last" ] && { ok=0; detail="$detail$m by teq over scalac's modules built, where over-scalac-errors.txt holds its refusal"$'\n'; }
+        elif [ "$m" != "$last" ]; then
+          ok=0; detail="$detail$m by teq: $(cat "$out/$name.overe-$m.log")"$'\n'; break
+        elif ! diff "$dir/over-scalac-errors.txt" "$out/$name.overe-$m.log" > /dev/null; then
+          ok=0; detail="$detail$(diff "$dir/over-scalac-errors.txt" "$out/$name.overe-$m.log")"$'\n'
+        fi
+      fi
+      cp=${cp:+$cp:}$out/$name/overe-$m
+    done
+    result "$name" over-scalac-errors $ok "$detail"
   fi
   # scalac-client: scalac's client over teq's products and over scalac's.
   if [ -d "$dir/client" ] && [ -f "$dir/client.txt" ] && [ ! -f "$expect" ] && [ $have_java = 1 ]; then

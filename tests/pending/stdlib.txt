@@ -145,6 +145,7 @@ given_nested_init_cycle	output differs
 given_object_instance_lazy	error: type IllegalThreadStateException not found
 given_object_publication_super	RangeError: Maximum call stack size exceeded
 given_object_several_parents_mixed	< 3.6: 12; default: 12 (teq: 10 in both, a compilation with a file at 3.6 typed as before; queued: the part that ports 3.6 and 3.7-migration's comparison of givens)
+given_object_singleton_scope	error: No given instance of type Box[(O.G : T)] was found for parameter x of method summon in object Predef
 given_open_variable_tapir_joins	error: cannot resolve import: sttp not found
 given_owners	output differs
 given_publish_during_init	output differs

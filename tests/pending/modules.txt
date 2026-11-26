@@ -7,6 +7,8 @@ exportinlinedefaults	exportinlinedefaults build
 exporttransparentdefault	exporttransparentdefault build
 functionxxl	functionxxl build
 givenclass	givenclass classes
+givenrankalias	givenrankalias over-scalac
+givenrankambiguous	givenrankambiguous over-scalac-errors
 inlineoverloadsequality	classes, subset, jvm-run, scalac-run; queued: two inaccessible overloads of one name called from inline methods, one accessor in the products
 inlineoverloadsnamed	classes, subset, jvm-run, scalac-run; queued: two inaccessible overloads of one name called from inline methods, one accessor in the products
 javasuperstable	javasuperstable bundle
