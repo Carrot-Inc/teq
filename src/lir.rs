@@ -235,7 +235,18 @@ pub struct Node {
     /// The erased type of the value the node leaves, `ErasedType::V` for none.
     pub ty: ErasedType,
     /// The expression of the typed IR the node is the whole of, whose position its code takes.
-    pub of: Option<TExprId>,
+    pub of: Option<Place>,
+}
+
+/// Where a node's code takes its line: the expression of the typed IR the node is the whole of,
+/// whose span is the position; the point of the span whose line it is (a selection's member's
+/// name, past its receiver); and whether it is a call, whose arguments the typer made, which
+/// have the call's span, take the line of its end.
+#[derive(Clone, Copy)]
+pub struct Place {
+    pub expr: TExprId,
+    pub point: u32,
+    pub call: bool,
 }
 
 #[derive(Clone)]

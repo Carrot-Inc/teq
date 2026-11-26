@@ -1003,7 +1003,7 @@ impl<'a> Gen<'a> {
             // `case null`'s test stands at the pattern's line, which the null it drops would have marked
             // (`Gen::write_compare`): the scrutinee's load takes it.
             if let TExpr::Null = prog.expr(e) {
-                self.lir.nodes[value.0 as usize].of = Some(e);
+                self.place(value, e);
             }
             let same = self.lir.push(Kind::Compare { relation: Relation::Eq, how: Comparing::Identity, left: expected, right: value }, ErasedType::Z);
             return self.lower_fail_unless(same, fail, out);

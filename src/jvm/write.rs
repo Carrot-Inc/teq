@@ -50,8 +50,8 @@ impl<'a> Gen<'a> {
         let node = self.lir.node(id);
         let (kind, ty, of) = (node.kind.clone(), node.ty.clone(), node.of);
         let lines = (self.line_floor, self.line_hold);
-        if let Some(e) = of {
-            self.mark_line(e);
+        if let Some(place) = of {
+            self.mark_line(place);
         }
         self.code.in_node += 1;
         match kind {
@@ -483,8 +483,8 @@ impl<'a> Gen<'a> {
     fn write_to(&mut self, id: LirId, dest: Label) {
         debug_assert!(*self.lir.ty(id) == ErasedType::V, "a value written to a jump");
         let lines = (self.line_floor, self.line_hold);
-        if let Some(e) = self.lir.node(id).of {
-            self.mark_line(e);
+        if let Some(place) = self.lir.node(id).of {
+            self.mark_line(place);
         }
         match self.lir.node(id).kind.clone() {
             Kind::If { cond, then, otherwise } if !(otherwise.is_none() && matches!(self.lir.node(then).kind, Kind::Break { value: None, .. })) => {
@@ -821,8 +821,8 @@ impl<'a> Gen<'a> {
             // into a block.
             Kind::Block { stmts, result } => {
                 let lines = (self.line_floor, self.line_hold);
-                if let Some(e) = self.lir.node(id).of {
-                    self.mark_line(e);
+                if let Some(place) = self.lir.node(id).of {
+                    self.mark_line(place);
                 }
                 let mark = self.code.locals_mark();
                 for i in 0..stmts.len {

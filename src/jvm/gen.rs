@@ -2,7 +2,7 @@
 //! stack, brought to the static type the typer recorded for it (a cast or an unboxing where a
 //! generic result is used at a concrete type), and then to the type its consumer wants.
 
-use crate::lir::{Adaptation, Capture, Comparing, ErasedType, FieldRole, Invoke, Kind, LiftedShape, LirId, MethodParam, MethodRef, ParamRole, Relation};
+use crate::lir::{Adaptation, Capture, Comparing, ErasedType, FieldRole, Invoke, Kind, LiftedShape, LirId, MethodParam, MethodRef, ParamRole, Place, Relation};
 use super::classfile::*;
 use super::free::{Analysis, Free};
 use super::lifted::{Asker, LiftedBody, Placed};
@@ -3734,42 +3734,32 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Emits `e` at its static type.
-    /// Records the source line of `e` for the code that follows, as scalac does: the line of
-    /// the expression's point, which for a selection is its member's name, so that a chain of
-    /// calls over several lines attributes each call to its own line. An expression of another
-    /// file (an inlined body) keeps the line of the call around it; an argument the typer made
-    /// (a given, a default) spans the call it is in and takes the line of the call's end, where
-    /// scalac places it, through its whole tree: a given's copy keeps the spans of the site that
-    /// searched first, which a worker may have made at another line.
-    pub(super) fn mark_line(&mut self, e: TExprId) {
+    /// Records the source line of a node's place for the code that follows, as scalac does: the
+    /// line of its point (`Place`), so that a chain of calls over several lines attributes each
+    /// call to its own line. An expression of another file (an inlined body) keeps the line of
+    /// the call around it; an argument the typer made (a given, a default) spans the call it is
+    /// in and takes the line of the call's end, where scalac places it, through its whole tree: a
+    /// given's copy keeps the spans of the site that searched first, which a worker may have
+    /// made at another line.
+    pub(super) fn mark_line(&mut self, place: Place) {
         let cx = self.cx;
-        let prog = cx.input.prog;
         if self.line_hold {
             return;
         }
-        let Some((file, span)) = prog.span_of(e) else { return };
+        let Some((file, span)) = cx.input.prog.span_of(place.expr) else { return };
         if file != self.line_file {
             return;
         }
         let point = match self.line_floor {
-            Some((call, f, s, end)) if call != e && (f, s) == (file, span) => {
+            Some((call, f, s, end)) if call != place.expr && (f, s) == (file, span) => {
                 self.line_hold = true;
                 end
             }
             _ => {
-                let point = match prog.expr(e) {
-                    TExpr::CallMethod(recv, ..) | TExpr::Field(recv, _) => cx.point_after(file, span, prog.span_of(recv)),
-                    TExpr::CallStatic(_, args) => match prog.expr_list(args).first() {
-                        Some(&recv) => cx.point_after(file, span, prog.span_of(recv)),
-                        None => span.start,
-                    },
-                    _ => span.start,
-                };
-                if matches!(prog.expr(e), TExpr::CallMethod(..) | TExpr::CallStatic(..) | TExpr::CallClosure(..) | TExpr::New(..) | TExpr::NewVia(..)) {
-                    self.line_floor = Some((e, file, span, span.end.saturating_sub(1)));
+                if place.call {
+                    self.line_floor = Some((place.expr, file, span, span.end.saturating_sub(1)));
                 }
-                point
+                place.point
             }
         };
         self.code.line(cx.line_of(file, point));

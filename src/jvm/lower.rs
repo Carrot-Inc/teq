@@ -3,7 +3,7 @@
 //! constant pool refuse a write while one runs (`Gen::lowering`), since the order of what is
 //! written is the output's bytes.
 
-use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, FieldRole, Invoke, Kind, LiftedFrom, LiftedShape, LirId, List, MethodRef, ParamRole, Refusal, Relation, TempId};
+use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, FieldRole, Invoke, Kind, LiftedFrom, LiftedShape, LirId, List, MethodRef, ParamRole, Place, Refusal, Relation, TempId};
 use super::gen::{rank_type, CallRoute, CaptureArgument, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, ReturnTarget, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::lifted::{Asker, Placed};
 use super::names::*;
@@ -85,13 +85,30 @@ impl<'a> Gen<'a> {
     /// `e` brought to the type `want`.
     pub(super) fn lower_expr(&mut self, e: TExprId, want: &ErasedType) -> LirId {
         let id = self.lower_marked(e, want);
-        let node = &mut self.lir.nodes[id.0 as usize];
         // A jump where a value is wanted takes its arguments' positions: the operands it drops
         // under it are its place's.
-        if !matches!(node.kind, Kind::SelfTailCall { .. }) {
-            node.of = Some(e);
+        if !matches!(self.lir.node(id).kind, Kind::SelfTailCall { .. }) {
+            self.place(id, e);
         }
         id
+    }
+
+    /// The node `id` as the whole of `e`, at its place (`lir::Place`): a selection's and a method
+    /// call's line at its member's name, past the receiver; a static call's past its first
+    /// argument, an extension's receiver or not (scalac takes another static call's line at its
+    /// name); any other's at its start.
+    pub(super) fn place(&mut self, id: LirId, e: TExprId) {
+        let (cx, prog) = (self.cx, self.cx.input.prog);
+        let point = prog.span_of(e).map_or(0, |(file, span)| {
+            let receiver = match prog.expr(e) {
+                TExpr::CallMethod(recv, ..) | TExpr::Field(recv, _) => Some(recv),
+                TExpr::CallStatic(_, args) => prog.expr_list(args).first().copied(),
+                _ => None,
+            };
+            receiver.map_or(span.start, |recv| cx.point_after(file, span, prog.span_of(recv)))
+        });
+        let call = matches!(prog.expr(e), TExpr::CallMethod(..) | TExpr::CallStatic(..) | TExpr::CallClosure(..) | TExpr::New(..) | TExpr::NewVia(..));
+        self.lir.nodes[id.0 as usize].of = Some(Place { expr: e, point, call });
     }
 
     /// A form the target has no translation of, refused where it stands (`Kind::Refused`): no
@@ -503,7 +520,7 @@ impl<'a> Gen<'a> {
             // An inline val's read alone is lowered as the read, which holds its position.
             Reduced::Constant(v, of) if !matches!(prog.expr(e), TExpr::Static(_)) => {
                 let id = self.lir.push(Kind::Bool(v), ErasedType::Z);
-                self.lir.nodes[id.0 as usize].of = Some(of);
+                self.place(id, of);
                 return id;
             }
             Reduced::Expr(x) if x != e => return self.lower_cond(x),
@@ -515,14 +532,14 @@ impl<'a> Gen<'a> {
             TExpr::Block(stmts, res) => {
                 let nodes = self.lower_block_statements(stmts);
                 let result = self.lower_cond(res);
-                let node = &mut self.lir.nodes[result.0 as usize];
+                let node = self.lir.node(result);
                 if node.of.is_none() && !matches!(node.kind, Kind::SelfTailCall { .. }) {
-                    node.of = Some(res);
+                    self.place(result, res);
                 }
                 let result = self.expansion_tested(result);
                 let stmts = self.lir.list(&nodes);
                 let id = self.lir.push(Kind::Block { stmts, result }, ErasedType::Z);
-                self.lir.nodes[id.0 as usize].of = Some(e);
+                self.place(id, e);
                 self.expansion_tested(id)
             }
             TExpr::Unary(UnOp::BoolNot, a) => {
@@ -562,7 +579,7 @@ impl<'a> Gen<'a> {
     /// transparent one's too, and lowers any other as the condition it is.
     fn expansion_tested(&mut self, id: LirId) -> LirId {
         let node = self.lir.node(id);
-        let Some(of) = node.of.filter(|&of| self.cx.input.prog.is_expansion(of)) else { return id };
+        let Some(of) = node.of.filter(|of| self.cx.input.prog.is_expansion(of.expr)) else { return id };
         if matches!(node.kind, Kind::Typed(_)) {
             return id;
         }
@@ -700,7 +717,7 @@ impl<'a> Gen<'a> {
             TExpr::Match(scrut, _) if !boxed_whole => {
                 crate::tir::matcher::check(prog, crate::tir::matcher::Owner::Match(e), "jvm match");
                 let id = self.lower_match(scrut, crate::tir::matcher::Owner::Match(e), None);
-                self.lir.nodes[id.0 as usize].of = Some(e);
+                self.place(id, e);
                 return id;
             }
             // A return out of the method here is that return, its value the method's result (dotty's
@@ -724,7 +741,7 @@ impl<'a> Gen<'a> {
             },
         };
         let id = self.lir.push(kind, ErasedType::V);
-        self.lir.nodes[id.0 as usize].of = Some(e);
+        self.place(id, e);
         id
     }
 
@@ -760,7 +777,7 @@ impl<'a> Gen<'a> {
         let kind = self.lower_local_return(v);
         let id = self.lir.push(kind, want.clone());
         // The jump back stands for the whole `return`, whose position it takes.
-        self.lir.nodes[id.0 as usize].of = Some(e);
+        self.place(id, e);
         id
     }
 
