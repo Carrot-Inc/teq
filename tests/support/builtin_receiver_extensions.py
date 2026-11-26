@@ -216,9 +216,12 @@ def self_test():
     accepting = {**good, ("p-e", "split", "js"): "ok:a|1"}
     wrong = {**good, ("f-a", "whole", "jvm"): "ok:Vector(a, b)"}
     missing = {k: v for k, v in good.items() if k != ("f-a", "whole", "interp")}
+    # A run that printed scalac's lines and then failed or stood at its bound: the runner's err and hang verdicts.
+    trailing = {**good, ("f-a", "split", "jvm"): "err:-:-:-: Exception in thread \"main\" java.lang.RuntimeException"}
+    timeout = {**good, ("f-a", "whole", "js"): "hang:60s"}
     null = open(os.devnull, "w")
     for what, base, head, code in (("all right", wrong, good, 0), ("a wrong value", good, wrong, 1), ("an acceptance scalac refuses", good, accepting, 1),
-                                   ("a missing leg", good, missing, 1)):
+                                   ("a missing leg", good, missing, 1), ("a trailing failure", good, trailing, 1), ("a timeout", good, timeout, 1)):
         if judge(["f-a", "p-e"], s, base, head, out=null) != code:
             bad.append(f"the judge on the planted table: {what}")
     o = io.StringIO()

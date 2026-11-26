@@ -6664,7 +6664,13 @@ impl<'w, 'a> P<'w, 'a> {
             self.buf.byte(TYPEREFSYMBOL);
             self.def_ref(Key::Class(c));
         } else {
-            let n = self.simple_name(self.w.syms.class(c).name);
+            // An object a local object holds (a case class's companion, `O.C` of `object O` in a
+            // block), through the object's val (`term_ref`'s forward reference): its module class by
+            // its object class name (`C$`, dotty's `ModuleClassName`).
+            let info = self.w.syms.class(c);
+            let module = info.kind == ClassKind::Object || info.inner_object.is_some();
+            let local_object = matches!(self.w.types.get(prefix), Type::Term(s) if self.w.local_module_of_sym(s).is_some());
+            let n = if module && local_object { self.names.object_class(&self.name(info.name)) } else { self.simple_name(info.name) };
             self.buf.byte(TYPEREF);
             self.buf.nat(n as u64);
         }
@@ -7422,6 +7428,13 @@ impl<'w, 'a> P<'w, 'a> {
         match info.owner {
             // A local written before the type, a case's binder (`s.MirroredElemTypes`).
             Owner::Local if matches!(self.places.get(&Key::Sym(s)), Some(Place::At(_))) => {
+                self.buf.byte(TERMREFDIRECT);
+                self.def_ref(Key::Sym(s));
+            }
+            // A local object's val, which a block writes after its result (`BLOCK expr stats`): its
+            // reference forward, as its `this` outside its body is (a val never written withholds the
+            // body at its end, `body_end`'s dangling reference).
+            Owner::Local if self.w.local_module_of_sym(s).is_some() => {
                 self.buf.byte(TERMREFDIRECT);
                 self.def_ref(Key::Sym(s));
             }

@@ -330,6 +330,7 @@ local_imports
 local_imports_blocks
 local_imports_members
 local_lazy_forward
+local_object_case_companion
 local_object_import
 local_type_aliases
 long_buffer_order

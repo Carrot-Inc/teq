@@ -1394,7 +1394,11 @@ impl<'a> Worker<'a> {
                 let s = r.sym()?;
                 match self.syms.sym(s).kind {
                     SymKind::Object(c) => Some(ImportTarget::ClassAll(c)),
-                    _ => self.local_module_of_sym(s).or_else(|| self.inner_object_of_sym(s)).map(ImportTarget::ClassAll),
+                    // A block's local object is a value of its module class (the import qualifier is
+                    // the local module's term), imported from as a local class's instance is: its
+                    // members, its parents' among them, read through the value, not a static module.
+                    _ if self.local_module_of_sym(s).is_some() => None,
+                    _ => self.inner_object_of_sym(s).map(ImportTarget::ClassAll),
                 }
             }
         }

@@ -308,10 +308,13 @@ def self_test():
     misplaced = {**good, ("c-e", "whole", "jvm"): "err:Lib.scala:4:10: Cyclic reference involving val b"}
     worded = {**good, ("c-e", "split", "interp"): "err:Lib.scala:5:10: recursive value a needs type"}
     missing = {k: v for k, v in good.items() if k != ("v-a", "whole", "interp")}
+    # A run that printed scalac's lines and then failed or stood at its bound: the runner's err and hang verdicts.
+    trailing = {**good, ("v-a", "split", "jvm"): "err:-:-:-: Exception in thread \"main\" java.lang.RuntimeException"}
+    timeout = {**good, ("v-a", "whole", "js"): "hang:60s"}
     null = open(os.devnull, "w")
     for what, base, head, code in (("all right", hung, good, 0), ("a hang", good, hung, 1), ("a refusal of a valid leg", good, refusing, 1),
                                    ("an error's place", good, misplaced, 1), ("an error's words", good, worded, 1),
-                                   ("a missing leg", good, missing, 1)):
+                                   ("a missing leg", good, missing, 1), ("a trailing failure", good, trailing, 1), ("a timeout", good, timeout, 1)):
         if judge(["v-a", "c-e"], s, base, head, out=null) != code:
             bad.append(f"the judge on the planted table: {what}")
     import io

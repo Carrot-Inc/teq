@@ -21,6 +21,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 - On the JVM `super.toString()`, `super.hashCode()` and `super.equals(x)` in a class over `java.util.ArrayList`, or in a
   trait mixed into one, call the superclass, as scalac, where they called `Collection`'s or `List`'s interface method:
   `toString` printed the object's identity (`A@97`) and `hashCode` and `equals` threw `AbstractMethodError`.
+- An import over an object local to a block (`object h`, `case object h`, a given without parameters: `import
+  h.*`, `import h.o.*`, a selection, a renaming, `given`, a type) brings its members as an import over a local class's
+  instance does, its parents' included, as scalac: a nested object's path through it ran into "Unit has no member o"
+  (a ClassCastException on the JVM), and a parent's member was "Not found".
 - On the JVM a value class method's default argument is passed where the default is an inline method's (`inline def
   m(a: Int)(b: Int = u + a)`) or inherited from a universal trait's method the class overrides without a default, as
   scalac; the call threw `NoSuchMethodError` (`V$.m$default$2$extension`).

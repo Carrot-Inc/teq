@@ -390,10 +390,13 @@ def self_test():
     wrong = {**good, ("a", "split", "js"): "ok:-1"}
     misplaced = {**good, ("e", "whole", "jvm"): "err:Main.scala:6:4: ambiguous given instances"}
     missing = {k: v for k, v in good.items() if k != ("a", "whole", "interp")}
+    # A run that printed scalac's lines and then failed or stood at its bound: the runner's err and hang verdicts.
+    trailing = {**good, ("a", "split", "jvm"): "err:-:-:-: Exception in thread \"main\" java.lang.RuntimeException"}
+    timeout = {**good, ("a", "whole", "js"): "hang:60s"}
     other_error = {**good, ("e", "split", "js"): "err:Main.scala:6:3: value gi is not a member of fd.pf"}
     null = open(os.devnull, "w")
     for what, base, head, code in (("all right", wrong, good, 0), ("a regressed leg", good, wrong, 1), ("an error's column", good, misplaced, 1),
-                                   ("a missing leg", good, missing, 1), ("another error at scalac's place", good, other_error, 1)):
+                                   ("a missing leg", good, missing, 1), ("another error at scalac's place", good, other_error, 1), ("a trailing failure", good, trailing, 1), ("a timeout", good, timeout, 1)):
         if judge(["a", "e"], s, base, head, out=null) != code:
             bad.append(f"the judge on the planted table: {what}")
     if not wording(s[("e", "whole", "run")], good[("e", "whole", "jvm")]):

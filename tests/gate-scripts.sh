@@ -3163,6 +3163,11 @@ check "singleton-cycles: the table's templates and its judge's planted tables ju
 check "builtin-receiver-extensions: the table's templates and its judge's planted tables judged as they must be" "$work/builtin-receiver-extensions.log" \
   eval 'python3 tests/support/builtin_receiver_extensions.py --self-test > "$work/builtin-receiver-extensions.log" 2>&1'
 
+# The table of an import over a block's local object (tests/support/block_object_imports.py, run by
+# tests/support/pkgobj-given-import.sh and tests/support/scalac_cells.scala): its templates, its judge's planted tables.
+check "block-object-imports: the table's templates and its judge's planted tables judged as they must be" "$work/block-object-imports.log" \
+  eval 'python3 tests/support/block_object_imports.py --self-test > "$work/block-object-imports.log" 2>&1'
+
 fi
 unit_close
 check "units: each unit within its bound (three times its weight, by the CPUs of its machine, 180 s at least)" "$work/unit-bounds.log" \

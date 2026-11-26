@@ -194,6 +194,13 @@ def self_test():
         bad.append("the split judge passed a wrong over leg")
     if split_judge(m, ["a"], sc, teq, teq, ov, {}, out=null) != 1:
         bad.append("the split judge passed a missing over leg")
+    # A run that printed scalac's lines and then failed (scalac's in-JVM run catches its exception), and the teq legs'
+    # trailing failure and timeout.
+    if split_judge(m, ["a"], sc, teq, teq, ov, {("a", "split", "over"): "err:-:-:-: java.lang.RuntimeException: after the lines"}, out=null) != 1:
+        bad.append("the split judge passed an over leg that failed after its lines")
+    for planted in ("err:-:-:-: Exception in thread \"main\" java.lang.RuntimeException", "hang:60s"):
+        if split_judge(m, ["a"], sc, teq, {**teq, ("a", "split", "js"): planted}, ov, ov, out=null) != 1:
+            bad.append(f"the split judge passed a teq leg {planted[:12]}")
     if bad:
         sys.exit("export_given_body self-test FAILED: " + "; ".join(bad))
     print(f"export_given_body self-test: {len(cells())} cells, whole and as a library and its user, the templates checked, the split judge's planted tables judged as they must be (the judge's own in local_given_params.py)")
