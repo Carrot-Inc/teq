@@ -411,9 +411,6 @@ pub enum Kind {
     /// it; the call passes the captured values as `Closure` has them, then the arguments as `Call`
     /// has them.
     LiftedCall { method: Rc<MethodRef>, from: LiftedFrom, lifted: Rc<LiftedShape>, captures: List, args: List, order: Option<Rc<[usize]>> },
-    /// The key of the non-local returns of the def the code stands in, a reference: the one the
-    /// def made, or the one the code was given where it is a closure's.
-    ReturnKey,
     /// The temporary declared with the value of `init`; it lives to the end of the block that
     /// holds this node. No value.
     Let { temp: TempId, init: LirId },
@@ -652,7 +649,7 @@ impl Body {
         match &self.node(id).kind {
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => {}
             Kind::Local(_) | Kind::Param(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This | Kind::StaticField { .. } => {}
-            Kind::ReturnKey | Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
+            Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
             Kind::Block { stmts, result } => {
                 out.extend(self.items(*stmts));
                 out.push(*result);

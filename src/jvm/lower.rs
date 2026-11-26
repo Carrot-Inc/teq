@@ -741,7 +741,7 @@ impl<'a> Gen<'a> {
     /// as an `Object` (`ensureConforms`): a value class's underlying value, a primitive boxed.
     fn lower_non_local_return(&mut self, v: TExprId, want: &ErasedType) -> LirId {
         let object = ErasedType::object();
-        let key = self.lir.push(Kind::ReturnKey, object.clone());
+        let key = self.lower_return_key();
         let value = match self.m.return_target.clone() {
             ReturnTarget::Def(ErasedType::V) => self.lower_expr(v, &object),
             ReturnTarget::Def(ret) => {
@@ -1271,10 +1271,12 @@ impl<'a> Gen<'a> {
 
     /// A def's body that a closure it makes returns from, as dotty's `NonLocalReturns.nonLocalReturnTry` makes it
     /// (NonLocalReturns.scala 80-91): the `Let` of a fresh key of each run, which the closures capture
-    /// (`Kind::ReturnKey`) and their `return`s throw in a `NonLocalReturnControl`; and the method's return of the
-    /// body in a `try` whose handler of `NonLocalReturnControl` (`case ex: NonLocalReturnControl`, a handler of its
-    /// own) gives the value of one carrying this run's key and throws any other on. The key's temporary too.
-    pub(super) fn lower_keyed_body(&mut self, body: TExprId) -> (TempId, LirId, LirId) {
+    /// (`Gen::body_key` while the body is lowered) and their `return`s throw in a `NonLocalReturnControl`; and the
+    /// method's return of the body in a `try` whose handler of `NonLocalReturnControl` (`case ex:
+    /// NonLocalReturnControl`, a handler of its own) gives the value of one carrying this run's key and throws any
+    /// other on.
+    pub(super) fn lower_keyed_body(&mut self, body: TExprId) -> (LirId, LirId) {
+        debug_assert!(self.given_key().is_none(), "the method of a keyed body is given a key: {}", self.planned.as_ref().map_or("", |m| &*m.name));
         let object = ErasedType::object();
         let control: Rc<str> = Rc::from(NON_LOCAL_RETURN);
         let control_type = ErasedType::L(control.clone());
@@ -1308,7 +1310,7 @@ impl<'a> Gen<'a> {
         let handler = self.lower_handler_value(handled, Vec::new(), done, &ret);
         let handlers = Rc::from([ExceptionHandler { class: control, caught: Caught::Temp(caught), body: handler }]);
         let protected = self.push_protected(Kind::Try { body: value, catch: Some(Catch { done, handlers }), finalizer: None, returns: false }, ret.clone());
-        (key, kept, self.lir.push(Kind::Return(protected), ErasedType::V))
+        (kept, self.lir.push(Kind::Return(protected), ErasedType::V))
     }
 
     /// The `try` or `synchronized` node, its `returns` recorded (`Body::returns_through`).
@@ -2052,7 +2054,6 @@ impl<'a> Gen<'a> {
     /// with the holder of the lazy val `key_of` where the method is that val's accessor or
     /// initialiser), then each capture as the scope holds it.
     pub(super) fn lower_captures(&mut self, instance: bool, home: Option<ClassId>, key: bool, key_of: Option<SymId>, captures: &[Capture]) -> Vec<LirId> {
-        let object = ErasedType::object();
         let mut nodes = Vec::new();
         if instance {
             nodes.push(match home {
@@ -2063,7 +2064,7 @@ impl<'a> Gen<'a> {
         if key {
             nodes.push(match key_of {
                 Some(x) => self.lower_lazy_key(x),
-                None => self.lir.push(Kind::ReturnKey, object.clone()),
+                None => self.lower_return_key(),
             });
         }
         for c in captures {
@@ -2102,15 +2103,29 @@ impl<'a> Gen<'a> {
         self.lir.push(Kind::Null, object)
     }
 
+    /// The key of the non-local returns the code throws (`lower_own_key`), reported where it holds none.
+    fn lower_return_key(&mut self) -> LirId {
+        if let Some(own) = self.lower_own_key() {
+            return own;
+        }
+        self.unsupported("a non-local return of a def that makes no key");
+        self.lir.push(Kind::Null, ErasedType::object())
+    }
+
     /// The key of the non-local returns of the code being lowered: the one a closure (or a local lazy val's accessor
     /// or initialiser) was given, or the one the def's keyed body makes (`Gen::lower_keyed_body`).
     fn lower_own_key(&mut self) -> Option<LirId> {
-        let given = self.planned.as_ref().and_then(|m| m.params.iter().position(|p| matches!(p.role, ParamRole::Key { .. })));
-        match (given, self.body_key) {
+        match (self.given_key(), self.body_key) {
             (Some(i), _) => Some(self.param(i)),
             (None, Some(key)) => Some(self.lir.push(Kind::Temp(key), ErasedType::object())),
             (None, None) => None,
         }
+    }
+
+    /// The planned method's parameter of the role `Key`: the key a closure, or a local lazy val's accessor or
+    /// initialiser, is given.
+    fn given_key(&self) -> Option<usize> {
+        self.planned.as_ref()?.params.iter().position(|p| matches!(p.role, ParamRole::Key { .. }))
     }
 
     /// A function value: its body `code` lifted to a method over what it captures, named where it is lowered

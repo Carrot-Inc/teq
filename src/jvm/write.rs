@@ -410,7 +410,6 @@ impl<'a> Gen<'a> {
                 self.write_arguments(args, order.as_deref());
                 self.invoke_mref(&method);
             }
-            Kind::ReturnKey => self.load_return_key(),
             Kind::Let { temp, init } => {
                 self.write(init);
                 let held = self.lir.ty(init).clone();

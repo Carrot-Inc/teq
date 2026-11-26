@@ -461,7 +461,7 @@ pub enum ReturnTarget {
     Def(ErasedType),
     /// The closure stands in code no def holds (a parameter's default, a field's initialiser), where scalac refuses a
     /// `return`: teq's typer refuses it, or the method reading the closure that makes no key (`Gen::lower_lazy_key`,
-    /// `load_return_key`).
+    /// `Gen::lower_return_key`).
     NoDef,
     /// A closure the walk of the program's code did not meet (`Cx::return_def`).
     #[default]
@@ -501,8 +501,6 @@ pub struct MethodCx {
     /// The method is a lifted lambda or a local lazy val's initialiser: a `return` in it throws
     /// `NonLocalReturnControl` with the key of the def it leaves (dotty's `NonLocalReturns`).
     pub closure: bool,
-    /// The slot of that key: the def's, which it makes, or the closure's capture of it.
-    pub return_key: Option<u16>,
     /// In a closure, the def its `return`s leave.
     pub return_target: ReturnTarget,
     /// In a class's copy of a local lazy val's accessor or initialiser or of a local def that stands in a
@@ -581,7 +579,6 @@ impl Default for MethodCx {
             before_super: false,
             lambda: false,
             closure: false,
-            return_key: None,
             return_target: ReturnTarget::Unknown,
             this_module: None,
             this_home: None,
@@ -6004,18 +6001,6 @@ impl<'a> Gen<'a> {
         let captured = captures.iter().map(|c| if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() }).collect();
         let shape = LiftedShape { instance, key: free.nonlocal, captured, params, ret };
         (Rc::new(shape), Rc::new(LiftedBody { code, captures, home, module }))
-    }
-
-    /// The key of the non-local returns of the def being written, or the one its closure was given.
-    pub(super) fn load_return_key(&mut self) {
-        match self.m.return_key {
-            Some(slot) => self.load(slot, &ErasedType::object()),
-            None => {
-                self.unsupported("a non-local return of a def that makes no key");
-                self.code.op(op::ACONST_NULL);
-                self.code.push(VT::Null);
-            }
-        }
     }
 
     /// The body of the closure whose lifted method is `target`, queued where the class's holds first meet the closure,

@@ -187,7 +187,7 @@ struct ModulePart {
 /// (`Gen::lower_keyed_body`).
 enum BodyTree {
     Plain(LirId),
-    Keyed { key: TempId, made: LirId, tree: LirId },
+    Keyed { made: LirId, tree: LirId },
 }
 
 /// A primary constructor as it is decided before its body is lowered.
@@ -314,8 +314,7 @@ impl<'a> Gen<'a> {
                     syms.push(*sym);
                 }
                 ParamRole::Instance | ParamRole::Underlying(_) => m.this_slot = Some(slot),
-                ParamRole::Key { .. } => m.return_key = Some(slot),
-                ParamRole::Declared(None) | ParamRole::CapturedKey(_) | ParamRole::Enclosing(_) => {}
+                ParamRole::Declared(None) | ParamRole::Key { .. } | ParamRole::CapturedKey(_) | ParamRole::Enclosing(_) => {}
             }
             m.params.push((slot, p.ty.clone()));
             slot += if p.ty.wide() { 2 } else { 1 };
@@ -739,7 +738,7 @@ impl<'a> Gen<'a> {
     fn held_roots(&self, code: &HeldCode) -> Vec<LirId> {
         match code {
             HeldCode::Tree(tree) | HeldCode::Def(BodyTree::Plain(tree)) => vec![*tree],
-            HeldCode::Def(BodyTree::Keyed { made, tree, .. }) => vec![*made, *tree],
+            HeldCode::Def(BodyTree::Keyed { made, tree }) => vec![*made, *tree],
             HeldCode::ModulePart(part) => {
                 let (stmts, made) = self.module_statements(part.root);
                 let own = if part.init { &stmts[..made] } else { &stmts[made..] };
@@ -893,8 +892,8 @@ impl<'a> Gen<'a> {
             self.tail_position_calls(sym, params.len(), body, &mut jumps);
             self.m.tail = Some(TailLoop { sym, params: params.to_vec(), jumps });
         }
-        let (key, made, tree) = self.lowering(|g| g.lower_keyed_body(body));
-        BodyTree::Keyed { key, made, tree }
+        let (made, tree) = self.lowering(|g| g.lower_keyed_body(body));
+        BodyTree::Keyed { made, tree }
     }
 
     /// Writes a def's body lowered by `Gen::lower_method_body`, from the loop's head where the def loops: a plain one
@@ -906,12 +905,10 @@ impl<'a> Gen<'a> {
                 self.bind_loop_head();
                 self.write_body(tree);
             }
-            BodyTree::Keyed { key, made, tree } => {
+            BodyTree::Keyed { made, tree } => {
                 self.write(made);
-                let outer_key = self.m.return_key.replace(self.m.temps[&key]);
                 self.bind_loop_head();
                 self.write(tree);
-                self.m.return_key = outer_key;
             }
         }
         self.m.tail = None;
