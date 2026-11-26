@@ -256,9 +256,9 @@ pub enum Kind {
     /// A local or a parameter held in the method's frame, read at the node's type: its value,
     /// or the reference cell that holds it.
     Local(SymId),
-    /// A parameter of the method by its position among the declared ones (the receiver is none
-    /// of them): how a body the back end composes names what it was given, since its
-    /// parameters have no symbol.
+    /// A parameter of the method by its position among its parameters (`MethodDef::params`; the
+    /// receiver is none of them): what a body the back end composes was given, whose parameters
+    /// have no symbol, and a value the method takes by its role (`ParamRole`).
     Param(u32),
     /// Statements in order, then the result, whose value is the block's. The locals declared in
     /// it end with it.
@@ -419,9 +419,6 @@ pub enum Kind {
     /// (`ReturnKey`). Transitional: the symbol ends when a method's hidden parameters are
     /// parameters of the class-level plan's method.
     LazyKey(SymId),
-    /// The instance of a class that encloses the code, which the method was given beside its
-    /// parameters. Transitional as `LazyKey` is.
-    GivenInstance(ClassId),
     /// The temporary declared with the value of `init`; it lives to the end of the block that
     /// holds this node. No value.
     Let { temp: TempId, init: LirId },
@@ -660,7 +657,7 @@ impl Body {
         match &self.node(id).kind {
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => {}
             Kind::Local(_) | Kind::Param(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This | Kind::StaticField { .. } => {}
-            Kind::ReturnKey | Kind::LazyKey(_) | Kind::GivenInstance(_) | Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
+            Kind::ReturnKey | Kind::LazyKey(_) | Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
             Kind::Block { stmts, result } => {
                 out.extend(self.items(*stmts));
                 out.push(*result);
@@ -936,12 +933,76 @@ impl MethodFlags {
     pub const ABSTRACT: MethodFlags = MethodFlags { is_abstract: true, ..MethodFlags::PUBLIC };
 }
 
+/// What a planned method's parameter is given as. Beside the parameters the source declares, a method takes the
+/// values lambda lifting and the class-level plan give it (the instance its code runs on, what its code captures, the
+/// key of the non-local returns its code throws, the instances and keys a lifted class's code reads); each is a
+/// parameter of its role, so that every writer finds it by its position.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParamRole {
+    /// A parameter as the source declares it, by its symbol; none where a body names it by its position alone
+    /// (`Kind::Param`).
+    Declared(Option<SymId>),
+    /// The instance the code runs on, taken as a parameter by a method that has no receiver: a lifted body that
+    /// reads `this`, a trait's `$init$`.
+    Instance,
+    /// The underlying value of the value class standing for `this` in its extension method.
+    Underlying(ClassId),
+    /// The key of the non-local returns the code throws: the one of the def it leaves, which a closure is given; in a
+    /// local lazy val's accessor and initialiser `holder` is that val, and the key the one travelling with its holder.
+    Key { holder: Option<SymId> },
+    /// A local the code captures, held as its value, or in its cell where `cell` is the type of what the cell holds.
+    Capture { sym: SymId, cell: Option<ErasedType> },
+    /// The key that travels with the holder of the local lazy val, captured beside the holder.
+    CapturedKey(SymId),
+    /// The instance of the class whose code the code was copied from: a lifted class's copy of a local def of that
+    /// class's code reads it (`Gen::class_extras`).
+    Enclosing(ClassId),
+}
+
+/// A parameter of a planned method: the type its callers pass, and what it is given as.
+#[derive(Debug, Clone)]
+pub struct MethodParam {
+    pub ty: ErasedType,
+    pub role: ParamRole,
+}
+
+impl MethodParam {
+    pub fn declared(sym: Option<SymId>, ty: ErasedType) -> MethodParam {
+        MethodParam { ty, role: ParamRole::Declared(sym) }
+    }
+}
+
+/// The role two parameters of one method would share, which no method has: it takes at most one instance (or
+/// underlying value) and one key, each local once (declared or captured), and each other hidden value once; a key
+/// is not both its own and captured.
+pub fn repeated_role(params: &[MethodParam]) -> Option<&ParamRole> {
+    use ParamRole::*;
+    let local = |r: &ParamRole| match r {
+        Declared(Some(s)) | Capture { sym: s, .. } => Some(*s),
+        _ => None,
+    };
+    let key = |r: &ParamRole| match r {
+        Key { holder: Some(x) } | CapturedKey(x) => Some(*x),
+        _ => None,
+    };
+    params.iter().enumerate().find_map(|(i, p)| {
+        let same = |q: &MethodParam| match (&p.role, &q.role) {
+            (Declared(None), _) | (_, Declared(None)) => false,
+            (Instance | Underlying(_), Instance | Underlying(_)) | (Key { .. }, Key { .. }) => true,
+            (a, b) if local(a).is_some() || local(b).is_some() => local(a) == local(b),
+            (a, b) if key(a).is_some() && key(b).is_some() => key(a) == key(b),
+            (a, b) => a == b,
+        };
+        params[i + 1..].iter().any(same).then_some(&p.role)
+    })
+}
+
 /// A method a class defines, where `MethodRef` is one that code names: its encoded name and
 /// its erased signature, the types its callers pass and are answered with.
 #[derive(Debug, Clone)]
 pub struct MethodDef {
     pub name: Rc<str>,
-    pub params: Vec<ErasedType>,
+    pub params: Vec<MethodParam>,
     pub ret: ErasedType,
     /// The signature as a class file spells it, kept with the definition as `MethodRef::desc`
     /// is with a reference: a class is asked by it whether it holds a method.
@@ -949,6 +1010,13 @@ pub struct MethodDef {
     pub flags: MethodFlags,
     /// A lifted method's place among the class's lifted methods (`ClassDef::methods`), none for any other.
     pub place: Option<u32>,
+}
+
+impl MethodDef {
+    /// The types its callers pass.
+    pub fn param_types(&self) -> Vec<ErasedType> {
+        self.params.iter().map(|p| p.ty.clone()).collect()
+    }
 }
 
 /// What a field is beside its name and type.
@@ -1046,6 +1114,28 @@ impl ClassDef {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A method takes each role once: `repeated_role` finds a second instance, key, local or hidden value, and
+    /// passes parameters that differ in their roles or are named by their position alone.
+    #[test]
+    fn a_method_takes_each_role_once() {
+        let p = |role: ParamRole| MethodParam { ty: ErasedType::object(), role };
+        let (s, t, c) = (SymId(1), SymId(2), ClassId(3));
+        let distinct = [p(ParamRole::Instance), p(ParamRole::Key { holder: Some(s) }), p(ParamRole::Capture { sym: t, cell: None }), p(ParamRole::CapturedKey(t)), p(ParamRole::Enclosing(c)), p(ParamRole::Declared(None)), p(ParamRole::Declared(None)), p(ParamRole::Declared(Some(s)))];
+        assert_eq!(repeated_role(&distinct), None);
+        let planted = [
+            [p(ParamRole::Instance), p(ParamRole::Underlying(c))],
+            [p(ParamRole::Key { holder: None }), p(ParamRole::Key { holder: Some(s) })],
+            [p(ParamRole::Declared(Some(t))), p(ParamRole::Capture { sym: t, cell: None })],
+            [p(ParamRole::Capture { sym: s, cell: None }), p(ParamRole::Capture { sym: s, cell: Some(ErasedType::I) })],
+            [p(ParamRole::CapturedKey(s)), p(ParamRole::CapturedKey(s))],
+            [p(ParamRole::Key { holder: Some(s) }), p(ParamRole::CapturedKey(s))],
+            [p(ParamRole::Enclosing(c)), p(ParamRole::Enclosing(c))],
+        ];
+        for params in &planted {
+            assert!(repeated_role(params).is_some(), "{:?} passed", params);
+        }
+    }
 
     fn case(body: &mut Body, keys: &[i32]) -> SwitchCase {
         SwitchCase { keys: keys.into(), body: body.push(Kind::Unit, ErasedType::V) }

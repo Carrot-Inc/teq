@@ -2,7 +2,7 @@
 //! 3.8.4), over scala-library's runtime: a local's holder of the `LazyRef` family, read through an accessor and
 //! computed by an initialiser under the holder's monitor (`transformLocalDef`, `transformStats`).
 
-use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedShape, LirId, MethodDef, MethodFlags, MethodRef, Relation, Visibility};
+use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedShape, LirId, MethodFlags, MethodRef, Relation, Visibility};
 use super::gen::*;
 use super::lifted::{Asker, LiftedBody, Placed};
 use super::names::*;
@@ -169,12 +169,11 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The tree of the accessor of `s`, its holder in `slot` (`PendingBody::LazyAccessor`): `if
+    /// The tree of the accessor of `s`, its holder its last parameter (`PendingBody::LazyAccessor`): `if
     /// x$lzy.initialized() then x$lzy.value() else x$lzyINIT()`, each returned.
-    pub fn lazy_accessor_tree(&mut self, s: SymId, slot: u16) -> LirId {
+    pub fn lazy_accessor_tree(&mut self, s: SymId) -> LirId {
         let (class, value) = self.lazy_holder_class(s);
         let holder = ErasedType::L(class.clone());
-        self.m.locals.insert(s, Local { slot, ty: holder.clone(), cell: false });
         let ret = self.m.ret.clone();
         let method = |name: &str, ret: ErasedType| {
             let desc = method_desc(&[], &ret);
@@ -194,13 +193,12 @@ impl<'a> Gen<'a> {
         })
     }
 
-    /// The tree of the initialiser of `s`, its holder in `slot`, the right-hand side `init`
+    /// The tree of the initialiser of `s`, its holder its last parameter, the right-hand side `init`
     /// (`PendingBody::LazyInit`): `x$lzy.synchronized { if x$lzy.initialized() then x$lzy.value()
     /// else x$lzy.initialize(rhs) }`, returned.
-    pub fn lazy_init_tree(&mut self, s: SymId, init: TExprId, slot: u16) -> LirId {
+    pub fn lazy_init_tree(&mut self, s: SymId, init: TExprId) -> LirId {
         let (class, value) = self.lazy_holder_class(s);
         let holder = ErasedType::L(class.clone());
-        self.m.locals.insert(s, Local { slot, ty: holder.clone(), cell: false });
         let ret = self.m.ret.clone();
         let method = |name: &str, params: Vec<ErasedType>, ret: ErasedType| {
             let desc = method_desc(&params, &ret);
@@ -303,13 +301,13 @@ impl<'a> Gen<'a> {
     /// The getter of a `@threadUnsafe` member `getter` of the type `ty` over its container and flag
     /// (`mkThreadUnsafeDef`, LazyVals.scala 230-239): `if !flag then { container = rhs; flag = true }; container`,
     /// the right-hand side the member's own or a trait's static (`HolderInit::TraitStatic`), none where it has none
-    /// (reported by the caller), held in the context `method` (`Gen::hold_tree`).
-    pub fn thread_unsafe_getter(&mut self, method: MethodDef, getter: &str, ty: &ErasedType, init: Option<super::classes::HolderInit>) {
+    /// (reported by the caller), held in the context `Gen::held_context` made (`Gen::hold_tree`).
+    pub fn thread_unsafe_getter(&mut self, getter: &str, ty: &ErasedType, init: Option<super::classes::HolderInit>) {
         use super::classes::HolderInit;
         let (container, flag) = self.thread_unsafe_names(getter);
         let owner = self.this_name.clone();
         let this = ErasedType::L(owner.clone());
-        self.hold_tree(method, "@threadUnsafe lazy val's getter", |g| {
+        self.hold_tree("@threadUnsafe lazy val's getter", |g| {
             let mut stmts = Vec::new();
             if let Some(init) = init {
                 let receiver = g.lir.this(this.clone());

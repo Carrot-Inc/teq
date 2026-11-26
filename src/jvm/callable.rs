@@ -2,7 +2,7 @@
 //! bytecode, reflection and the `java` launcher. A case class's companion with `apply`,
 //! `unapply` and `fromProduct`, the case class's `copy`.
 
-use crate::lir::{Catch, Caught, ClassFlags, Comparing, ErasedType, ExceptionHandler, FieldFlags, Invoke, Kind, LirId, MethodDef, MethodFlags, MethodRef, Relation, SwitchCase, TempId, Visibility};
+use crate::lir::{Catch, Caught, ClassFlags, Comparing, ErasedType, ExceptionHandler, FieldFlags, Invoke, Kind, LirId, MethodDef, MethodFlags, MethodParam, MethodRef, ParamRole, Relation, SwitchCase, TempId, Visibility};
 use super::classfile::*;
 use super::gen::*;
 use super::names::*;
@@ -708,9 +708,9 @@ impl<'a> Gen<'a> {
         self.this_class = None;
         self.line_file = info.file;
         self.context = name.clone();
-        let method = self.held_context(MethodFlags::PUBLIC, "<init>", "()V", &[], ErasedType::V, &[], super::classes::MethodSite::default());
+        self.held_context(MethodFlags::PUBLIC, "<init>", "()V", &[], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
-        self.hold_tree(method, "main class's constructor", |g| {
+        self.hold_tree("main class's constructor", |g| {
             let made = g.lir.init(&object_init, &[]);
             let unit = g.lir.unit();
             let done = g.lir.seq(&[made], unit);
@@ -753,9 +753,9 @@ impl<'a> Gen<'a> {
         let this = ErasedType::L(name.clone());
         let outer = self.sym_type(tc.ctor_params[0]);
         self.field(FieldFlags { is_final: true, ..FieldFlags::PRIVATE }, "$outer", &outer);
-        let method = self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), &[(None, outer.clone())], ErasedType::V, &[], super::classes::MethodSite::default());
+        self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), &[MethodParam::declared(None, outer.clone())], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
-        self.hold_tree(method, "inner companion's constructor", |g| {
+        self.hold_tree("inner companion's constructor", |g| {
             let made = g.lir.init(&object_init, &[]);
             let instance = g.lir.this(this.clone());
             let given = g.param(0);
@@ -1053,9 +1053,9 @@ impl<'a> Gen<'a> {
         let outer_name = self.class_name(o);
         let outer = ErasedType::L(outer_name.clone());
         self.field(FieldFlags { is_final: true, synthetic: true, ..FieldFlags::PRIVATE }, "$outer", &outer);
-        let method = self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), &[(None, outer.clone())], ErasedType::V, &[], super::classes::MethodSite::default());
+        self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&[outer.clone()], &ErasedType::V), &[MethodParam::declared(None, outer.clone())], ErasedType::V, &[], super::classes::MethodSite::default());
         let object_init = method_ref(Invoke::Special, &Rc::from(OBJECT), false, "<init>", &[], &ErasedType::V);
-        self.hold_tree(method, "instance companion's constructor", |g| {
+        self.hold_tree("instance companion's constructor", |g| {
             let instance = g.lir.this(this.clone());
             let given = g.param(0);
             let kept = g.lir.store(instance, &name, "$outer", given);
@@ -1242,24 +1242,20 @@ impl<'a> Gen<'a> {
             let m = self.mref(fun.sym);
             let info = cx.input.syms.sym(fun.sym);
             self.context = format!("{}.{}$extension", self.this_name, m.name);
-            let mut params: Vec<(Option<SymId>, ErasedType)> = vec![(None, u.clone())];
-            params.extend(self.class_file_params(fun.sym, &fun.params).iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
-            let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
+            let mut params: Vec<MethodParam> = vec![MethodParam { ty: u.clone(), role: ParamRole::Underlying(c) }];
+            params.extend(self.class_file_params(fun.sym, &fun.params).iter().zip(&m.params).map(|(&s, t)| MethodParam::declared(Some(s), t.clone())));
+            let types: Vec<ErasedType> = params.iter().map(|p| p.ty.clone()).collect();
             if let Some(body) = fun.body {
                 let site = super::classes::MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_extension(c, fun.sym), ..Default::default() };
-                let method = self.held_context(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", m.name), &method_desc(&types, &m.ret), &params, m.ret.clone(), &[body], site);
-                self.m.this_slot = Some(1);
-                self.m.this_underlying = Some(u.clone());
-                self.hold_def(method, "value class's extension method", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
+                self.held_context(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &format!("{}$extension", m.name), &method_desc(&types, &m.ret), &params, m.ret.clone(), &[body], site);
+                self.hold_def("value class's extension method", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
             }
             for (i, d) in fun.own_defaults() {
                 let shape = self.default_getter_shape(fun.sym, i);
                 let (before, ret) = (shape.before, shape.ret.clone());
                 let getter = format!("{}$default${}$extension", self.source_method_name(fun.sym), shape.index);
-                let method = self.held_context(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &getter, &method_desc(&types[..before + 1], &ret), &params[..before + 1], ret.clone(), &[d], super::classes::MethodSite::default());
-                self.m.this_slot = Some(1);
-                self.m.this_underlying = Some(u.clone());
-                self.hold_tree(method, "value class extension's default getter", |g| {
+                self.held_context(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &getter, &method_desc(&types[..before + 1], &ret), &params[..before + 1], ret.clone(), &[d], super::classes::MethodSite::default());
+                self.hold_tree("value class extension's default getter", |g| {
                     let value = g.lower_default_value(d, shape.by_name, &ret);
                     g.lir.ret(value)
                 });
@@ -1322,11 +1318,11 @@ impl<'a> Gen<'a> {
             g.enum_companion_parts(&mut parts, &name, touch.clone(), &values);
             g.returning(parts)
         };
-        let clinit = self.held_context(MethodFlags { visibility: Visibility::Package, is_static: true, ..MethodFlags::PUBLIC }, "<clinit>", "()V", &[], ErasedType::V, &[], super::classes::MethodSite::default());
-        self.hold_module_part(clinit, false, tree);
+        self.held_context(MethodFlags { visibility: Visibility::Package, is_static: true, ..MethodFlags::PUBLIC }, "<clinit>", "()V", &[], ErasedType::V, &[], super::classes::MethodSite::default());
+        self.hold_module_part(false, tree);
 
-        let init = self.held_context(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, "<init>", "()V", &[], ErasedType::V, &[], super::classes::MethodSite::default());
-        self.hold_module_part(init, true, |_| unreachable!("the tree its `<clinit>` made"));
+        self.held_context(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, "<init>", "()V", &[], ErasedType::V, &[], super::classes::MethodSite::default());
+        self.hold_module_part(true, |_| unreachable!("the tree its `<clinit>` made"));
         name
     }
 

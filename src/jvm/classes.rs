@@ -1,6 +1,6 @@
 //! Classes, traits, objects, enums and the module class of a file's top-level definitions.
 
-use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedFrom, LiftedShape, LirId, MethodDef, MethodFlags, MethodRef, Refusal, Relation, TempId, Visibility};
+use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedFrom, LiftedShape, LirId, MethodDef, MethodFlags, MethodParam, MethodRef, ParamRole, Refusal, Relation, TempId, Visibility};
 use super::classfile::*;
 use super::free;
 use super::gen::*;
@@ -277,6 +277,11 @@ pub enum Wider {
     LambdaBody,
 }
 
+/// A frame of parameters the source declares, each by its symbol where one stands for it.
+pub(super) fn declared_params(params: &[(Option<SymId>, ErasedType)]) -> Vec<MethodParam> {
+    params.iter().map(|(s, t)| MethodParam::declared(*s, t.clone())).collect()
+}
+
 impl<'a> Gen<'a> {
     fn is_lazy_member(&self, s: SymId) -> bool {
         self.cx.is_lazy_member(s)
@@ -288,23 +293,42 @@ impl<'a> Gen<'a> {
     /// static, its result, the locals of `roots` that live in cells, and where it is defined. Every method with code
     /// passes here before its body is lowered, when its member is held (`Gen::held_context`) or for a lifted body to be written later
     /// (`Gen::lower_lifted`), and so passes the class file's gate here.
-    fn method_cx(&mut self, method: &MethodDef, site: MethodSite, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId]) -> MethodCx {
+    fn method_cx(&mut self, method: &MethodDef, site: MethodSite, params: &[MethodParam], ret: ErasedType, roots: &[TExprId]) -> MethodCx {
         self.check_method(method, &site);
+        debug_assert!(crate::lir::repeated_role(params).is_none(), "two parameters of {}{} take one role", method.name, method.desc);
         let mut m = MethodCx { at: site.at, ..MethodCx::default() };
         let mut slot = 0;
         if !method.flags.is_static {
             m.this_slot = Some(0);
             slot = 1;
         }
-        for (sym, ty) in params {
-            if let Some(s) = sym {
-                m.locals.insert(*s, Local { slot, ty: ty.clone(), cell: false });
+        let mut syms: Vec<SymId> = Vec::new();
+        for p in params {
+            match &p.role {
+                ParamRole::Declared(Some(s)) => {
+                    m.locals.insert(*s, Local { slot, ty: p.ty.clone(), cell: false });
+                    syms.push(*s);
+                }
+                ParamRole::Capture { sym, cell } => {
+                    m.locals.insert(*sym, Local { slot, ty: cell.clone().unwrap_or_else(|| p.ty.clone()), cell: cell.is_some() });
+                    syms.push(*sym);
+                }
+                ParamRole::Instance | ParamRole::Underlying(_) => m.this_slot = Some(slot),
+                ParamRole::Key { holder } => {
+                    m.return_key = Some(slot);
+                    if let Some(x) = holder {
+                        m.lazy_keys.insert(*x, slot);
+                    }
+                }
+                ParamRole::CapturedKey(x) => {
+                    m.lazy_keys.insert(*x, slot);
+                }
+                ParamRole::Declared(None) | ParamRole::Enclosing(_) => {}
             }
-            m.params.push((slot, ty.clone()));
-            slot += if ty.wide() { 2 } else { 1 };
+            m.params.push((slot, p.ty.clone()));
+            slot += if p.ty.wide() { 2 } else { 1 };
         }
         m.ret = ret;
-        let syms: Vec<SymId> = params.iter().filter_map(|p| p.0).collect();
         m.cells = free::cells(self.cx, &mut self.an, &syms, roots);
         m
     }
@@ -484,28 +508,31 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let l = p.lifted.clone();
         let lazy = matches!(p.body, PendingBody::LazyAccessor(_) | PendingBody::LazyInit(..));
-        let mut params: Vec<(Option<SymId>, ErasedType)> = Vec::new();
+        let lazy_val = match p.body {
+            PendingBody::LazyAccessor(s) | PendingBody::LazyInit(s, _) => Some(s),
+            _ => None,
+        };
+        let mut params: Vec<MethodParam> = Vec::new();
         if l.this {
             // A copy of code declared in another class's code takes that class's instance.
             let this = match l.home.or(self.this_class) {
                 Some(c) => self.class_type(c),
                 None => ErasedType::L(self.this_name.clone()),
             };
-            params.push((None, this));
+            params.push(MethodParam { ty: this, role: ParamRole::Instance });
         }
-        let key_slot = params.len() as u16;
         if l.key {
-            params.push((None, ErasedType::object()));
+            // A lazy val's accessor and initialiser take the key of its holder.
+            params.push(MethodParam { ty: ErasedType::object(), role: ParamRole::Key { holder: lazy_val } });
         }
-        // The keys that travel with lazy vals' holders, by their slots.
-        let mut keys: Vec<(SymId, u16)> = Vec::new();
         for c in &l.captures {
-            if c.key {
-                keys.push((c.sym, params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>()));
-                params.push((None, c.ty.clone()));
-                continue;
-            }
-            params.push((Some(c.sym), if c.cell { ErasedType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() }));
+            params.push(if c.key {
+                MethodParam { ty: c.ty.clone(), role: ParamRole::CapturedKey(c.sym) }
+            } else if c.cell {
+                MethodParam { ty: ErasedType::L(Rc::from(OBJECT_REF)), role: ParamRole::Capture { sym: c.sym, cell: Some(c.ty.clone()) } }
+            } else {
+                MethodParam { ty: c.ty.clone(), role: ParamRole::Capture { sym: c.sym, cell: None } }
+            });
         }
         let first_param = params.len();
         let (param_syms, body, roots): (Vec<SymId>, Option<TExprId>, Vec<TExprId>) = match &p.body {
@@ -545,7 +572,7 @@ impl<'a> Gen<'a> {
         } else {
             (l.params.iter().map(width).sum(), l.params.len())
         };
-        let before: usize = params[receiver..].iter().map(|(_, t)| width(t)).sum();
+        let before: usize = params[receiver..].iter().map(|p| width(&p.ty)).sum();
         // A lambda's body, a local def and its default's getter are dotty's lifted methods: LambdaLift lifts every
         // local definition, referenced or not (Dependencies.scala 250-251, LambdaLift.scala 222), with no generic
         // signature (BCodeHelpers.scala 683), unless dotty drops it with its block (`Gen::under_folded_block`). A
@@ -578,31 +605,24 @@ impl<'a> Gen<'a> {
         };
         let site = MethodSite { at, dotty, wider };
         for (i, t) in l.params.iter().enumerate() {
-            // The parameters of a lambda arrive boxed and get locals of their own below.
-            let sym = if is_lambda { None } else { param_syms.get(i).copied() };
-            params.push((sym, t.clone()));
+            // The parameters of a lambda arrive boxed and get locals of their own below. A local lazy val's accessor
+            // and initialiser take its holder last (`LazyVals.transformLocalDef`), the val as its holder.
+            let sym = if is_lambda { None } else { lazy_val.or_else(|| param_syms.get(i).copied()) };
+            params.push(MethodParam::declared(sym, t.clone()));
         }
         let mut method = begun_method_def(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, &params, &l.ret);
         method.place = l.place;
         self.m = self.method_cx(&method, site, &params, l.ret.clone(), &roots);
+        self.planned = Some(method);
         self.lir.clear();
         self.lower_declared.clear();
         self.m.lambda = is_lambda;
         self.m.closure = is_lambda || matches!(p.body, PendingBody::LazyInit(..));
         if l.key {
-            self.m.return_key = Some(key_slot);
             self.m.return_target = p.return_target.clone();
-            // A lazy val's accessor and initialiser take the key of its holder.
-            if let PendingBody::LazyAccessor(s) | PendingBody::LazyInit(s, _) = p.body {
-                self.m.lazy_keys.insert(s, key_slot);
-            }
         }
         if l.this {
-            self.m.this_slot = Some(0);
             self.m.this_home = l.home;
-        }
-        for (s, slot) in keys {
-            self.m.lazy_keys.insert(s, slot);
         }
         // A class's copy of a local def of an object reached statically reads its `MODULE$` for `this`,
         // and so does what such code lifts.
@@ -612,17 +632,11 @@ impl<'a> Gen<'a> {
         if l.module.is_some() {
             self.m.this_module = l.module.clone();
         }
-        for c in l.captures.iter().filter(|c| !c.key) {
-            if let Some(local) = self.m.locals.get_mut(&c.sym) {
-                local.ty = c.ty.clone();
-                local.cell = c.cell;
-            }
-        }
         // A lambda's parameters arrive as `Object`s: each not of a reference type is unboxed into a local of its own
         // before the body (a parameter is never assigned, so none lives in a cell).
         let mut unboxed: Vec<(SymId, u32, ErasedType)> = Vec::new();
         if is_lambda {
-            let mut slot = params[..first_param].iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
+            let mut slot = params[..first_param].iter().map(|p| if p.ty.wide() { 2 } else { 1 }).sum::<u16>();
             for (k, &s) in param_syms.iter().enumerate() {
                 let declared = self.sym_type(s);
                 if declared.is_object() && !self.is_vc_object(&declared) {
@@ -634,15 +648,8 @@ impl<'a> Gen<'a> {
             }
         }
         let code = match (&p.body, body) {
-            // A local lazy val's accessor and initialiser take its holder last (`LazyVals.transformLocalDef`).
-            (PendingBody::LazyAccessor(sym), _) => {
-                let slot = params[..params.len() - 1].iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
-                HeldCode::Tree(self.lazy_accessor_tree(*sym, slot))
-            }
-            (PendingBody::LazyInit(sym, init), _) => {
-                let slot = params[..params.len() - 1].iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
-                HeldCode::Tree(self.lazy_init_tree(*sym, *init, slot))
-            }
+            (PendingBody::LazyAccessor(sym), _) => HeldCode::Tree(self.lazy_accessor_tree(*sym)),
+            (PendingBody::LazyInit(sym, init), _) => HeldCode::Tree(self.lazy_init_tree(*sym, *init)),
             (PendingBody::Fun(f), Some(body)) => {
                 let fun = &cx.input.prog.funs[f.idx()];
                 HeldCode::Def(self.lower_method_body(fun.sym, &fun.params, body))
@@ -688,7 +695,7 @@ impl<'a> Gen<'a> {
         for r in self.held_roots(&code) {
             self.ask_lifted(r);
         }
-        self.hold_method(method, if lazy { "local lazy val's method" } else { "lifted method" }, code)
+        self.hold_method(if lazy { "local lazy val's method" } else { "lifted method" }, code)
     }
 
     /// The held method entering the class's plan, unless the class holds one of its name and signature already: the
@@ -702,9 +709,10 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The method `method` held with the code its maker has just lowered: the method's context, the tree and the locals
-    /// the lowering declared, taken from the generator, to be written later by `Gen::write_held`.
-    fn hold_method(&mut self, method: MethodDef, what: &'static str, code: HeldCode) -> HeldMethod {
+    /// The planned method held with the code its maker has just lowered: the method, its context, the tree and the
+    /// locals the lowering declared, taken from the generator, to be written later by `Gen::write_held`.
+    fn hold_method(&mut self, what: &'static str, code: HeldCode) -> HeldMethod {
+        let method = self.planned.take().expect("a planned method is held");
         let (m, lir, declared) = (std::mem::take(&mut self.m), std::mem::take(&mut self.lir), std::mem::take(&mut self.lower_declared));
         HeldMethod { method, entered: false, what, first_line: None, m, lir, declared, code }
     }
@@ -717,20 +725,19 @@ impl<'a> Gen<'a> {
     /// writer meets them.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn hold_member(&mut self, flags: MethodFlags, name: &str, desc: &str, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId], site: MethodSite, what: &'static str, compose: impl FnOnce(&mut Self) -> LirId) {
-        let method = self.held_context(flags, name, desc, params, ret, roots, site);
-        self.hold_tree(method, what, compose);
+        self.held_context(flags, name, desc, &declared_params(params), ret, roots, site);
+        self.hold_tree(what, compose);
     }
 
-    /// `hold_member`'s first half: the member's plan entry, its context made at the class file's gate and set as the
-    /// generator's, the lowering's state cleared. A kind that sets more of the context (the slots of what its method
-    /// is given, a local's cell) does it here, between this and `hold_tree`, before the tree is lowered.
+    /// `hold_member`'s first half: the member's planned method, by what each parameter is given as (`ParamRole`), and
+    /// its context made at the class file's gate, set as the generator's, the lowering's state cleared.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn held_context(&mut self, flags: MethodFlags, name: &str, desc: &str, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId], site: MethodSite) -> MethodDef {
+    pub(super) fn held_context(&mut self, flags: MethodFlags, name: &str, desc: &str, params: &[MethodParam], ret: ErasedType, roots: &[TExprId], site: MethodSite) {
         let method = begun_method_def(flags, name, desc, params, &ret);
         self.m = self.method_cx(&method, site, params, ret, roots);
+        self.planned = Some(method);
         self.lir.clear();
         self.lower_declared.clear();
-        method
     }
 
     /// The roots of a held method's code whose lifted bodies it asks for (`Gen::ask_lifted`), in the order they are
@@ -749,21 +756,21 @@ impl<'a> Gen<'a> {
 
     /// A def's member in the context `held_context` made: its body lowered (`Gen::lower_method_body`), asked as
     /// `hold_tree` asks, held and written, its code starting at `first_line`.
-    pub(super) fn hold_def(&mut self, method: MethodDef, what: &'static str, first_line: u32, (sym, params, body): (SymId, &[SymId], TExprId)) {
+    pub(super) fn hold_def(&mut self, what: &'static str, first_line: u32, (sym, params, body): (SymId, &[SymId], TExprId)) {
         let code = HeldCode::Def(self.lower_method_body(sym, params, body));
         for r in self.held_roots(&code) {
             self.ask_lifted(r);
         }
-        let mut held = HeldMethod { first_line: Some(first_line), ..self.hold_method(method, what, code) };
+        let mut held = HeldMethod { first_line: Some(first_line), ..self.hold_method(what, code) };
         self.enter_plan(&mut held);
         self.write_held(held);
     }
 
     /// `hold_member`'s second half, in the context `held_context` made: the tree lowered, asked, held and written.
-    pub(super) fn hold_tree(&mut self, method: MethodDef, what: &'static str, compose: impl FnOnce(&mut Self) -> LirId) {
+    pub(super) fn hold_tree(&mut self, what: &'static str, compose: impl FnOnce(&mut Self) -> LirId) {
         let tree = self.lowering(compose);
         self.ask_lifted(tree);
-        let mut held = self.hold_method(method, what, HeldCode::Tree(tree));
+        let mut held = self.hold_method(what, HeldCode::Tree(tree));
         self.enter_plan(&mut held);
         self.write_held(held);
     }
@@ -1205,8 +1212,8 @@ impl<'a> Gen<'a> {
                 let fin = info.mods & mods::FINAL != 0 && !self.is_interface;
                 let flags = MethodFlags { is_final: outer_accessor || fin, synthetic: outer_accessor, ..MethodFlags::PUBLIC };
                 let site = MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_member(fun.sym, &m.name), ..MethodSite::default() };
-                let method = self.held_context(flags, &m.name, &m.desc, &params, m.ret.clone(), &[body], site);
-                self.hold_def(method, "method", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
+                self.held_context(flags, &m.name, &m.desc, &declared_params(&params), m.ret.clone(), &[body], site);
+                self.hold_def("method", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
                 self.emit_bridges(fun.sym, &m);
                 if self.is_interface && self.dotty_forwards(fun.sym) {
                     let site = self.statified_site(&m.params, &m.ret, None, MethodSite::default());
@@ -1302,10 +1309,9 @@ impl<'a> Gen<'a> {
         let proxies = self.proxy_syms(&fun.params[..k]);
         let extras = self.extras_of(&fun.params[..k], None);
         let pm = self.proxied_mref(&m, &proxies, &extras);
-        let mut params: Vec<(Option<SymId>, ErasedType)> = proxies.iter().zip(&pm.params).map(|(&s, t)| (Some(s), t.clone())).collect();
-        let extras_slot = 1 + params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
-        params.extend(pm.params[proxies.len()..pm.params.len() - m.params.len()].iter().map(|t| (None, t.clone())));
-        params.extend(self.class_file_params(fun.sym, declared).iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
+        let mut params: Vec<MethodParam> = proxies.iter().map(|&s| self.capture_param(s, s)).collect();
+        params.extend(self.extras_params(&extras));
+        params.extend(self.class_file_params(fun.sym, declared).iter().zip(&m.params).map(|(&s, t)| MethodParam::declared(Some(s), t.clone())));
         // One refusal a member: dotty's restriction where it refuses the member or its static forwarder, else teq's
         // own, given at the member, where teq's wider shape passes the class file's bound.
         let restricted = slots + usize::from(forwarded) > MAX_PARAMETER_SLOTS;
@@ -1318,10 +1324,8 @@ impl<'a> Gen<'a> {
             Dotty::NotSure => Dotty::NotSure,
         };
         let site = MethodSite { at, dotty, wider };
-        let method = self.held_context(MethodFlags::PUBLIC, &pm.name, &pm.desc, &params, pm.ret.clone(), &[body], site);
-        self.bind_proxies(&proxies);
-        self.bind_extras(&extras, extras_slot);
-        self.hold_def(method, "local trait's member", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
+        self.held_context(MethodFlags::PUBLIC, &pm.name, &pm.desc, &params, pm.ret.clone(), &[body], site);
+        self.hold_def("local trait's member", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
         // The static forwarder at the trait, where dotty places its error; a private member's is teq's alone. Where teq
         // passes the member more than dotty does, its forwarder's descriptor is not dotty's to check.
         let site = if forwarded {
@@ -1497,16 +1501,14 @@ impl<'a> Gen<'a> {
             self.box_forwarder(c, &m.name, &format!("{}$extension", m.name), params, &m.ret, site);
             return;
         }
-        let mut ext_params = vec![(None, u.clone())];
-        ext_params.extend(params.iter().cloned());
-        let ext_types: Vec<ErasedType> = ext_params.iter().map(|p| p.1.clone()).collect();
+        let mut ext_params = vec![MethodParam { ty: u.clone(), role: ParamRole::Underlying(c) }];
+        ext_params.extend(declared_params(params));
+        let ext_types: Vec<ErasedType> = ext_params.iter().map(|p| p.ty.clone()).collect();
         let ext_desc = method_desc(&ext_types, &m.ret);
         let ext_name = format!("{}$extension", m.name);
         let ext_site = MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_extension(c, fun.sym), ..MethodSite::default() };
-        let method = self.held_context(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &ext_name, &ext_desc, &ext_params, m.ret.clone(), &[body], ext_site);
-        self.m.this_slot = Some(0);
-        self.m.this_underlying = Some(u.clone());
-        self.hold_def(method, "value class's static extension", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
+        self.held_context(MethodFlags { is_static: true, ..MethodFlags::PUBLIC }, &ext_name, &ext_desc, &ext_params, m.ret.clone(), &[body], ext_site);
+        self.hold_def("value class's static extension", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
         let this = self.class_type(c);
         let extension = method_ref(Invoke::Static, &self.this_name.clone(), false, &ext_name, &ext_types, &m.ret);
         self.hold_member(MethodFlags::PUBLIC, &m.name, &m.desc, params, m.ret.clone(), &[], site, "value class box's method", |g| {
@@ -2155,8 +2157,8 @@ impl<'a> Gen<'a> {
     /// statements, in order), where the class file runs it (`Gen::write_module_part`).
     fn module_clinit(&mut self, k: &PrimaryCtor) {
         let roots = self.primary_roots(k);
-        let method = self.held_context(self.clinit_flags(), "<clinit>", "()V", &[], ErasedType::V, &roots, MethodSite::default());
-        self.hold_module_part(method, false, |g| g.primary_tree(k));
+        self.held_context(self.clinit_flags(), "<clinit>", "()V", &[], ErasedType::V, &roots, MethodSite::default());
+        self.hold_module_part(false, |g| g.primary_tree(k));
     }
 
     /// What an object that is an enum's companion runs before its body (`Gen::enum_companion_parts`):
@@ -2579,21 +2581,18 @@ impl<'a> Gen<'a> {
         is_value_case: bool,
         is_object: bool,
         is_anon: bool,
-    ) -> (Vec<(Option<SymId>, ErasedType)>, PrimaryCtor<'t>) {
+    ) -> (Vec<MethodParam>, PrimaryCtor<'t>) {
         let cx = self.cx;
-        let mut params: Vec<(Option<SymId>, ErasedType)> = Vec::new();
         // An enum over `java.lang.Enum` passes the name and ordinal of its values up to it.
         let java_enum = cx.is_java_enum(tc.id) || (is_value_case && cx.enum_of_case(tc.id).map_or(false, |e| cx.is_java_enum(e)));
         let n_captures = if is_anon { tc.ctor_params.len() } else { tc.captures };
-        for t in self.anon_ctor_params(tc.id) {
-            params.push((None, t));
-        }
+        let mut params = self.class_capture_params(tc.id);
         // The name and ordinal follow what the class captures: a value of an enum of a block or a
         // class takes its companion's instance first (`enum_value_new`).
         let name_param = params.len();
         if is_value_case || java_enum {
-            params.push((None, ErasedType::L(Rc::from(STRING))));
-            params.push((None, ErasedType::I));
+            params.push(MethodParam::declared(None, ErasedType::L(Rc::from(STRING))));
+            params.push(MethodParam::declared(None, ErasedType::I));
         }
         let first_super_arg = params.len();
         // An anonymous class over a class receives the arguments of the superclass's
@@ -2603,11 +2602,11 @@ impl<'a> Gen<'a> {
         let anon_super = if at_creation { self.anon_super_params(tc.id) } else { None };
 
         for t in anon_super.iter().flat_map(|(_, _, types)| types.iter()) {
-            params.push((None, t.clone()));
+            params.push(MethodParam::declared(None, t.clone()));
         }
         for &p in &tc.ctor_params[n_captures..] {
             let t = self.sym_type(p);
-            params.push((Some(p), t));
+            params.push(MethodParam::declared(Some(p), t));
         }
         let route = self.super_call_route(tc, enum_class, anon_super.map(|(_, _, types)| types), at_creation);
         (params, PrimaryCtor { tc, fields, super_name, is_value_case, is_object, is_anon, java_enum, name_param, first_super_arg, route })
@@ -2659,40 +2658,24 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn constructor(&mut self, params: &[(Option<SymId>, ErasedType)], k: &PrimaryCtor) {
+    fn constructor(&mut self, params: &[MethodParam], k: &PrimaryCtor) {
         let cx = self.cx;
         let tc = k.tc;
         let roots = self.primary_roots(k);
-        let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
+        let types: Vec<ErasedType> = params.iter().map(|p| p.ty.clone()).collect();
         // A static module is made by its own `<clinit>` only, as scalac's.
         let private = k.is_object && cx.statically_placed(tc.id) && cx.input.syms.class(tc.id).local_module.is_none();
         let visibility = if private { Visibility::Private } else { Visibility::Public };
-        let declared: Vec<SymId> = params.iter().filter_map(|p| p.0).filter(|p| tc.ctor_params.contains(p)).collect();
+        let declared: Vec<SymId> = params.iter().filter_map(|p| match p.role { ParamRole::Declared(s) => s, _ => None }).filter(|p| tc.ctor_params.contains(p)).collect();
         let site = MethodSite { at: self.primary_ctor_place(tc.id), dotty: self.dotty_constructor(tc.id, &declared), ..MethodSite::default() };
         let (flags, desc) = (MethodFlags { visibility, ..MethodFlags::PUBLIC }, method_desc(&types, &ErasedType::V));
-        let method = self.held_context(flags, "<init>", &desc, params, ErasedType::V, &roots, site);
         // The constructor reads what the class captures from its parameters, which the
         // arguments of the superclass's constructor need before the fields are set.
-        let mut slot = 1u16;
-        for (s, _, ty, held) in self.class_captures.clone() {
-            let stored = self.anon_capture_type(s);
-            match held {
-                Held::Value => {
-                    self.m.locals.insert(s, Local { slot, ty, cell: false });
-                }
-                Held::Cell => {
-                    let ty = self.sym_type(s);
-                    self.m.locals.insert(s, Local { slot, ty, cell: true });
-                }
-            }
-            slot += if stored.wide() { 2 } else { 1 };
-        }
-        let extras = Extras { homes: self.class_homes.iter().map(|h| h.0).collect(), keys: self.class_keys.iter().map(|k| k.0).collect() };
-        self.bind_extras(&extras, slot);
+        self.held_context(flags, "<init>", &desc, params, ErasedType::V, &roots, site);
         if k.is_object {
-            self.hold_module_part(method, true, |g| g.primary_tree(k));
+            self.hold_module_part(true, |g| g.primary_tree(k));
         } else {
-            self.hold_tree(method, "primary constructor", |g| {
+            self.hold_tree("primary constructor", |g| {
                 let (root, fields) = g.primary_tree(k);
                 assert!(fields.is_empty(), "a class declares no field in its constructor's tree");
                 root
@@ -2734,7 +2717,7 @@ impl<'a> Gen<'a> {
     /// at its own hold, before the tree where the `<clinit>` comes first, and stands for `this` while the tree is
     /// lowered (`MethodCx::this_kept`). Each part asks for the lifted bodies of its own statements alone
     /// (`Gen::held_roots`), in the order they are written.
-    pub(super) fn hold_module_part(&mut self, method: MethodDef, init: bool, make: impl FnOnce(&mut Self) -> (LirId, Vec<Declared>)) {
+    pub(super) fn hold_module_part(&mut self, init: bool, make: impl FnOnce(&mut Self) -> (LirId, Vec<Declared>)) {
         let kept = self.module_tree.take().map(|kept| {
             self.lir = kept.lir;
             self.lower_declared = kept.declared;
@@ -2752,7 +2735,7 @@ impl<'a> Gen<'a> {
             self.ask_lifted(s);
         }
         let what = if init { "object's constructor" } else { "object's static initialiser" };
-        let mut held = self.hold_method(method, what, code);
+        let mut held = self.hold_method(what, code);
         self.enter_plan(&mut held);
         self.write_held(held);
         if first {
@@ -3001,8 +2984,7 @@ impl<'a> Gen<'a> {
         // local def's own captures in its place. A parameter that is not the capture itself (the enclosing
         // instance of a class nested in a class) is the constructor's own, as before.
         let own = self.this_class.map_or(Vec::new(), |c| self.via_own_captures(c, fun.sym));
-        let mut params: Vec<(Option<SymId>, ErasedType)> = Vec::new();
-        let mut held: Option<(Vec<(SymId, SymId)>, Extras, u16)> = None;
+        let mut params: Vec<MethodParam> = Vec::new();
         let mut declared_from = 0;
         if let (true, Some(c)) = (own.contains(&true), self.this_class) {
             let captured: Vec<SymId> = cx.input.prog.classes[cx.tclass_of[c.idx()] as usize].ctor_params[..own.len()].to_vec();
@@ -3012,32 +2994,20 @@ impl<'a> Gen<'a> {
             let through = self.class_captured(c).split_off(slots.len());
             slots.extend(through.into_iter().map(|s| (s, s)));
             let extras = self.class_extras(c);
-            params.extend(slots.iter().map(|&(p, cap)| (Some(p), self.anon_capture_type(cap))));
-            let extras_slot = 1 + params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
-            params.extend(self.extras_types(&extras).into_iter().map(|t| (None, t)));
-            held = Some((slots, extras, extras_slot));
+            for (p, cap) in slots {
+                params.push(self.capture_param(p, cap));
+            }
+            params.extend(self.extras_params(&extras));
             declared_from = own.len().min(fun.params.len());
         }
-        params.extend(fun.params[declared_from..].iter().map(|&s| (Some(s), self.sym_type(s))));
+        params.extend(fun.params[declared_from..].iter().map(|&s| MethodParam::declared(Some(s), self.sym_type(s))));
         self.context = format!("{}.<init>", self.this_name);
-        let taken: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
+        let taken: Vec<ErasedType> = params.iter().map(|p| p.ty.clone()).collect();
         let info = cx.input.syms.sym(fun.sym);
         let declared: Vec<SymId> = fun.params[declared_from..].to_vec();
         let site = MethodSite { at: Some((info.file, info.span)), dotty: self.this_class.map_or(Dotty::NotSure, |c| self.dotty_constructor(c, &declared)), ..MethodSite::default() };
-        let method = self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&taken, &ErasedType::V), &params, ErasedType::V, &[body], site);
-        if let Some((slots, extras, extras_slot)) = held {
-            self.bind_extras(&extras, extras_slot);
-            for &(p, cap) in &slots {
-                if self.held(cap) == Held::Cell {
-                    let ty = self.sym_type(cap);
-                    if let Some(local) = self.m.locals.get_mut(&p) {
-                        local.ty = ty;
-                        local.cell = true;
-                    }
-                }
-            }
-        }
-        self.hold_tree(method, "secondary constructor", |g| {
+        self.held_context(MethodFlags::PUBLIC, "<init>", &method_desc(&taken, &ErasedType::V), &params, ErasedType::V, &[body], site);
+        self.hold_tree("secondary constructor", |g| {
             let mut parts = Parts::of(Vec::new());
             g.secondary_parts(&mut parts, prelude, route, after);
             g.returning(parts).0
@@ -3115,17 +3085,16 @@ impl<'a> Gen<'a> {
             Some(c) if captures > 0 && self.cx.input.syms.class(c).kind != ClassKind::Anon => (self.class_captured(c), self.class_extras(c)),
             _ => (params[..captures].to_vec(), Extras::default()),
         };
-        let extras_types = self.extras_types(&extras);
+        let extras_params = self.extras_params(&extras);
         for (i, d) in defaults.iter().enumerate() {
             let Some(d) = *d else { continue };
             if i < captures {
                 continue;
             }
             let upto = captures + super::gen::clause_shape(clauses, i - captures).0;
-            let mut before: Vec<(Option<SymId>, ErasedType)> = captured.iter().map(|&p| (Some(p), self.anon_capture_type(p))).collect();
-            let extras_slot = before.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
-            before.extend(extras_types.iter().map(|t| (None, t.clone())));
-            before.extend(params[captures..upto.min(i)].iter().map(|&p| (Some(p), self.sym_type(p))));
+            let mut before: Vec<MethodParam> = captured.iter().map(|&p| self.capture_param(p, p)).collect();
+            before.extend(extras_params.iter().cloned());
+            before.extend(params[captures..upto.min(i)].iter().map(|&p| MethodParam::declared(Some(p), self.sym_type(p))));
             // The getter's type as the typer completed it (`Namer.inferredResultType`), the
             // parameter's where nothing refers to the class's type parameters.
             let declared_ty = clauses.iter().flat_map(|c| c.params.iter()).nth(i - captures).map(|p| p.ty);
@@ -3136,20 +3105,10 @@ impl<'a> Gen<'a> {
                 None => self.default_getter_ret(by_name_ty, |g| g.sym_type(params[i])),
             };
             let by_name = by_name_ty.is_some();
-            let types: Vec<ErasedType> = before.iter().map(|p| p.1.clone()).collect();
+            let types: Vec<ErasedType> = before.iter().map(|p| p.ty.clone()).collect();
             let flags = MethodFlags { is_static: true, ..MethodFlags::PUBLIC };
-            let method = self.held_context(flags, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&types, &ret), &before, ret.clone(), &[d], MethodSite::default());
-            self.bind_extras(&extras, extras_slot);
-            for &s in &captured {
-                if self.held(s) == Held::Cell {
-                    let ty = self.sym_type(s);
-                    if let Some(local) = self.m.locals.get_mut(&s) {
-                        local.ty = ty;
-                        local.cell = true;
-                    }
-                }
-            }
-            self.hold_tree(method, "constructor's default getter", |g| {
+            self.held_context(flags, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&types, &ret), &before, ret.clone(), &[d], MethodSite::default());
+            self.hold_tree("constructor's default getter", |g| {
                 let value = g.lower_default_value(d, by_name, &ret);
                 g.lir.ret(value)
             });
@@ -3213,7 +3172,7 @@ impl<'a> Gen<'a> {
         let mut holder = None;
         if f.lazy {
             let roots: Vec<TExprId> = f.init.filter(|_| thread_unsafe && f.lazy_owner.is_none()).into_iter().collect();
-            let method = self.held_context(flags, &f.name, &getter_desc, &[], f.ty.clone(), &roots, MethodSite::default());
+            self.held_context(flags, &f.name, &getter_desc, &[], f.ty.clone(), &roots, MethodSite::default());
             let init = match (f.lazy_owner, f.init) {
                 (Some(t), _) => Some(HolderInit::TraitStatic(self.class_name(t))),
                 (None, Some(init)) => Some(HolderInit::Expr(init)),
@@ -3224,10 +3183,10 @@ impl<'a> Gen<'a> {
                 self.unsupported("a lazy member without an initialiser");
             }
             match h {
-                None => self.thread_unsafe_getter(method, &f.name, &f.ty, init),
+                None => self.thread_unsafe_getter(&f.name, &f.ty, init),
                 // `transformMemberDefThreadSafe`: the getter over the holder, the initialiser after it.
                 Some(h) => {
-                    self.hold_tree(method, "lazy val's getter", |g| g.lower_thread_safe_getter(&h));
+                    self.hold_tree("lazy val's getter", |g| g.lower_thread_safe_getter(&h));
                     holder = init.map(|init| (h, init));
                 }
             }
@@ -3367,23 +3326,16 @@ impl<'a> Gen<'a> {
         if self.source_trait_has_init(tc) {
             let roots: Vec<TExprId> = runs.iter().map(|r| r.1).collect();
             let proxies = self.proxy_syms(&tc.ctor_params[..tc.captures]);
-            let mut params = vec![(None, this.clone())];
+            let mut params = vec![MethodParam { ty: this.clone(), role: ParamRole::Instance }];
             for &p in &proxies {
-                let t = self.anon_capture_type(p);
-                params.push((Some(p), t));
+                params.push(self.capture_param(p, p));
             }
-            let extras_slot = params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
             let extras = self.extras_of(&tc.ctor_params[..tc.captures], None);
-            for t in self.extras_types(&extras) {
-                params.push((None, t));
-            }
-            let types: Vec<ErasedType> = params.iter().map(|p| p.1.clone()).collect();
+            params.extend(self.extras_params(&extras));
+            let types: Vec<ErasedType> = params.iter().map(|p| p.ty.clone()).collect();
             let flags = MethodFlags { is_static: true, ..MethodFlags::PUBLIC };
-            let method = self.held_context(flags, "$init$", &method_desc(&types, &ErasedType::V), &params, ErasedType::V, &roots, MethodSite::default());
-            self.bind_proxies(&proxies);
-            self.bind_extras(&extras, extras_slot);
-            self.m.this_slot = Some(0);
-            self.hold_tree(method, "trait's initialiser", |g| {
+            self.held_context(flags, "$init$", &method_desc(&types, &ErasedType::V), &params, ErasedType::V, &roots, MethodSite::default());
+            self.hold_tree("trait's initialiser", |g| {
                 let mut stmts = Vec::with_capacity(runs.len());
                 for (field, e) in runs {
                     stmts.push(match field {
@@ -4878,8 +4830,8 @@ impl<'a> Gen<'a> {
     /// runs them (`Gen::write_module_part`).
     fn file_module_clinit(&mut self, fields: &[FieldDef]) {
         let roots = file_module_roots(fields);
-        let method = self.held_context(self.clinit_flags(), "<clinit>", "()V", &[], ErasedType::V, &roots, MethodSite::default());
-        self.hold_module_part(method, false, |g| g.file_module_tree(fields));
+        self.held_context(self.clinit_flags(), "<clinit>", "()V", &[], ErasedType::V, &roots, MethodSite::default());
+        self.hold_module_part(false, |g| g.file_module_tree(fields));
     }
 
     /// The file module's constructor as one tree, an object's (`Gen::constructor_parts`):
@@ -4983,8 +4935,8 @@ impl<'a> Gen<'a> {
         if clinit_first {
             self.file_module_clinit(&fields);
         }
-        let method = self.held_context(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, "<init>", "()V", &[], ErasedType::V, &file_module_roots(&fields), MethodSite::default());
-        self.hold_module_part(method, true, |g| g.file_module_tree(&fields));
+        self.held_context(MethodFlags { visibility: Visibility::Private, ..MethodFlags::PUBLIC }, "<init>", "()V", &[], ErasedType::V, &file_module_roots(&fields), MethodSite::default());
+        self.hold_module_part(true, |g| g.file_module_tree(&fields));
         for f in &fields {
             self.accessors(f);
         }

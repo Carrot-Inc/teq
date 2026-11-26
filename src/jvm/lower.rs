@@ -3,7 +3,7 @@
 //! constant pool refuse a write while one runs (`Gen::lowering`), since the order of what is
 //! written is the output's bytes.
 
-use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LiftedFrom, LiftedShape, LirId, List, MethodRef, Refusal, Relation, TempId};
+use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, Invoke, Kind, LiftedFrom, LiftedShape, LirId, List, MethodRef, ParamRole, Refusal, Relation, TempId};
 use super::gen::{rank_type, CallRoute, CaptureArgument, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, ReturnTarget, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
 use super::lifted::{Asker, Placed};
 use super::names::*;
@@ -40,6 +40,11 @@ impl<'a> Gen<'a> {
     pub(super) fn param(&mut self, i: usize) -> LirId {
         let ty = self.m.params[i].1.clone();
         self.lir.push(Kind::Param(i as u32), ty)
+    }
+
+    /// The position of the planned method's parameter of the role `role`, where it takes one.
+    pub(super) fn param_of(&self, role: &ParamRole) -> Option<usize> {
+        self.planned.as_ref()?.params.iter().position(|p| p.role == *role)
     }
 
     /// Runs a lowering with the writers refusing.
@@ -764,7 +769,7 @@ impl<'a> Gen<'a> {
         let params = self.m.tail.as_ref().expect("a def that loops").params.clone();
         // A value class's extension method holds its instance unboxed (`$this`): the receiver is
         // lowered at the underlying type, as the call's lowering lowers it (`Gen::lower_extension_call`).
-        let this_type = match (self.m.this_home, self.m.this_underlying.clone(), self.this_class) {
+        let this_type = match (self.m.this_home, self.underlying().map(|(_, u)| u), self.this_class) {
             (None, Some(u), Some(_)) => u,
             (_, _, Some(c)) => self.class_type(c),
             (_, _, None) => ErasedType::object(),
@@ -1980,7 +1985,7 @@ impl<'a> Gen<'a> {
     /// value, and its lifted code on the box.
     fn lower_boxed_instance(&mut self, class: Option<ClassId>) -> LirId {
         let this = self.lower_instance();
-        let (Some(u), Some(c)) = (self.m.this_underlying.clone(), class) else { return this };
+        let (Some((_, u)), Some(c)) = (self.underlying(), class) else { return this };
         let held = self.lir.ty(this).clone();
         let value = self.lower_adapt(this, &held, &u);
         let boxed = self.class_type(c);
@@ -1999,15 +2004,15 @@ impl<'a> Gen<'a> {
         let current = self.m.this_home.or(self.this_class);
         if current == Some(h) && self.m.this_module.is_none() {
             // In a value class's method its companion holds, `this` is the underlying value: its box.
-            if self.m.this_underlying.is_some() && self.m.this_home.is_none() {
+            if self.underlying().is_some() && self.m.this_home.is_none() {
                 return self.lower_boxed_instance(Some(h));
             }
             let held = self.lower_instance();
             let from = self.lir.ty(held).clone();
             return self.lower_adapt(held, &from, &t);
         }
-        if self.m.home_slots.iter().any(|(k, _)| *k == h) {
-            return self.lir.push(Kind::GivenInstance(h), t);
+        if let Some(i) = self.param_of(&ParamRole::Enclosing(h)) {
+            return self.param(i);
         }
         if let Some(k) = current.filter(|_| self.m.this_module.is_none()) {
             let held = if self.m.this_home.is_none() { self.class_homes.iter().position(|(c, _)| *c == h) } else { self.class_extras(k).homes.iter().position(|&c| c == h) };
@@ -2571,7 +2576,7 @@ impl<'a> Gen<'a> {
         // (JVMS 4.10.1.9), where a frame inside the arguments (a join, the code after a `return` or a `throw`) stands
         // over it; as `lower_object_super_call` takes it. A value class's extension method has no instance of its class
         // (`this` is the underlying value): its receiver stays the method's owner's.
-        let receiver = if self.m.this_underlying.is_some() { self.lower_receiver(r, s, &None) } else { self.lower_instance() };
+        let receiver = if self.underlying().is_some() { self.lower_receiver(r, s, &None) } else { self.lower_instance() };
         let (args, order) = self.lower_arguments(Some(s), args, &method.params);
         let place = cx.input.prog.span_of(e).map(|(file, span)| (file, span.end));
         let ret = method.ret.clone();

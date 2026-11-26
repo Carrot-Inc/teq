@@ -2,7 +2,7 @@
 //! stack, brought to the static type the typer recorded for it (a cast or an unboxing where a
 //! generic result is used at a concrete type), and then to the type its consumer wants.
 
-use crate::lir::{Adaptation, Capture, Comparing, ErasedType, Invoke, Kind, LiftedShape, LirId, MethodRef, Relation};
+use crate::lir::{Adaptation, Capture, Comparing, ErasedType, Invoke, Kind, LiftedShape, LirId, MethodParam, MethodRef, ParamRole, Relation};
 use super::classfile::*;
 use super::free::{Analysis, Free};
 use super::lifted::{Asker, LiftedBody, Placed};
@@ -505,8 +505,6 @@ pub struct MethodCx {
     pub return_key: Option<u16>,
     /// In a closure, the def its `return`s leave.
     pub return_target: ReturnTarget,
-    /// In a value class's `m$extension`, `this` is the underlying value of this type.
-    pub this_underlying: Option<ErasedType>,
     /// In a class's copy of a local lazy val's accessor or initialiser or of a local def that stands in a
     /// method of an object (or of a file's top level), `this` is that object's `MODULE$`
     /// (`Gen::copy_home_module`).
@@ -514,11 +512,9 @@ pub struct MethodCx {
     /// In a class's copy of a local def or lazy val declared in another class's code, `this` is that
     /// class's instance (`Lifted::home`).
     pub this_home: Option<ClassId>,
-    /// The slots holding the keys that travel with local lazy vals' holders (`Extras::keys`).
+    /// The slots of the parameters holding the keys that travel with local lazy vals' holders (`ParamRole::Key`'s
+    /// holder, `ParamRole::CapturedKey`).
     pub lazy_keys: FxMap<SymId, u16>,
-    /// The slots holding the instances of other classes (`Extras::homes`) where no field holds them yet:
-    /// a constructor's and a local trait's member's parameters.
-    pub home_slots: Vec<(ClassId, u16)>,
     /// The `try` blocks with a finalizer and the `synchronized` blocks the code being generated
     /// stands in, innermost last: a `return` leaves through each one's finalizer or monitor exit
     /// (`Gen::write_try`, `Gen::monitor_block`).
@@ -590,11 +586,9 @@ impl Default for MethodCx {
             closure: false,
             return_key: None,
             return_target: ReturnTarget::Unknown,
-            this_underlying: None,
             this_module: None,
             this_home: None,
             lazy_keys: FxMap::default(),
-            home_slots: Vec::new(),
             finalizers: Vec::new(),
             exits_taken: Vec::new(),
             early_return: None,
@@ -824,6 +818,9 @@ pub struct Gen<'a> {
     /// whether it is kept in a cell: a later statement of the block is lowered before the
     /// declaration is written.
     pub(super) lower_declared: FxMap<SymId, (ErasedType, bool)>,
+    /// The planned method whose code is being lowered, from its context's making (`Gen::held_context`,
+    /// `Gen::lower_lifted`) until it is held (`Gen::hold_method`): what the lowering reads of its parameters' roles.
+    pub(super) planned: Option<crate::lir::MethodDef>,
     /// The local defs the lowering running met, queued when it ends (`Gen::queue_local_defs`).
     pub(super) local_defs: Vec<SymId>,
     /// The templates read, by their text (`Gen::template`).
@@ -941,6 +938,7 @@ impl<'a> Gen<'a> {
             code: Code::new(Vec::new()),
             lir: crate::lir::Body::default(),
             lower_declared: FxMap::default(),
+            planned: None,
             local_defs: Vec::new(),
             templates: FxMap::default(),
             module_tree: Phased::new(PhasedField::ModuleTree, None),
@@ -2378,7 +2376,7 @@ impl<'a> Gen<'a> {
         match cx.input.prog.expr(e) {
             TExpr::New(c, _) if cx.input.syms.class(c).value_class => Some((c, EMPTY_LIST)),
             // `this` in a value class's `m$extension`, the underlying value.
-            TExpr::This if self.m.this_underlying.is_some() => self.this_class.filter(|&c| cx.input.syms.class(c).value_class).map(|c| (c, EMPTY_LIST)),
+            TExpr::This => self.underlying().map(|(c, _)| c).filter(|&c| cx.input.syms.class(c).value_class).map(|c| (c, EMPTY_LIST)),
             TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) | TExpr::CallStatic(s, _) | TExpr::CallMethod(_, s, _) => declared(s),
             _ => None,
         }
@@ -4223,13 +4221,23 @@ impl<'a> Gen<'a> {
         if !self.m.has_instance() {
             return None;
         }
-        let t = match (self.m.this_home, self.m.this_underlying.clone(), self.this_class) {
+        let t = match (self.m.this_home, self.underlying().map(|(_, u)| u), self.this_class) {
             (Some(home), _, _) => self.class_type(home),
             (None, Some(underlying), _) => underlying,
             (None, None, Some(c)) => self.class_type(c),
             (None, None, None) => ErasedType::object(),
         };
         Some(ThisValue::Slot(t))
+    }
+
+    /// The value class whose underlying value stands for `this` in the planned method being lowered (its extension
+    /// method, `ParamRole::Underlying`), and the type the code holds that value at.
+    pub(super) fn underlying(&self) -> Option<(ClassId, ErasedType)> {
+        let params = &self.planned.as_ref()?.params;
+        params.iter().zip(&self.m.params).find_map(|(p, (_, held))| match p.role {
+            ParamRole::Underlying(c) => Some((c, held.clone())),
+            _ => None,
+        })
     }
 
     pub fn load_this(&mut self) -> ErasedType {
@@ -4708,7 +4716,7 @@ impl<'a> Gen<'a> {
         if field != s && cx.input.syms.class(c).members.get(&cx.input.syms.sym(s).name) != Some(&field) {
             return None;
         }
-        if matches!(cx.input.prog.expr(r), TExpr::This) && Some(c) == self.this_class && self.m.this_underlying.is_none() {
+        if matches!(cx.input.prog.expr(r), TExpr::This) && Some(c) == self.this_class && self.underlying().is_none() {
             return None;
         }
         Some(c)
@@ -5671,14 +5679,20 @@ impl<'a> Gen<'a> {
     /// The constructor of a lifted class takes what its body captured first, a `var` as its cell, then
     /// its `Extras` (`class_extras`).
     pub fn anon_ctor_params(&mut self, c: ClassId) -> Vec<ErasedType> {
+        self.class_capture_params(c).into_iter().map(|p| p.ty).collect()
+    }
+
+    /// The parameters a lifted class's constructors take first (`anon_ctor_params`): what it captures, then its
+    /// `Extras`.
+    pub fn class_capture_params(&mut self, c: ClassId) -> Vec<MethodParam> {
         let cx = self.cx;
         let idx = cx.tclass_of[c.idx()];
         if idx == u32::MAX {
             return Vec::new();
         }
-        let mut out: Vec<ErasedType> = self.class_captured(c).into_iter().map(|s| self.anon_capture_type(s)).collect();
+        let mut out: Vec<MethodParam> = self.class_captured(c).into_iter().map(|s| self.capture_param(s, s)).collect();
         let extras = self.class_extras(c);
-        out.extend(self.extras_types(&extras));
+        out.extend(self.extras_params(&extras));
         out
     }
 
@@ -5814,22 +5828,14 @@ impl<'a> Gen<'a> {
 
     /// The types the `Extras` `e` are passed as.
     pub fn extras_types(&mut self, e: &Extras) -> Vec<ErasedType> {
-        let mut out: Vec<ErasedType> = e.homes.iter().map(|&h| self.class_type(h)).collect();
-        out.extend(e.keys.iter().map(|_| ErasedType::object()));
-        out
+        self.extras_params(e).into_iter().map(|p| p.ty).collect()
     }
 
-    /// Binds the `Extras` `e` that a method takes from the slot `first` on.
-    pub fn bind_extras(&mut self, e: &Extras, first: u16) {
-        let mut slot = first;
-        for &h in &e.homes {
-            self.m.home_slots.push((h, slot));
-            slot += 1;
-        }
-        for &x in &e.keys {
-            self.m.lazy_keys.insert(x, slot);
-            slot += 1;
-        }
+    /// The parameters a method takes the `Extras` `e` as: the instances, then the keys.
+    pub fn extras_params(&mut self, e: &Extras) -> Vec<MethodParam> {
+        let mut out: Vec<MethodParam> = e.homes.iter().map(|&h| MethodParam { ty: self.class_type(h), role: ParamRole::Enclosing(h) }).collect();
+        out.extend(e.keys.iter().map(|&x| MethodParam { ty: ErasedType::object(), role: ParamRole::CapturedKey(x) }));
+        out
     }
 
     /// The field of a lifted class holding the instance of `h`, the `i`th of its `Extras::homes` (numbered as the
@@ -5962,23 +5968,12 @@ impl<'a> Gen<'a> {
         MethodRef { params, desc, ..m.clone() }
     }
 
-    /// The proxies a method takes first, bound as the locals they stand for: a `var` read
-    /// through its cell, a lazy val through its thunk.
-    pub fn bind_proxies(&mut self, proxies: &[SymId]) {
-        for &p in proxies {
-            let held = self.held(p);
-            let declared = self.sym_type(p);
-            let ty = self.anon_capture_type(p);
-            if let Some(local) = self.m.locals.get_mut(&p) {
-                match held {
-                    Held::Cell => {
-                        local.cell = true;
-                        local.ty = declared;
-                    }
-                    _ => local.ty = ty,
-                }
-            }
-        }
+    /// The parameter the captured local `captured` is passed as to the code of a class that holds it
+    /// (`anon_capture_type`: a `var` its cell, a lazy val its holder), read as the local `local`: the captured one, or
+    /// a constructor's parameter that stands for it.
+    pub fn capture_param(&mut self, local: SymId, captured: SymId) -> MethodParam {
+        let cell = (self.held(captured) == Held::Cell).then(|| self.sym_type(captured));
+        MethodParam { ty: self.anon_capture_type(captured), role: ParamRole::Capture { sym: local, cell } }
     }
 
     pub fn anon_capture_type(&mut self, s: SymId) -> ErasedType {

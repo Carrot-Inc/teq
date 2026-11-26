@@ -2,8 +2,8 @@
 //! takes it: a member's facts as a class file's access flags, the members recorded as they are
 //! declared, and what the emitters ask of the class's members.
 
-use crate::lir::{ClassDef, ClassFlags, ErasedType, FieldDef, FieldFlags, MethodDef, MethodFlags, Visibility};
-use crate::types::{ClassId, SymId};
+use crate::lir::{ClassDef, ClassFlags, ErasedType, FieldDef, FieldFlags, MethodDef, MethodFlags, MethodParam, Visibility};
+use crate::types::ClassId;
 use super::classfile::*;
 use super::gen::Gen;
 use super::names::*;
@@ -40,20 +40,25 @@ pub fn method_access(f: MethodFlags) -> u16 {
     visibility_access(f.visibility) | bit(f.is_static, ACC_STATIC) | bit(f.is_final, ACC_FINAL) | bit(f.is_abstract, ACC_ABSTRACT) | bit(f.synthetic, ACC_SYNTHETIC) | bit(f.bridge, ACC_BRIDGE)
 }
 
-/// A method of the class by its flags, its name and its signature as a class file spells it.
+/// A method of the class by its flags, its name and its signature as a class file spells it, each parameter one no
+/// symbol stands for.
 pub fn method_def(flags: MethodFlags, name: &str, desc: &str) -> MethodDef {
     let (params, ret) = parse_method_desc(desc);
-    MethodDef { name: Rc::from(name), params, ret, desc: desc.to_string(), flags, place: None }
+    MethodDef { name: Rc::from(name), params: params.into_iter().map(|t| MethodParam::declared(None, t)).collect(), ret, desc: desc.to_string(), flags, place: None }
 }
 
-/// A method of the class as `method_def` makes it, from the types of the frame its code is begun
-/// with where they spell `desc`: they do but for a jar's method whose code holds a value class's
-/// underlying value as the erasure marks it, under its class file's descriptor (`Gen::linked_mref`).
-pub fn begun_method_def(flags: MethodFlags, name: &str, desc: &str, frame: &[(Option<SymId>, ErasedType)], ret: &ErasedType) -> MethodDef {
-    if !spells_method_desc(desc, frame.iter().map(|p| &p.1), ret) {
-        return method_def(flags, name, desc);
+/// A method of the class with the parameters of the frame its code is begun with, at the frame's types where they
+/// spell `desc`: they do but for a jar's method whose code holds a value class's underlying value as the erasure
+/// marks it, which takes its class file's descriptor's (`Gen::linked_mref`).
+pub fn begun_method_def(flags: MethodFlags, name: &str, desc: &str, frame: &[MethodParam], ret: &ErasedType) -> MethodDef {
+    if !spells_method_desc(desc, frame.iter().map(|p| &p.ty), ret) {
+        let mut method = method_def(flags, name, desc);
+        for (p, framed) in method.params.iter_mut().zip(frame) {
+            p.role = framed.role.clone();
+        }
+        return method;
     }
-    MethodDef { name: Rc::from(name), params: frame.iter().map(|p| p.1.clone()).collect(), ret: ret.clone(), desc: desc.to_string(), flags, place: None }
+    MethodDef { name: Rc::from(name), params: frame.to_vec(), ret: ret.clone(), desc: desc.to_string(), flags, place: None }
 }
 
 impl<'a> Gen<'a> {
@@ -162,7 +167,7 @@ impl<'a> Gen<'a> {
         if let Some(at) = cw.fields_differ(&fields) {
             panic!("the plan of {} is not its class file's from field {} on: {:?}", class.name, at, fields.get(at));
         }
-        let methods: Vec<(u16, &str, String)> = class.methods.iter().map(|m| (method_access(m.flags), &*m.name, method_desc(&m.params, &m.ret))).collect();
+        let methods: Vec<(u16, &str, String)> = class.methods.iter().map(|m| (method_access(m.flags), &*m.name, method_desc(&m.param_types(), &m.ret))).collect();
         if let Some(at) = cw.methods_differ(&methods) {
             panic!("the plan of {} is not its class file's from method {} on: {:?}", class.name, at, methods.get(at));
         }

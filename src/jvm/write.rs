@@ -412,10 +412,6 @@ impl<'a> Gen<'a> {
             }
             Kind::ReturnKey => self.load_return_key(),
             Kind::LazyKey(holder) => self.load_lazy_key(holder),
-            Kind::GivenInstance(class) => {
-                let slot = self.m.home_slots.iter().find(|(given, _)| *given == class).expect("an instance the method was given").1;
-                self.load(slot, &ty);
-            }
             Kind::Let { temp, init } => {
                 self.write(init);
                 let held = self.lir.ty(init).clone();
