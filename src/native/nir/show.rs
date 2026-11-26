@@ -183,11 +183,11 @@ impl<'c> Show<'c> {
                 self.str("int128 ");
                 self.num(((*hi as i128) << 64) | (*lo as i128));
             }
-            Val::Float(bits) => {
+            Val::Float(bits, _) => {
                 self.str("float ");
                 self.str(&crate::javanum::float_string(f32::from_bits(*bits)));
             }
-            Val::Double(bits) => {
+            Val::Double(bits, _) => {
                 self.str("double ");
                 self.str(&crate::javanum::double_string(f64::from_bits(*bits)));
             }

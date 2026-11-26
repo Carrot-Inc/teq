@@ -533,8 +533,8 @@ impl Rt {
             Val::Int(_) => self.int,
             Val::Long(_) => self.long,
             Val::Int128 { .. } => cx.ty(Type::Int128),
-            Val::Float(_) => self.float,
-            Val::Double(_) => self.double,
+            Val::Float(..) => self.float,
+            Val::Double(..) => self.double,
             Val::StructValue(vals) => {
                 let tys: Vec<Ty> = vals.iter().map(|v| self.val_ty(cx, v)).collect();
                 cx.ty(Type::StructValue(tys.into_boxed_slice()))

@@ -10,6 +10,7 @@ pub mod show;
 pub mod write;
 
 use crate::intern::FxMap;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 /// An interned string. NIR's strings are UTF-16 code units; one is kept as UTF-8, an unpaired
@@ -82,9 +83,15 @@ pub enum Val {
     Int(i32),
     Long(i64),
     Int128 { hi: i64, lo: i64 },
-    /// The bits: two values are the same when their bits are.
-    Float(u32),
-    Double(u64),
+    /// The bits, and for a NaN read from a file the place of its entry. Scala Native tells two
+    /// numbers apart by their bits and writes every NaN as the canonical one, so a file has an
+    /// entry for each NaN of other bits than another's, all of the same bytes, and the reader
+    /// numbers a NaN by its entry's place; no other number has a place. Within the file a value was
+    /// read from, its place is that file's entry; between files it means nothing, and only the
+    /// writer tells values apart by it: the code generator tells two numbers apart by their bits
+    /// alone, as Scala Native's does with what it reads.
+    Float(u32, Option<u32>),
+    Double(u64, Option<u32>),
     StructValue(Arc<[Val]>),
     ArrayValue(Ty, Arc<[Val]>),
     /// A C string's bytes, without the terminating zero it is emitted with, and which of its
@@ -217,17 +224,24 @@ pub enum Next {
     Label(Local, Box<[Val]>),
 }
 
-/// A position in a source file, zero-based; the file is the empty string where there is none.
+/// A position in a source file, zero-based; the file is the empty string where there is none, and
+/// a position in no file read from a file has the place of its entry. Scala Native writes a
+/// position in no file (`SourceFile.Virtual`) and one in the file at the empty path from the
+/// source root (`SourceFile.Relative("")`, a source file that is its own root) both with the empty
+/// string, so a file can hold two such entries of the same bytes; the reader numbers them by their
+/// places, which mean what a NaN's do (`Val::Float`). The place is counted from one, so that it
+/// takes the room of one number and no more: every instruction carries a position.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Pos {
     pub file: Str,
     pub line: u32,
     pub column: u32,
+    pub place: Option<NonZeroU32>,
 }
 
 impl Pos {
     /// `SourcePosition.NoPosition`: what a definition the toolchain makes stands at.
-    pub const NONE: Pos = Pos { file: Str(0), line: 0, column: 0 };
+    pub const NONE: Pos = Pos { file: Str(0), line: 0, column: 0, place: None };
 }
 
 #[derive(Clone, PartialEq, Debug)]

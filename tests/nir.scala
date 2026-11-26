@@ -108,7 +108,7 @@ import java.nio.file.{Files, Path, Paths}
 
   // The writer: each fixture written again from what was read, byte for byte.
   val rewritten = Sh(teq, "nir", "--rewrite", "tests/nir/fixtures").mergeErr.timeout(60).check(false).run()
-  if rewritten.ok && rewritten.out.trim == "22 files, 214 definitions, 22 rewritten byte for byte, 0 differ" then pass += 1
+  if rewritten.ok && rewritten.out.trim == "30 files, 261 definitions, 30 rewritten byte for byte, 0 differ" then pass += 1
   else
     fail += 1
     println(s"FAIL fixtures rewritten: ${rewritten.out.linesIterator.take(5).mkString("\n")}")

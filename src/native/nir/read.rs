@@ -458,12 +458,20 @@ impl<'r, 'a, 'c> Reader<'r, 'a, 'c> {
     }
 
     fn position(&mut self) -> Res<Pos> {
-        let target = self.target(self.file.sections.positions)?;
+        let place = self.unsigned_int()?;
+        // An offset is a JVM `Int` that is not negative, as Scala Native writes and reads it, so that
+        // a place counted from one is a number of 32 bits.
+        if place > i32::MAX as u32 {
+            return Err("a position beyond the 31 bits of an offset".to_string());
+        }
+        let target = self.file.sections.positions.wrapping_add(place);
         if let Some(&p) = self.file.positions.get(&target) {
             return Ok(p);
         }
         let back = std::mem::replace(&mut self.pos, target as usize);
-        let p = Pos { file: self.string()?, line: self.unsigned_int()?, column: self.unsigned_int()? };
+        let file = self.string()?;
+        let place = if file == Str::EMPTY { NonZeroU32::new(place + 1) } else { None };
+        let p = Pos { file, line: self.unsigned_int()?, column: self.unsigned_int()?, place };
         self.pos = back;
         self.file.positions.insert(target, p);
         Ok(p)
@@ -496,8 +504,14 @@ impl<'r, 'a, 'c> Reader<'r, 'a, 'c> {
                 7 => Val::Short(r.signed_int()? as i16),
                 8 => Val::Int(r.signed_int()?),
                 9 => Val::Long(r.signed_long()?),
-                10 => Val::Float(u32::from_be_bytes(r.array()?)),
-                11 => Val::Double(u64::from_be_bytes(r.array()?)),
+                10 => {
+                    let bits = u32::from_be_bytes(r.array()?);
+                    Val::Float(bits, f32::from_bits(bits).is_nan().then_some(place))
+                }
+                11 => {
+                    let bits = u64::from_be_bytes(r.array()?);
+                    Val::Double(bits, f64::from_bits(bits).is_nan().then_some(place))
+                }
                 12 => Val::StructValue(r.vals()?.into()),
                 13 => Val::ArrayValue(r.ty()?, r.vals()?.into()),
                 14 => {
@@ -990,6 +1004,17 @@ mod tests {
     #[test]
     fn refuses_values_nested_deeper_than_the_bound_in_steps() {
         holds_the_bound_through_what_was_decoded(false);
+    }
+
+    /// A variable of the type `unit` whose value is null, at a position whose offset is 2^31, then
+    /// 2^31 - 1, which is read and is beyond this file.
+    #[test]
+    fn refuses_a_position_beyond_31_bits() {
+        let mut cx = Cx::new();
+        let at = |offset: [u8; 5]| assemble(&[13, 0, 3, 18], &[&[1, 0, 0][..], &offset, &[3, 0]].concat(), &[3], &[]);
+        let read = |file: Vec<u8>, cx: &mut Cx| NirFile::open(&file).and_then(|mut f| f.defns(cx)).err();
+        assert_eq!(read(at([0x80, 0x80, 0x80, 0x80, 0x08]), &mut cx), Some("M1AD1fuEO: a position beyond the 31 bits of an offset".to_string()));
+        assert_eq!(read(at([0xff, 0xff, 0xff, 0xff, 0x07]), &mut cx), Some("M1AD1fuEO: the file ends within a definition".to_string()));
     }
 
     #[test]

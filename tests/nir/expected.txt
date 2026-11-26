@@ -1,3 +1,28 @@
+## Positions$package$.nir
+def @"M18Positions$package$D12writeReplaceL16java.lang.ObjectEPT18Positions$package$" : (@"T18Positions$package$") => @"T16java.lang.Object" {
+%2(%1 <this> : @"T18Positions$package$"):
+  %3 = classalloc @"T38scala.runtime.ModuleSerializationProxy"
+  %4 = call[(@"T38scala.runtime.ModuleSerializationProxy", @"T15java.lang.Class") => unit] @"M38scala.runtime.ModuleSerializationProxyRL15java.lang.ClassE" : ptr(%3 : !?@"T38scala.runtime.ModuleSerializationProxy", classOf[@"T18Positions$package$"])
+  ret %3 : !?@"T38scala.runtime.ModuleSerializationProxy"
+}
+def @"M18Positions$package$D4hereiEO" : (@"T18Positions$package$") => int {
+%2(%1 <this> : @"T18Positions$package$"):
+  ret int 1
+}
+def @"M18Positions$package$RE" : (@"T18Positions$package$") => unit {
+%2(%1 <this> : @"T18Positions$package$"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T18Positions$package$")
+  ret unit
+}
+module @"T18Positions$package$" : @"T16java.lang.Object"
+## Positions$package.nir
+inlinehint def @"M17Positions$packageD4hereiEo" : () => int {
+%1:
+  %2 = module @"T18Positions$package$"
+  %3 = call[(@"T18Positions$package$") => int] @"M18Positions$package$D4hereiEO" : ptr(%2 : !?@"T18Positions$package$")
+  ret %3 : int
+}
+class @"T17Positions$package" : @"T16java.lang.Object"
 ## fix/Circle$.nir
 def @"M11fix.Circle$D11fromProductL13scala.ProductL10fix.CircleEO" : (@"T11fix.Circle$", @"T13scala.Product") => @"T10fix.Circle" {
 %3(%2 <this> : @"T11fix.Circle$", %1 <x$0> : @"T13scala.Product"):
@@ -848,6 +873,165 @@ def @"M12fix.CountersRE" : (@"T12fix.Counters") => unit {
   ret unit
 }
 class @"T12fix.Counters" : @"T16java.lang.Object"
+## fix/NaNFields.nir
+alwaysinline def @"M13fix.NaNFieldsD1ffEO" : (@"T13fix.NaNFields") => float {
+%2(%1 <this> : @"T13fix.NaNFields"):
+  %3 = fieldload[float] %1 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1fO"
+  ret %3 : float
+}
+alwaysinline def @"M13fix.NaNFieldsD1gfEO" : (@"T13fix.NaNFields") => float {
+%2(%1 <this> : @"T13fix.NaNFields"):
+  %3 = fieldload[float] %1 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1gO"
+  ret %3 : float
+}
+alwaysinline def @"M13fix.NaNFieldsD1xdEO" : (@"T13fix.NaNFields") => double {
+%2(%1 <this> : @"T13fix.NaNFields"):
+  %3 = fieldload[double] %1 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1xO"
+  ret %3 : double
+}
+alwaysinline def @"M13fix.NaNFieldsD1ydEO" : (@"T13fix.NaNFields") => double {
+%2(%1 <this> : @"T13fix.NaNFields"):
+  %3 = fieldload[double] %1 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1yO"
+  ret %3 : double
+}
+alwaysinline def @"M13fix.NaNFieldsD5f_$eqfuEO" : (@"T13fix.NaNFields", float) => unit {
+%3(%2 <this> : @"T13fix.NaNFields", %1 <x$1> : float):
+  %4 = fieldstore[float] %2 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1fO", %1 <x$1> : float
+  ret unit
+}
+alwaysinline def @"M13fix.NaNFieldsD5g_$eqfuEO" : (@"T13fix.NaNFields", float) => unit {
+%3(%2 <this> : @"T13fix.NaNFields", %1 <x$1> : float):
+  %4 = fieldstore[float] %2 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1gO", %1 <x$1> : float
+  ret unit
+}
+alwaysinline def @"M13fix.NaNFieldsD5x_$eqduEO" : (@"T13fix.NaNFields", double) => unit {
+%3(%2 <this> : @"T13fix.NaNFields", %1 <x$1> : double):
+  %4 = fieldstore[double] %2 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1xO", %1 <x$1> : double
+  ret unit
+}
+alwaysinline def @"M13fix.NaNFieldsD5y_$eqduEO" : (@"T13fix.NaNFields", double) => unit {
+%3(%2 <this> : @"T13fix.NaNFields", %1 <x$1> : double):
+  %4 = fieldstore[double] %2 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1yO", %1 <x$1> : double
+  ret unit
+}
+var @"M13fix.NaNFieldsF1fO" : float = zero[float]
+var @"M13fix.NaNFieldsF1gO" : float = zero[float]
+var @"M13fix.NaNFieldsF1xO" : double = zero[double]
+var @"M13fix.NaNFieldsF1yO" : double = zero[double]
+def @"M13fix.NaNFieldsRE" : (@"T13fix.NaNFields") => unit {
+%2(%1 <this> : @"T13fix.NaNFields"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T13fix.NaNFields")
+  %4 = fieldstore[double] %1 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1xO", double NaN
+  %5 = fieldstore[double] %1 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1yO", double NaN
+  %6 = fieldstore[float] %1 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1fO", float NaN
+  %7 = fieldstore[float] %1 <this> : @"T13fix.NaNFields", @"M13fix.NaNFieldsF1gO", float NaN
+  ret unit
+}
+class @"T13fix.NaNFields" : @"T16java.lang.Object"
+## fix/NaNPair.nir
+alwaysinline def @"M11fix.NaNPairD1xdEO" : ({double, double}) => double {
+%2(%1 <this> : {double, double}):
+  %3 = extract %1 <this> : {double, double}, 0
+  ret %3 : double
+}
+alwaysinline def @"M11fix.NaNPairD1ydEO" : ({double, double}) => double {
+%2(%1 <this> : {double, double}):
+  %3 = extract %1 <this> : {double, double}, 1
+  ret %3 : double
+}
+class @"T11fix.NaNPair"
+## fix/NaNs$.nir
+def @"M9fix.NaNs$D10floatZerosLAf_EO" : (@"T9fix.NaNs$") => array[float] {
+%2(%1 <this> : @"T9fix.NaNs$"):
+  %3 = arrayalloc[float] arrayvalue float {float -0.0, float 0.0, float 1.0}
+  ret %3 : ?array[float]
+}
+def @"M9fix.NaNs$D12writeReplaceL16java.lang.ObjectEPT9fix.NaNs$" : (@"T9fix.NaNs$") => @"T16java.lang.Object" {
+%2(%1 <this> : @"T9fix.NaNs$"):
+  %3 = classalloc @"T38scala.runtime.ModuleSerializationProxy"
+  %4 = call[(@"T38scala.runtime.ModuleSerializationProxy", @"T15java.lang.Class") => unit] @"M38scala.runtime.ModuleSerializationProxyRL15java.lang.ClassE" : ptr(%3 : !?@"T38scala.runtime.ModuleSerializationProxy", classOf[@"T9fix.NaNs$"])
+  ret %3 : !?@"T38scala.runtime.ModuleSerializationProxy"
+}
+def @"M9fix.NaNs$D4pairSddEEO" : (@"T9fix.NaNs$") => {double, double} {
+%2(%1 <this> : @"T9fix.NaNs$"):
+  %3 = insert zero[{double, double}], double NaN, 0
+  %4 = insert %3 : {double, double}, double NaN, 1
+  ret %4 : {double, double}
+}
+def @"M9fix.NaNs$D5againLAd_EO" : (@"T9fix.NaNs$") => array[double] {
+%2(%1 <this> : @"T9fix.NaNs$"):
+  %3 = arrayalloc[double] arrayvalue double {double NaN, double 2.0, double NaN}
+  ret %3 : ?array[double]
+}
+def @"M9fix.NaNs$D5alonedEO" : (@"T9fix.NaNs$") => double {
+%2(%1 <this> : @"T9fix.NaNs$"):
+  ret double NaN
+}
+def @"M9fix.NaNs$D5zerosLAd_EO" : (@"T9fix.NaNs$") => array[double] {
+%2(%1 <this> : @"T9fix.NaNs$"):
+  %3 = arrayalloc[double] arrayvalue double {double -0.0, double 0.0, double 1.0}
+  ret %3 : ?array[double]
+}
+def @"M9fix.NaNs$D6floatsLAf_EO" : (@"T9fix.NaNs$") => array[float] {
+%2(%1 <this> : @"T9fix.NaNs$"):
+  %3 = arrayalloc[float] arrayvalue float {float NaN, float NaN}
+  ret %3 : ?array[float]
+}
+def @"M9fix.NaNs$D7doublesLAd_EO" : (@"T9fix.NaNs$") => array[double] {
+%2(%1 <this> : @"T9fix.NaNs$"):
+  %3 = arrayalloc[double] arrayvalue double {double NaN, double NaN}
+  ret %3 : ?array[double]
+}
+def @"M9fix.NaNs$RE" : (@"T9fix.NaNs$") => unit {
+%2(%1 <this> : @"T9fix.NaNs$"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T9fix.NaNs$")
+  ret unit
+}
+module @"T9fix.NaNs$" : @"T16java.lang.Object"
+## fix/NaNs.nir
+inlinehint def @"M8fix.NaNsD10floatZerosLAf_Eo" : () => array[float] {
+%1:
+  %2 = module @"T9fix.NaNs$"
+  %3 = call[(@"T9fix.NaNs$") => array[float]] @"M9fix.NaNs$D10floatZerosLAf_EO" : ptr(%2 : !?@"T9fix.NaNs$")
+  ret %3 : array[float]
+}
+inlinehint def @"M8fix.NaNsD4pairSddEEo" : () => {double, double} {
+%1:
+  %2 = module @"T9fix.NaNs$"
+  %3 = call[(@"T9fix.NaNs$") => {double, double}] @"M9fix.NaNs$D4pairSddEEO" : ptr(%2 : !?@"T9fix.NaNs$")
+  ret %3 : {double, double}
+}
+inlinehint def @"M8fix.NaNsD5againLAd_Eo" : () => array[double] {
+%1:
+  %2 = module @"T9fix.NaNs$"
+  %3 = call[(@"T9fix.NaNs$") => array[double]] @"M9fix.NaNs$D5againLAd_EO" : ptr(%2 : !?@"T9fix.NaNs$")
+  ret %3 : array[double]
+}
+inlinehint def @"M8fix.NaNsD5alonedEo" : () => double {
+%1:
+  %2 = module @"T9fix.NaNs$"
+  %3 = call[(@"T9fix.NaNs$") => double] @"M9fix.NaNs$D5alonedEO" : ptr(%2 : !?@"T9fix.NaNs$")
+  ret %3 : double
+}
+inlinehint def @"M8fix.NaNsD5zerosLAd_Eo" : () => array[double] {
+%1:
+  %2 = module @"T9fix.NaNs$"
+  %3 = call[(@"T9fix.NaNs$") => array[double]] @"M9fix.NaNs$D5zerosLAd_EO" : ptr(%2 : !?@"T9fix.NaNs$")
+  ret %3 : array[double]
+}
+inlinehint def @"M8fix.NaNsD6floatsLAf_Eo" : () => array[float] {
+%1:
+  %2 = module @"T9fix.NaNs$"
+  %3 = call[(@"T9fix.NaNs$") => array[float]] @"M9fix.NaNs$D6floatsLAf_EO" : ptr(%2 : !?@"T9fix.NaNs$")
+  ret %3 : array[float]
+}
+inlinehint def @"M8fix.NaNsD7doublesLAd_Eo" : () => array[double] {
+%1:
+  %2 = module @"T9fix.NaNs$"
+  %3 = call[(@"T9fix.NaNs$") => array[double]] @"M9fix.NaNs$D7doublesLAd_EO" : ptr(%2 : !?@"T9fix.NaNs$")
+  ret %3 : array[double]
+}
+class @"T8fix.NaNs" : @"T16java.lang.Object"
 ## fix/Named.nir
 def @"M9fix.NamedD4nameL16java.lang.StringEO" : (@"T9fix.Named") => @"T16java.lang.String" {
 %2(%1 <this> : @"T9fix.Named"):
@@ -868,6 +1052,33 @@ def @"M9fix.NamedRL16java.lang.StringE" : (@"T9fix.Named", @"T16java.lang.String
   ret unit
 }
 abstract class @"T9fix.Named" : @"T16java.lang.Object", @"T9fix.Shape"
+## fix/Orders$.nir
+def @"M11fix.Orders$D12writeReplaceL16java.lang.ObjectEPT11fix.Orders$" : (@"T11fix.Orders$") => @"T16java.lang.Object" {
+%2(%1 <this> : @"T11fix.Orders$"):
+  %3 = classalloc @"T38scala.runtime.ModuleSerializationProxy"
+  %4 = call[(@"T38scala.runtime.ModuleSerializationProxy", @"T15java.lang.Class") => unit] @"M38scala.runtime.ModuleSerializationProxyRL15java.lang.ClassE" : ptr(%3 : !?@"T38scala.runtime.ModuleSerializationProxy", classOf[@"T11fix.Orders$"])
+  ret %3 : !?@"T38scala.runtime.ModuleSerializationProxy"
+}
+def @"M11fix.Orders$D8acquiredR_iEO" : (@"T11fix.Orders$", ptr) => int {
+%3(%2 <this> : @"T11fix.Orders$", %1 <p> : ptr):
+  %4 = atomic store[int] %1 <p> : ptr, int 1 release
+  %5 = atomic load[int] %1 <p> : ptr acquire
+  ret %5 : int
+}
+def @"M11fix.Orders$RE" : (@"T11fix.Orders$") => unit {
+%2(%1 <this> : @"T11fix.Orders$"):
+  %3 = call[(@"T16java.lang.Object") => unit] @"M16java.lang.ObjectRE" : ptr(%1 <this> : @"T11fix.Orders$")
+  ret unit
+}
+module @"T11fix.Orders$" : @"T16java.lang.Object"
+## fix/Orders.nir
+inlinehint def @"M10fix.OrdersD8acquiredR_iEo" : (ptr) => int {
+%2(%1 : ptr):
+  %3 = module @"T11fix.Orders$"
+  %4 = call[(@"T11fix.Orders$", ptr) => int] @"M11fix.Orders$D8acquiredR_iEO" : ptr(%3 : !?@"T11fix.Orders$", %1 : ptr)
+  ret %4 : int
+}
+class @"T10fix.Orders" : @"T16java.lang.Object"
 ## fix/Rect$.nir
 alwaysinline def @"M9fix.Rect$D11fromProductL13scala.ProductL16java.lang.ObjectEO" : (@"T9fix.Rect$", @"T13scala.Product") => @"T16java.lang.Object" {
 %3(%2 <this> : @"T9fix.Rect$", %1 <p> : @"T13scala.Product"):

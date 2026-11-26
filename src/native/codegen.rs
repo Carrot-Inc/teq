@@ -99,22 +99,31 @@ fn graph(insts: &[Inst]) -> Res<Vec<Block>> {
     Ok(blocks)
 }
 
-/// A constant as Scala Native's table of a module's constants tells two apart (`nir.Val`'s
-/// equality): by value, but a byte string by the array that holds it, never by its bytes. The
+/// Whether Scala Native's code generator takes two values for one (`nir.Val`'s equality over what
+/// it reads): by value, a number by its bits, which are the canonical ones for every NaN it reads
+/// whatever its entry, but a byte string by the array that holds it, never by its bytes. The
 /// reader holds one array for each place of a file, so two literals of the same bytes are two.
+fn same(a: &Val, b: &Val) -> bool {
+    match (a, b) {
+        (Val::ByteString(x, _), Val::ByteString(y, _)) => Arc::ptr_eq(x, y),
+        (Val::Float(x, _), Val::Float(y, _)) => x == y,
+        (Val::Double(x, _), Val::Double(y, _)) => x == y,
+        (Val::StructValue(xs), Val::StructValue(ys)) => all_same(xs, ys),
+        (Val::ArrayValue(t, xs), Val::ArrayValue(u, ys)) => t == u && all_same(xs, ys),
+        (Val::Const(x), Val::Const(y)) => same(x, y),
+        _ => a == b,
+    }
+}
+
+fn all_same(xs: &[Val], ys: &[Val]) -> bool {
+    xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(x, y)| same(x, y))
+}
+
+/// A constant as Scala Native's table of a module's constants tells two apart: by `same`.
 struct Constant(Val);
 
 impl PartialEq for Constant {
     fn eq(&self, other: &Self) -> bool {
-        fn same(a: &Val, b: &Val) -> bool {
-            match (a, b) {
-                (Val::ByteString(x, _), Val::ByteString(y, _)) => Arc::ptr_eq(x, y),
-                (Val::StructValue(xs), Val::StructValue(ys)) => xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(x, y)| same(x, y)),
-                (Val::ArrayValue(t, xs), Val::ArrayValue(u, ys)) => t == u && xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(x, y)| same(x, y)),
-                (Val::Const(x), Val::Const(y)) => same(x, y),
-                _ => a == b,
-            }
-        }
         same(&self.0, &other.0)
     }
 }
@@ -127,6 +136,8 @@ impl Hash for Constant {
             std::mem::discriminant(v).hash(state);
             match v {
                 Val::ByteString(bytes, _) => Arc::as_ptr(bytes).cast::<u8>().hash(state),
+                Val::Float(bits, _) => bits.hash(state),
+                Val::Double(bits, _) => bits.hash(state),
                 Val::StructValue(vs) | Val::ArrayValue(_, vs) => vs.iter().for_each(|v| hash(v, state)),
                 Val::Const(inner) => hash(inner, state),
                 _ => v.hash(state),
@@ -434,8 +445,8 @@ impl<'a> Codegen<'a> {
             Val::Int(_) => self.str("i32"),
             Val::Size(_) | Val::Long(_) => self.str("i64"),
             Val::Int128 { .. } => self.str("i128"),
-            Val::Float(_) => self.str("float"),
-            Val::Double(_) => self.str("double"),
+            Val::Float(..) => self.str("float"),
+            Val::Double(..) => self.str("double"),
             Val::StructValue(vs) => {
                 self.str("{ ");
                 for (i, v) in vs.iter().enumerate() {
@@ -518,12 +529,12 @@ impl<'a> Codegen<'a> {
             Val::Int(i) => self.num(*i),
             Val::Long(l) => self.num(*l),
             Val::Int128 { hi, lo } => self.num(((*hi as i128) << 64) | (*lo as u64 as i128)),
-            Val::Float(bits) => {
+            Val::Float(bits, _) => {
                 self.str("0x");
                 let wide = (f32::from_bits(*bits) as f64).to_bits();
                 self.str(&format!("{:x}", wide));
             }
-            Val::Double(bits) => {
+            Val::Double(bits, _) => {
                 self.str("0x");
                 self.str(&format!("{:x}", bits));
             }
@@ -797,7 +808,7 @@ impl<'a> Codegen<'a> {
             }
             InstKind::If { value, then: Next::Label(then, then_args), otherwise: Next::Label(otherwise, else_args) } if then == otherwise => {
                 // Both ways lead to one block: a jump, with the arguments selected.
-                let args: Box<[Val]> = if then_args == else_args {
+                let args: Box<[Val]> = if all_same(then_args, else_args) {
                     then_args.clone()
                 } else {
                     let mut selected = Vec::new();
@@ -1225,5 +1236,21 @@ mod tests {
             assert_eq!(names[i], expected, "{}", String::from_utf8_lossy(dir));
             assert!(!alone || !names[i].contains('-'));
         }
+    }
+
+    /// NaNs of other entries, of one file or of two, are one constant, as they are to Scala Native,
+    /// which reads each as the canonical one; zero and negative zero are two.
+    #[test]
+    fn tells_constants_apart_by_the_bits_of_their_numbers() {
+        let nan = 0x7ff8_0000_0000_0000;
+        let constant = |places: [Option<u32>; 2]| Constant(Val::Const(Arc::new(Val::ArrayValue(Ty(0), Arc::new(places.map(|p| Val::Double(nan, p)))))));
+        let hash = |c: &Constant| {
+            let mut h = std::hash::DefaultHasher::new();
+            c.hash(&mut h);
+            h.finish()
+        };
+        let (a, b) = (constant([Some(3), Some(12)]), constant([Some(12), Some(40)]));
+        assert!(a == b && hash(&a) == hash(&b));
+        assert!(Constant(Val::Float(0, None)) != Constant(Val::Float(0x8000_0000, None)));
     }
 }

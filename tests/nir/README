@@ -1,7 +1,11 @@
 Fixtures of the tests of the NIR reader and writer (tests/nir.scala). NIR is Scala Native's
 intermediate representation: the files its compiler plugin writes into a library's jar.
 
-src/          the Scala source the fixtures were compiled from
+src/          the Scala sources the fixtures were compiled from, each on its own: Shapes.scala;
+              Numbers.scala on x86-64, where the JVM's 0.0 / 0.0 is a NaN of other bits than
+              Double.NaN's, so that its files hold two NaN entries of the same bytes; and
+              Positions.scala with `-P:scalanative:positionRelativizationPaths:<its own path>`, and
+              no main class (tests/native-link takes every main class here for a program of its own)
 fixtures/     the .nir files, written by the compiler plugin of Scala Native 0.5.12 for Scala 3.8.4:
                 scala-cli compile with `//> using platform native` and `//> using nativeVersion 0.5.12`,
                 the files taken from the classes directory; `teq nir --rewrite` has to write

@@ -318,7 +318,7 @@ impl<'a> Writer<'a> {
     }
 
     /// Two values are one entry when they are equal, a byte string by the literal it is and a
-    /// floating-point number by its bits.
+    /// floating-point number by its bits, a NaN read from a file by its entry there.
     fn intern_val(&mut self, v: &'a Val) -> u32 {
         if let Some(&at) = self.vals.get(v) {
             return at;
@@ -365,12 +365,12 @@ impl<'a> Writer<'a> {
                 self.signed(VALS, *n);
             }
             // The JVM's `DataOutputStream` writes every NaN as its canonical one, whatever its bits.
-            Val::Float(bits) => {
+            Val::Float(bits, _) => {
                 self.byte(VALS, 10);
                 let written = if f32::from_bits(*bits).is_nan() { 0x7fc0_0000 } else { *bits };
                 self.sections[VALS].extend_from_slice(&written.to_be_bytes());
             }
-            Val::Double(bits) => {
+            Val::Double(bits, _) => {
                 self.byte(VALS, 11);
                 let written = if f64::from_bits(*bits).is_nan() { 0x7ff8_0000_0000_0000 } else { *bits };
                 self.sections[VALS].extend_from_slice(&written.to_be_bytes());
@@ -799,7 +799,7 @@ mod tests {
         NirFile::open(file).and_then(|mut f| f.written_defns(cx)).unwrap()
     }
 
-    const NOWHERE: Pos = Pos { file: Str::EMPTY, line: 0, column: 0 };
+    const NOWHERE: Pos = Pos { file: Str::EMPTY, line: 0, column: 0, place: None };
 
     /// The symbol `A.<sig>` and the type `() => unit`.
     fn member(cx: &mut Cx, sig: &[u8]) -> (Global, Ty) {
@@ -841,7 +841,9 @@ mod tests {
         // The declaration: its name, no attributes, its position, its type.
         expected.extend_from_slice(&[3, 2, 0, 0, 1]);
         assert_eq!(written, expected);
-        assert_eq!(read(&mut cx, &written), defns);
+        // Read back, the position in no file has the place of its entry, the first, counted from one.
+        let placed = Defn { pos: Pos { place: NonZeroU32::new(1), ..NOWHERE }, ..defns[0].clone() };
+        assert_eq!(read(&mut cx, &written), [placed]);
     }
 
     fn count(file: &[u8], bytes: &[u8]) -> usize {
@@ -925,7 +927,7 @@ mod tests {
     fn writes_the_scopes_in_their_order() {
         let mut cx = Cx::new();
         let (name, ty) = member(&mut cx, b"D1fuEO");
-        let scope = |id| LexicalScope { id, parent: 0, pos: Pos { file: Str::EMPTY, line: id + 1, column: 0 } };
+        let scope = |id| LexicalScope { id, parent: 0, pos: Pos { file: Str::EMPTY, line: id + 1, column: 0, place: None } };
         let sorted = file(&cx, &[method(name, ty, false, vec![scope(0), scope(1), scope(2)])], REVISION).unwrap();
         assert_eq!(file(&cx, &[method(name, ty, false, vec![scope(2), scope(0), scope(1)])], REVISION).unwrap(), sorted);
     }
@@ -951,7 +953,7 @@ mod tests {
         let (name, _) = member(&mut cx, b"D1fuEO");
         let texts = [cx.str(b"Shapes.scala"), cx.str(b"some text"), cx.str(b"a.property")];
         let class = cx.global(GlobalData::Top(texts[1]));
-        let at = |line| Pos { file: texts[0], line, column: 2 };
+        let at = |line| Pos { file: texts[0], line, column: 2, place: None };
         let (int, unit) = (cx.ty(Type::Int), cx.ty(Type::Unit));
         let simple = [Type::Vararg, Type::Ptr, Type::Bool, Type::Char, Type::Byte, Type::Short, Type::Long, Type::Float, Type::Double];
         let nested = [
@@ -978,8 +980,8 @@ mod tests {
             Val::Short(-300),
             Val::Int(i32::MIN),
             Val::Long(i64::MIN),
-            Val::Float(1.5f32.to_bits()),
-            Val::Double((-0.0f64).to_bits()),
+            Val::Float(1.5f32.to_bits(), None),
+            Val::Double((-0.0f64).to_bits(), None),
             Val::ArrayValue(int, Arc::new([Val::Int(1), Val::Int(2)])),
             Val::Global(name, int),
             Val::Unit,
@@ -1087,12 +1089,109 @@ mod tests {
         let mut cx = Cx::new();
         let (name, _) = member(&mut cx, b"F1v");
         let float = cx.ty(Type::Float);
-        let nans = Val::StructValue(Arc::new([Val::Float(0x7fc0_0001), Val::Float(0xffa0_0000), Val::Float(0x7fc0_0001), Val::Double(0x7ff0_0000_0000_0001)]));
+        let nans = Val::StructValue(Arc::new([Val::Float(0x7fc0_0001, None), Val::Float(0xffa0_0000, None), Val::Float(0x7fc0_0001, None), Val::Double(0x7ff0_0000_0000_0001, None)]));
         let defns = [Defn { attrs: Attrs::default(), name, pos: NOWHERE, kind: DefnKind::Var { ty: float, rhs: nans } }];
         let written = file(&cx, &defns, REVISION).unwrap();
         // Two entries for the two floats that differ in their bits, the canonical bits in both.
         assert_eq!(count(&written, &[10, 0x7f, 0xc0, 0, 0]), 2);
         assert_eq!(count(&written, &[11, 0x7f, 0xf8, 0, 0, 0, 0, 0, 0]), 1);
+    }
+
+    /// The numbers of a value and of what it is made of, in their order.
+    fn numbers<'v>(v: &'v Val, out: &mut Vec<&'v Val>) {
+        match v {
+            Val::Float(..) | Val::Double(..) => out.push(v),
+            Val::StructValue(vs) | Val::ArrayValue(_, vs) => vs.iter().for_each(|v| numbers(v, out)),
+            Val::Const(of) => numbers(of, out),
+            _ => {}
+        }
+    }
+
+    /// A NaN of the plugin's is told apart from another by its bits, and written as the canonical
+    /// one: a file holds an entry for each NaN of other bits, all of the same bytes. The reader
+    /// tells them apart by their places, in an array, a struct and a constant as on their own, so
+    /// that they are written again as they were; a NaN met twice is one entry, and zero and
+    /// negative zero are two, with no place.
+    #[test]
+    fn keeps_the_nans_of_a_file_apart() {
+        let mut cx = Cx::new();
+        let (name, _) = member(&mut cx, b"F1v");
+        let (float, double) = (cx.ty(Type::Float), cx.ty(Type::Double));
+        // `Float.NaN` and `0.0f / 0.0f` as a JVM on x86 makes it, and the same of doubles.
+        let (f1, f2) = (Val::Float(0x7fc0_0000, None), Val::Float(0xffc0_0000, None));
+        let (d1, d2) = (Val::Double(0x7ff8_0000_0000_0000, None), Val::Double(0xfff8_0000_0000_0000, None));
+        let zeros = [Val::Float(0, None), Val::Float(0x8000_0000, None), Val::Double(0, None), Val::Double(1 << 63, None)];
+        let var = |rhs| Defn { attrs: Attrs::default(), name, pos: NOWHERE, kind: DefnKind::Var { ty: float, rhs } };
+        let defns = [
+            var(Val::ArrayValue(double, Arc::new([d2.clone(), d1.clone(), d2.clone()]))),
+            var(Val::StructValue(Arc::new([f1.clone(), f2.clone(), Val::Const(Arc::new(Val::ArrayValue(float, Arc::new([f2, f1]))))]))),
+            var(Val::Const(Arc::new(d1))),
+            var(Val::StructValue(Arc::new(zeros))),
+        ];
+        let written = file(&cx, &defns, REVISION).unwrap();
+        assert_eq!(count(&written, &[10, 0x7f, 0xc0, 0, 0]), 2);
+        assert_eq!(count(&written, &[11, 0x7f, 0xf8, 0, 0, 0, 0, 0, 0]), 2);
+        let back = read(&mut cx, &written);
+        let mut met = Vec::new();
+        for defn in &back {
+            let DefnKind::Var { rhs, .. } = &defn.kind else { panic!("no variable read back") };
+            numbers(rhs, &mut met);
+        }
+        let met: Vec<(bool, Option<u32>)> = met
+            .into_iter()
+            .map(|v| match *v {
+                Val::Float(bits, place) => (f32::from_bits(bits).is_nan(), place),
+                Val::Double(bits, place) => (f64::from_bits(bits).is_nan(), place),
+                _ => unreachable!(),
+            })
+            .collect();
+        // Only a NaN has a place.
+        assert!(met.iter().all(|&(nan, place)| nan == place.is_some()), "{:?}", met);
+        // d2 d1 d2, f1 f2 f2 f1, d1, and the zeros.
+        let place = |i: usize| met[i].1;
+        assert_eq!((place(0), place(4), place(3)), (place(2), place(5), place(6)));
+        assert_eq!(place(1), place(7));
+        assert!(place(0) != place(1) && place(3) != place(4));
+        assert_eq!(file(&cx, &back, REVISION).unwrap(), written);
+    }
+
+    /// A position in no file and one in the file at the empty path are two entries of the same
+    /// bytes, which stand here for the plugin's two by places, as the reader tells them apart; a
+    /// position in a file has no place.
+    #[test]
+    fn keeps_the_positions_in_no_file_apart() {
+        let mut cx = Cx::new();
+        let (name, ty) = member(&mut cx, b"D1fuEO");
+        let named = Pos { file: cx.str(b"P.scala"), ..NOWHERE };
+        let (first, second) = (Pos { place: NonZeroU32::new(1), ..NOWHERE }, Pos { place: NonZeroU32::new(2), ..NOWHERE });
+        let insts = vec![Inst { pos: second, kind: InstKind::Label { id: 0, params: Box::new([]) } }, Inst { pos: named, kind: InstKind::Ret(Val::Unit) }];
+        let defns = [Defn { attrs: Attrs::default(), name, pos: first, kind: DefnKind::Define { ty, insts, debug: DebugInfo::NONE } }];
+        let written = file(&cx, &defns, REVISION).unwrap();
+        // The positions' section: two in no file, the empty string being the third string, after the class's
+        // name and the signature, and the one in a file.
+        let word = |k: usize| u32::from_be_bytes(written.chunks_exact(4).nth(k).unwrap().try_into().unwrap()) as usize;
+        assert_eq!(written[word(5)..word(6)], [9, 0, 0, 9, 0, 0, 10, 0, 0]);
+        let back = read(&mut cx, &written);
+        let DefnKind::Define { insts, .. } = &back[0].kind else { panic!("no method read back") };
+        let (first, second, named) = (back[0].pos, insts[0].pos, insts[1].pos);
+        assert!(first.place.is_some() && second.place.is_some() && first != second);
+        assert_eq!((named.file, named.place), (cx.str(b"P.scala"), None));
+        assert_eq!(file(&cx, &back, REVISION).unwrap(), written);
+    }
+
+    /// A file written from the definitions of two: a number is one entry by its bits, wherever
+    /// each file had its own, since only a NaN has its place.
+    #[test]
+    fn writes_a_number_of_two_files_once() {
+        let mut cx = Cx::new();
+        let (name, _) = member(&mut cx, b"F1v");
+        let float = cx.ty(Type::Float);
+        let var = |rhs| Defn { attrs: Attrs::default(), name, pos: NOWHERE, kind: DefnKind::Var { ty: float, rhs } };
+        let half = |n: f32| Val::Float((n + 0.5).to_bits(), None);
+        let first = file(&cx, &[var(Val::ArrayValue(float, Arc::new([half(2.0), half(1.0)])))], REVISION).unwrap();
+        let second = file(&cx, &[var(half(1.0))], REVISION).unwrap();
+        let both: Vec<Defn> = [first, second].iter().flat_map(|f| read(&mut cx, f)).collect();
+        assert_eq!(count(&file(&cx, &both, REVISION).unwrap(), &[10, 0x3f, 0xc0, 0, 0]), 1);
     }
 
     #[test]

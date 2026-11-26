@@ -423,14 +423,14 @@ fn inst_deps(inst: &Inst) -> Vec<Local> {
 }
 
 fn is_canonical(v: &Val) -> bool {
-    matches!(v, Val::True | Val::False | Val::Char(_) | Val::Size(_) | Val::Byte(_) | Val::Short(_) | Val::Int(_) | Val::Long(_) | Val::Float(_) | Val::Double(_) | Val::Global(..) | Val::Null)
+    matches!(v, Val::True | Val::False | Val::Char(_) | Val::Size(_) | Val::Byte(_) | Val::Short(_) | Val::Int(_) | Val::Long(_) | Val::Float(..) | Val::Double(..) | Val::Global(..) | Val::Null)
 }
 
 fn is_zero(v: &Val) -> bool {
     match v {
         Val::Zero(_) | Val::False | Val::Char(0) | Val::Size(0) | Val::Byte(0) | Val::Short(0) | Val::Int(0) | Val::Long(0) | Val::Null => true,
-        Val::Float(bits) => f32::from_bits(*bits) == 0.0,
-        Val::Double(bits) => f64::from_bits(*bits) == 0.0,
+        Val::Float(bits, _) => f32::from_bits(*bits) == 0.0,
+        Val::Double(bits, _) => f64::from_bits(*bits) == 0.0,
         _ => false,
     }
 }
@@ -1675,13 +1675,13 @@ impl<'a> Lowering<'a> {
             let v = self.gen_val(value)?;
             let from = self.val_ty(&v);
             let double = from == rt.double;
-            let float = |f: f32| Val::Float(f.to_bits());
+            let float = |f: f32| Val::Float(f.to_bits(), None);
             let (imin, imax, fmin, fmax) = if ty == rt.int {
                 let (min, max) = (i32::MIN, i32::MAX);
-                if double { (Val::Int(min), Val::Int(max), Val::Double((min as f64).to_bits()), Val::Double((max as f64).to_bits())) } else { (Val::Int(min), Val::Int(max), float(min as f32), float(max as f32)) }
+                if double { (Val::Int(min), Val::Int(max), Val::Double((min as f64).to_bits(), None), Val::Double((max as f64).to_bits(), None)) } else { (Val::Int(min), Val::Int(max), float(min as f32), float(max as f32)) }
             } else if ty == rt.long {
                 let (min, max) = (i64::MIN, i64::MAX);
-                if double { (Val::Long(min), Val::Long(max), Val::Double((min as f64).to_bits()), Val::Double((max as f64).to_bits())) } else { (Val::Long(min), Val::Long(max), float(min as f32), float(max as f32)) }
+                if double { (Val::Long(min), Val::Long(max), Val::Double((min as f64).to_bits(), None), Val::Double((max as f64).to_bits(), None)) } else { (Val::Long(min), Val::Long(max), float(min as f32), float(max as f32)) }
             } else {
                 return Err("a conversion of a floating-point number to other than int and long".to_string());
             };
@@ -1834,8 +1834,8 @@ impl<'a> Lowering<'a> {
             Type::Short => Some(Val::Short(0)),
             Type::Int => Some(Val::Int(0)),
             Type::Long => Some(Val::Long(0)),
-            Type::Float => Some(Val::Float(0f32.to_bits())),
-            Type::Double => Some(Val::Double(0f64.to_bits())),
+            Type::Float => Some(Val::Float(0f32.to_bits(), None)),
+            Type::Double => Some(Val::Double(0f64.to_bits(), None)),
             Type::Ptr | Type::Null | Type::Unit | Type::Array { .. } | Type::Ref { .. } => Some(Val::Null),
             _ => None,
         };
