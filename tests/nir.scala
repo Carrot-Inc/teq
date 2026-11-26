@@ -1,8 +1,10 @@
 //> using file ../tools/script
 // Tests of the NIR reader and writer: `teq nir` over the fixtures under tests/nir/fixtures (written by Scala
 // Native's compiler plugin from tests/nir/src; see tests/nir/README) has to print, byte for byte,
-// what Scala Native's own reader and printer printed for them, tests/nir/expected.txt; an input of no
-// NIR file (a filter that selects none, a directory without one) is refused, naming it; damaged
+// what Scala Native's own reader and printer printed for them, tests/nir/expected.txt; a filter
+// selects the files whose name holds it, and an option where a filter goes is refused with the
+// usage (exit 2); an input of no NIR file (a filter that selects none, a directory without one) is
+// refused, naming it; damaged
 // files have to be refused with a message, never a crash, and so has a file that nests deeper than
 // the reader follows; and for each jar of tests/nir/digests.txt
 // the listing has to have the SHA-256 of Scala Native's own. The writer has to write every fixture and
@@ -59,6 +61,14 @@ import java.nio.file.{Files, Path, Paths}
     else
       fail += 1
       println(s"FAIL teq nir ${(verb ++ List("tests/nir/fixtures", "fix/Shape.nir")).mkString(" ")}: exit code ${r.status}, ${r.out.take(120)}")
+  // An option in a filter's place is no filter: each verb that takes one prints the usage, exits 2 and lists
+  // nothing, so that an option the verb does not take is never read as a filter that selects no file.
+  for (verb, option) <- List(Nil -> "--verify", List("--verify") -> "--rewrite", List("--rewrite") -> "--threads=true") do
+    val misused = Sh((List(teq, "nir") ++ verb ++ List("tests/nir/fixtures", option))*).timeout(60).check(false).run()
+    if misused.status == 2 && misused.out.isEmpty && misused.err.startsWith("usage: teq nir") then pass += 1
+    else
+      fail += 1
+      println(s"FAIL teq nir ${(verb ++ List("tests/nir/fixtures", option)).mkString(" ")}: exit code ${misused.status}, ${misused.out.take(120)}${misused.err.take(120)}")
 
   // Damaged input: a message and exit code 1, or a listing where the damage fell into a text,
   // never a panic (101) or a signal.
@@ -147,15 +157,38 @@ import java.nio.file.{Files, Path, Paths}
     fail += 1
     println(s"FAIL a file the writer writes otherwise: exit code ${named.status}, ${named.out.take(300)}")
 
-  // Whole jars against the digests of Scala Native's own listings, and written again byte for byte.
+  // Whole jars against the digests of Scala Native's own listings, and written again byte for byte. Of each jar its
+  // NIR entries' names, as many as its digest's files: none holds `--`, so that a filter refused for starting with
+  // one (above) selects no file of them, and none of the fixtures does either.
   val caches = Option(System.getenv("COURSIER_CACHE")).filter(_.nonEmpty).toList ++
     List("/Library/Caches/Coursier/v1", "/.cache/coursier/v1").map(System.getProperty("user.home") + _)
+  val fixtureNames =
+    val s = Files.walk(Paths.get("tests/nir/fixtures"))
+    try s.toArray.toList.map(_.asInstanceOf[Path].toString).filter(_.endsWith(".nir"))
+    finally s.close()
+  var namesRead = fixtureNames.length
+  val dashed = scala.collection.mutable.ListBuffer.from(fixtureNames.filter(_.contains("--")))
+  var jarsNamed = 0
   for line <- Files.readString(Paths.get("tests/nir/digests.txt")).linesIterator if line.nonEmpty && !line.startsWith("#") do
     val Array(sha, files, definitions, path) = line.split(" ")
     val name = path.substring(path.lastIndexOf('/') + 1)
     caches.map(c => Paths.get(s"$c/https/repo1.maven.org/maven2/$path")).find(Files.isRegularFile(_)) match
       case None => println(s"skip $name: not in the coursier cache")
       case Some(jar) =>
+        val zip = new java.util.zip.ZipFile(jar.toString)
+        val names =
+          try
+            val entries = zip.entries()
+            val all = scala.collection.mutable.ListBuffer.empty[String]
+            while entries.hasMoreElements do all += entries.nextElement().getName
+            all.toList.filter(_.endsWith(".nir"))
+          finally zip.close()
+        if names.length == files.toInt then jarsNamed += 1
+        else
+          fail += 1
+          println(s"FAIL $name: ${names.length} NIR entries read, its digest's $files files")
+        namesRead += names.length
+        dashed ++= names.filter(_.contains("--")).map(n => s"$name: $n")
         val verified = Sh(teq, "nir", "--verify", jar.toString).mergeErr.timeout(120).check(false).run()
         val said = verified.out.trim
         if verified.ok && said == s"$files files, $definitions definitions, listing sha256 $sha" then pass += 1
@@ -167,6 +200,13 @@ import java.nio.file.{Files, Path, Paths}
         else
           fail += 1
           println(s"FAIL $name rewritten: ${again.out.linesIterator.take(5).mkString("\n")}")
+
+  if jarsNamed > 0 then
+    if dashed.isEmpty then pass += 1
+    else
+      fail += 1
+      println(s"FAIL NIR entries whose name holds --: ${dashed.take(5).mkString(", ")}")
+    println(s"nir: $namesRead NIR entries' names read, of the fixtures and $jarsNamed jars; ${dashed.length} hold --")
 
   println(s"nir: $pass passed, $fail failed")
   Script.exit(if fail == 0 then 0 else 1)

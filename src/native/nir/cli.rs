@@ -250,7 +250,7 @@ pub fn run(args: &[String]) -> ! {
     let verify = mode == "--verify";
     let (input, filter) = match rest {
         [input] if !input.starts_with("--") => (input, None),
-        [input, filter] if !input.starts_with("--") => (input, Some(filter.as_str())),
+        [input, filter] if !input.starts_with("--") && !filter.starts_with("--") => (input, Some(filter.as_str())),
         _ => usage(),
     };
     let items = items(input, filter).unwrap_or_else(|e| fail(e));
