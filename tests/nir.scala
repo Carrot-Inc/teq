@@ -1,7 +1,8 @@
 //> using file ../tools/script
 // Tests of the NIR reader and writer: `teq nir` over the fixtures under tests/nir/fixtures (written by Scala
 // Native's compiler plugin from tests/nir/src; see tests/nir/README) has to print, byte for byte,
-// what Scala Native's own reader and printer printed for them, tests/nir/expected.txt; damaged
+// what Scala Native's own reader and printer printed for them, tests/nir/expected.txt; an input of no
+// NIR file (a filter that selects none, a directory without one) is refused, naming it; damaged
 // files have to be refused with a message, never a crash, and so has a file that nests deeper than
 // the reader follows; and for each jar of tests/nir/digests.txt
 // the listing has to have the SHA-256 of Scala Native's own. The writer has to write every fixture and
@@ -37,6 +38,27 @@ import java.nio.file.{Files, Path, Paths}
   else
     fail += 1
     println("FAIL filter")
+  // Each verb over an input of no NIR file, a filter's or a directory's, says so on one line and exits 1, printing
+  // nothing else; over a filter that selects a file it does its work.
+  val noNir = Files.createTempDirectory("teq-nir-empty.")
+  Script.atExit(Sh.remove(noNir))
+  val verbs: List[(List[String], String => Boolean)] = List(
+    (Nil, (out: String) => out.linesIterator.count(_.startsWith("## ")) == 1 && out.startsWith("## fix/Shape.nir\n")),
+    (List("--verify"), (out: String) => out.trim.matches("1 files, 4 definitions, listing sha256 [0-9a-f]{64}")),
+    (List("--rewrite"), (out: String) => out.trim == "1 files, 4 definitions, 1 rewritten byte for byte, 0 differ"))
+  for (verb, selects) <- verbs do
+    val refusals = List(List("tests/nir/fixtures", "Nope") -> "tests/nir/fixtures: no NIR file whose name holds Nope", List(noNir.toString) -> s"$noNir: no NIR file")
+    for (input, line) <- refusals do
+      val r = Sh((List(teq, "nir") ++ verb ++ input)*).timeout(60).check(false).run()
+      if r.status == 1 && r.out.isEmpty && r.err.trim == line then pass += 1
+      else
+        fail += 1
+        println(s"FAIL teq nir ${(verb ++ input).mkString(" ")}: exit code ${r.status}, ${r.out.take(120)}${r.err.take(120)}")
+    val r = Sh((List(teq, "nir") ++ verb ++ List("tests/nir/fixtures", "fix/Shape.nir"))*).timeout(60).check(false).run()
+    if r.ok && selects(r.out) then pass += 1
+    else
+      fail += 1
+      println(s"FAIL teq nir ${(verb ++ List("tests/nir/fixtures", "fix/Shape.nir")).mkString(" ")}: exit code ${r.status}, ${r.out.take(120)}")
 
   // Damaged input: a message and exit code 1, or a listing where the damage fell into a text,
   // never a panic (101) or a signal.

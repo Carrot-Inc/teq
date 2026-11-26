@@ -254,6 +254,12 @@ pub fn run(args: &[String]) -> ! {
         _ => usage(),
     };
     let items = items(input, filter).unwrap_or_else(|e| fail(e));
+    if items.is_empty() {
+        fail(match filter {
+            Some(filter) => format!("{}: no NIR file whose name holds {}", input, filter),
+            None => format!("{}: no NIR file", input),
+        });
+    }
     if mode == "--rewrite" {
         rewrite_all(&items);
     }
