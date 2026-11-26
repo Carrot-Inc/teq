@@ -493,8 +493,7 @@ impl<'a> Gen<'a> {
         }
         match prog.expr(e) {
             TExpr::Bool(_) => unreachable!("a constant, reduced above"),
-            // A block's result is a condition too, at its own place: an inline method's expansion is written whole
-            // as a value (`Gen::write_cond`), its result's line entry where `lower_expr` would mark it.
+            // A block's result is a condition too, at its own place, its line entry where `lower_expr` would mark it.
             TExpr::Block(stmts, res) => {
                 let nodes = self.lower_block_statements(stmts);
                 let result = self.lower_cond(res);
@@ -502,10 +501,11 @@ impl<'a> Gen<'a> {
                 if node.of.is_none() && !matches!(node.kind, Kind::SelfTailCall { .. }) {
                     node.of = Some(res);
                 }
+                let result = self.expansion_tested(result);
                 let stmts = self.lir.list(&nodes);
                 let id = self.lir.push(Kind::Block { stmts, result }, ErasedType::Z);
                 self.lir.nodes[id.0 as usize].of = Some(e);
-                id
+                self.expansion_tested(id)
             }
             TExpr::Unary(UnOp::BoolNot, a) => {
                 let value = self.lower_cond(a);
@@ -527,8 +527,32 @@ impl<'a> Gen<'a> {
             | TExpr::Lambda(..) | TExpr::If(..) | TExpr::While(..) | TExpr::Assign(..) | TExpr::Match(..)
             | TExpr::StrConcat(_) | TExpr::ToStr(..) | TExpr::Js(..) | TExpr::Cast(..) | TExpr::ClassOf(..) | TExpr::SeqLit(_)
             | TExpr::ArrayLit(_) | TExpr::Index(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_)
-            | TExpr::Spread(_) | TExpr::Return(_) | TExpr::Throw(..) | TExpr::Try(_) | TExpr::Splice(_) => self.lower_expr(e, &ErasedType::Z),
+            | TExpr::Spread(_) | TExpr::Return(_) | TExpr::Throw(..) | TExpr::Try(_) | TExpr::Splice(_) => {
+                let id = self.lower_expr(e, &ErasedType::Z);
+                match self.lir.node(id).kind {
+                    Kind::Block { .. } => self.expansion_tested(id),
+                    _ => id,
+                }
+            }
         }
+    }
+
+    /// A node of a condition that stands for an inline method's expansion, as its value tested: `Kind::Typed`
+    /// over it, which takes its place. scalac tests a plain inline method's expansion so wherever it stands (the
+    /// `Typed` of `PrepareInlineable.wrapRHS`, which `genCond` does not look into: BCodeBodyBuilder.scala 1663 at
+    /// 3.8.4) and jumps on a transparent one's; teq tests one so where it is a block or a block's result, a
+    /// transparent one's too, and lowers any other as the condition it is.
+    fn expansion_tested(&mut self, id: LirId) -> LirId {
+        let node = self.lir.node(id);
+        let Some(of) = node.of.filter(|&of| self.cx.input.prog.is_expansion(of)) else { return id };
+        if matches!(node.kind, Kind::Typed(_)) {
+            return id;
+        }
+        let ty = node.ty.clone();
+        self.lir.nodes[id.0 as usize].of = None;
+        let typed = self.lir.push(Kind::Typed(id), ty);
+        self.lir.nodes[typed.0 as usize].of = Some(of);
+        typed
     }
 
     /// `inner.isInstanceOf[T]`: the value in a temporary and its test (`Gen::lower_test_on`), a constant where

@@ -354,7 +354,9 @@ pub enum Kind {
     /// seen at the node's type, which the operand's type represents as the node's does (a value
     /// class's instance made of its constructor's argument, held as that underlying value; a
     /// default argument that is its expression where the class has no getter; a null that an
-    /// ascription holds, dotty's `Typed` over the literal).
+    /// ascription holds, dotty's `Typed` over the literal; an inline method's expansion in a
+    /// condition, dotty's `Typed` over the method's result). A condition does not look into it:
+    /// its value is tested.
     Typed(LirId),
     /// A call of a method that takes no receiver: the arguments as `Call` has them.
     StaticCall { method: Rc<MethodRef>, args: List, order: Option<Rc<[usize]>> },

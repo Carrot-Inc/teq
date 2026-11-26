@@ -813,13 +813,6 @@ impl<'a> Gen<'a> {
     }
 
     /// A jump to `target` where the condition `id` is `jump_if`, falling through otherwise.
-    /// Whether the node is what an inline method's call gave (`Program::is_expansion` of its
-    /// expression): dotty's `Inlined`, which the back end loads as a value where a condition is
-    /// wanted.
-    fn is_expansion_node(&self, id: LirId) -> bool {
-        self.lir.node(id).of.is_some_and(|e| self.cx.input.prog.is_expansion(e))
-    }
-
     pub(super) fn write_cond(&mut self, id: LirId, target: Label, jump_if: bool) {
         match self.lir.node(id).kind.clone() {
             Kind::Not(value) => self.write_cond(value, target, !jump_if),
@@ -847,10 +840,8 @@ impl<'a> Gen<'a> {
             }
             Kind::Compare { relation, how, left, right } => self.write_compare(relation, how, left, right, target, jump_if),
             // The statements, then the result's jump, as scalac's `genCond` pushes the decision
-            // into a block; a constant result is a value tested, as there, and so is an inline
-            // method's expansion, dotty's `Inlined`, which `genCond` does not look into: a block
-            // that is one is tested whole, a block whose result is one tests that value.
-            Kind::Block { stmts, result } if !self.is_expansion_node(id) => {
+            // into a block.
+            Kind::Block { stmts, result } => {
                 let lines = (self.line_floor, self.line_hold);
                 if let Some(e) = self.lir.node(id).of {
                     self.mark_line(e);
@@ -860,12 +851,7 @@ impl<'a> Gen<'a> {
                     let stmt = self.lir.lists[(stmts.start + i) as usize];
                     self.write(stmt);
                 }
-                if matches!(self.lir.node(result).kind, Kind::Bool(_)) || self.is_expansion_node(result) {
-                    self.write(result);
-                    self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);
-                } else {
-                    self.write_cond(result, target, jump_if);
-                }
+                self.write_cond(result, target, jump_if);
                 self.code.locals_release(mark);
                 (self.line_floor, self.line_hold) = lines;
             }
@@ -873,8 +859,9 @@ impl<'a> Gen<'a> {
             // follows it, and the dead code after it is verified against the operands under it.
             Kind::SelfTailCall { receiver, args } => self.write_self_tail_call(receiver, args),
             // A boolean value, tested; a constant left as a condition too (a loop's, a guard's, a
-            // right operand, a pattern's test that always or never passes), as scalac's back end
-            // tests one (`genCond`), at the position of the read it stands for.
+            // right operand, a block's result, a pattern's test that always or never passes), as
+            // scalac's back end tests one (`genCond`), at the position of the read it stands for; and
+            // an inline method's expansion (`Kind::Typed`, `Gen::expansion_tested`).
             _ => {
                 self.write(id);
                 self.jump_if(if jump_if { op::IFNE } else { op::IFEQ }, 1, target);
