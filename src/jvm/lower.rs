@@ -24,6 +24,24 @@ pub(super) enum Reduced {
     Expr(TExprId),
 }
 
+/// scalac's `MaxIndySlots`: a concatenation's call ends before the part that would bring it to
+/// this many operand slots (`Gen::concat`).
+const CONCAT_SLOTS: usize = 200;
+/// What a constant of the class file holds, in bytes of modified UTF-8: the most text one call
+/// of a concatenation holds.
+const RECIPE_BYTES: usize = 65535;
+
+/// Whether a text holds a character a concatenation's recipe reads as a tag, which scalac makes
+/// an operand of its call (BCodeBodyBuilder.scala 1377-1380 at 3.8.4).
+pub(super) fn holds_recipe_tag(text: &str) -> bool {
+    text.contains(['\u{1}', '\u{2}'])
+}
+
+/// A text's bytes in a class file's constant (modified UTF-8).
+fn recipe_bytes(text: &str) -> usize {
+    text.chars().map(|c| if c == '\0' { 2 } else if c as u32 >= 0x10000 { 6 } else { c.len_utf8() }).sum()
+}
+
 /// What the first reference of an object runs (`Gen::object_inits`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum ObjectInits {
@@ -1083,8 +1101,9 @@ impl<'a> Gen<'a> {
     /// written in its place.
     fn lower_string(&mut self, e: TExprId, s: StrRef) -> LirId {
         let string = ErasedType::L(Rc::from(STRING));
-        if super::classfile::constant_text_fits(&self.cx.input.prog.strings[s.idx()], "") {
-            return self.lir.push(Kind::Str(s), string);
+        let text = self.cx.input.prog.strings[s.idx()].as_str();
+        if super::classfile::constant_text_fits(text, "") {
+            return self.lir.push(Kind::Str(Rc::from(text)), string);
         }
         self.refuse(e, "String constant is too long for the JVM".to_string());
         self.lir.push(Kind::Null, string)
@@ -1235,10 +1254,10 @@ impl<'a> Gen<'a> {
             let text = match prog.expr(value) {
                 // scalac drops the empty literals before it counts.
                 TExpr::Str(text) if prog.strings[text.idx()].is_empty() => continue,
-                // A text of the recipe, or of a constant argument where it holds a tag, and never an `ldc`: dotty checks
-                // only the `ldc` (BCodeBodyBuilder.scala 588-593), and the recipe's length is the class writer's.
+                // A text of the result, never an `ldc`: dotty checks only the `ldc` (BCodeBodyBuilder.scala 588-593), and a
+                // text's length counts toward its call's (`Gen::concat`).
                 TExpr::Str(text) => {
-                    parts.push(self.lir.push(Kind::Str(text), string.clone()));
+                    parts.push(self.lir.push(Kind::Str(Rc::from(prog.strings[text.idx()].as_str())), string.clone()));
                     continue;
                 }
                 // An inline val's read is its literal by the back end (dotty's `Inlining`, after the
@@ -1255,7 +1274,7 @@ impl<'a> Gen<'a> {
                 _ => None,
             };
             if let Some(text) = text {
-                parts.push(self.lir.push(Kind::Text(Rc::from(text)), string.clone()));
+                parts.push(self.lir.push(Kind::Str(Rc::from(text)), string.clone()));
                 continue;
             }
             let t = self.static_type(value);
@@ -1270,19 +1289,45 @@ impl<'a> Gen<'a> {
                 self.lower_expr(value, &t)
             };
             // An operand that lowers to a string constant, the literal branch of a condition reduced as
-            // `FirstTransform` reduces it, is the literal dotty's back end meets: a constant of the result,
-            // which the writer reads off the part's kind, and dropped where empty.
-            let empty = match &self.lir.node(part).kind {
-                Kind::Str(text) => prog.strings[text.idx()].is_empty(),
-                Kind::Text(text) => text.is_empty(),
-                _ => false,
-            };
-            if !empty {
+            // `FirstTransform` reduces it, is the literal dotty's back end meets: a text of the result
+            // (`Gen::concat` reads it off the part's kind), and dropped where empty.
+            if !matches!(&self.lir.node(part).kind, Kind::Str(text) if text.is_empty()) {
                 parts.push(part);
             }
         }
-        let parts = self.lir.list(&parts);
-        self.lir.push(Kind::Concat { parts }, string)
+        self.concat(&parts)
+    }
+
+    /// The concatenation of `parts` in the calls scalac's back end makes of it (`Kind::Concat`;
+    /// `genStringConcat`, BCodeBodyBuilder.scala 1358-1397 at 3.8.4): before each part, a text
+    /// too, the call so far ends where the part's slots would bring it to `MaxIndySlots`; a text
+    /// that holds a recipe tag is an operand of one slot. So is a text past the bytes a call's
+    /// text holds, which scalac's back end does not bound (the class file's writer refuses it).
+    pub(super) fn concat(&mut self, parts: &[LirId]) -> LirId {
+        let (mut calls, mut operands) = (Vec::new(), Vec::new());
+        let (mut slots, mut bytes) = (0, 0);
+        for (i, &part) in parts.iter().enumerate() {
+            let node = self.lir.node(part);
+            let size = if matches!(node.ty, ErasedType::J | ErasedType::D) { 2 } else { 1 };
+            if slots + size >= CONCAT_SLOTS {
+                calls.push(i as u32);
+                (slots, bytes) = (0, 0);
+            }
+            match &node.kind {
+                Kind::Str(text) if !holds_recipe_tag(text) && bytes + recipe_bytes(text) <= RECIPE_BYTES => bytes += recipe_bytes(text),
+                Kind::Str(_) => {
+                    operands.push(i as u32);
+                    slots += 1;
+                    bytes += 1;
+                }
+                _ => {
+                    slots += size;
+                    bytes += 1;
+                }
+            }
+        }
+        let parts = self.lir.list(parts);
+        self.lir.push(Kind::Concat { parts, calls: calls.into(), operands: operands.into() }, ErasedType::L(Rc::from(STRING)))
     }
 
     /// `lock.synchronized(body)`: the body at its own type, which is the value's.
@@ -1628,7 +1673,7 @@ impl<'a> Gen<'a> {
             return (Vec::new(), Vec::new());
         }
         let string = ErasedType::L(Rc::from(STRING));
-        let name = self.lir.push(Kind::Text(Rc::from(cx.input.interner.get(info.name))), string.clone());
+        let name = self.lir.push(Kind::Str(Rc::from(cx.input.interner.get(info.name))), string.clone());
         let ordinal = self.lir.push(Kind::Int(info.ordinal as i32), ErasedType::I);
         (vec![name, ordinal], vec![string, ErasedType::I])
     }

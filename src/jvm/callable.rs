@@ -1678,8 +1678,7 @@ impl<'a> Gen<'a> {
         let string = ErasedType::L(Rc::from(STRING));
         let ctor = method_ref(Invoke::Special, &Rc::from(class), false, "<init>", std::slice::from_ref(&string), &ErasedType::V);
         let text = self.lir.text(prefix, string.clone());
-        let parts = self.lir.list(&[text, shown]);
-        let message = self.lir.push(Kind::Concat { parts }, string);
+        let message = self.concat(&[text, shown]);
         let made = self.lir.make(&ctor, &[message]);
         self.lir.throw(made, want.clone())
     }

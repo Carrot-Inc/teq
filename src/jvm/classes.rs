@@ -1447,7 +1447,7 @@ impl<'a> Gen<'a> {
             LitVal::Float(bits) => (Kind::Float(f32::from_bits(bits)), ErasedType::F),
             LitVal::Char(c) => (Kind::Char(c), ErasedType::C),
             LitVal::Bool(b) => (Kind::Bool(b), ErasedType::Z),
-            LitVal::Str(n) => (Kind::Text(Rc::from(self.cx.input.interner.get(n))), ErasedType::L(Rc::from(STRING))),
+            LitVal::Str(n) => (Kind::Str(Rc::from(self.cx.input.interner.get(n))), ErasedType::L(Rc::from(STRING))),
         };
         self.lir.push(kind, ty)
     }

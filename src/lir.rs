@@ -5,7 +5,7 @@
 //! bytecode from it (docs/LIR.md).
 
 use crate::source::FileId;
-use crate::tir::{StrRef, TExprId};
+use crate::tir::TExprId;
 use crate::types::{ClassId, SymId};
 use std::rc::Rc;
 
@@ -246,10 +246,8 @@ pub enum Kind {
     Double(f64),
     Bool(bool),
     Char(u16),
-    Str(StrRef),
-    /// A string constant by its text, where the lowering made the text (the constants a
-    /// concatenation starts with, which the typer folds).
-    Text(Rc<str>),
+    /// A string constant, by its text.
+    Str(Rc<str>),
     Unit,
     /// The null reference: the null literal, or a null the lowering makes.
     Null,
@@ -384,13 +382,16 @@ pub enum Kind {
     /// `String` as it is (a null one stays null), another reference's `toString`, and `null`
     /// for a null one.
     StringOf { value: LirId },
-    /// The concatenation of the parts, in order. Every part is evaluated, left to right, before
-    /// the first is made a string; each is then the string Java's string conversion gives a
-    /// value of its type (a primitive's text, `null` for a null reference, a `String` or else
-    /// its `toString`). A part that is a `Str` or a `Text` is a constant of the result. How
-    /// many calls make the string, and what is text of their recipes, is the class-file
-    /// writer's.
-    Concat { parts: List },
+    /// The concatenation of the parts, in order, in the calls scalac's back end makes of it
+    /// (`Gen::concat`): a call takes the parts from its first to the next call's (`calls`: where
+    /// each call after the first begins). A call's operands are evaluated left to right; then
+    /// each is made the string Java's string conversion gives a value of its type (a primitive's
+    /// text, `null` for a null reference, a `String` or else its `toString`) and the call's
+    /// string is made, before the next call's first operand is evaluated; more than one call's
+    /// strings are joined last. A part that is a `Str` is text of the result and no operand of
+    /// its call, unless `operands` lists it: a text that holds `\u{1}` or `\u{2}`, or one past
+    /// the text a call holds.
+    Concat { parts: List, calls: Rc<[u32]>, operands: Rc<[u32]> },
     /// `try`: the body; where it throws, the cases (`Catch`); the finalizer, which runs on every
     /// way out. `returns`: whether a `return` of the method leaves through the finalizer
     /// (`Body::returns_through`), which the JVM writer must know before the `try` to make the
@@ -653,7 +654,7 @@ impl Body {
     pub fn operands(&self, id: LirId) -> Vec<LirId> {
         let mut out = Vec::new();
         match &self.node(id).kind {
-            Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Unit | Kind::Null => {}
+            Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Unit | Kind::Null => {}
             Kind::Local(_) | Kind::Param(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This | Kind::StaticField { .. } => {}
             Kind::Temp(_) | Kind::Reserve { .. } | Kind::LocalAt { .. } | Kind::Refused(_) => {}
             Kind::Block { stmts, result } => {
@@ -681,7 +682,7 @@ impl Body {
                 out.extend(*otherwise);
             }
             Kind::Helper { args, .. } | Kind::New { args, .. } | Kind::InitCall { args, .. } | Kind::StaticCall { args, .. } => out.extend(self.items(*args)),
-            Kind::ArrayOf { items, .. } | Kind::Concat { parts: items } => out.extend(self.items(*items)),
+            Kind::ArrayOf { items, .. } | Kind::Concat { parts: items, .. } => out.extend(self.items(*items)),
             Kind::Call { receiver, args, .. } | Kind::SuperCall { receiver, args, .. } => {
                 out.push(*receiver);
                 out.extend(self.items(*args));
@@ -756,7 +757,7 @@ impl Body {
 
     /// The string constant, at the string type `ty`.
     pub fn text(&mut self, text: &Rc<str>, ty: ErasedType) -> LirId {
-        self.push(Kind::Text(text.clone()), ty)
+        self.push(Kind::Str(text.clone()), ty)
     }
 
     pub fn field(&mut self, receiver: LirId, owner: &Rc<str>, name: &str, ty: ErasedType) -> LirId {

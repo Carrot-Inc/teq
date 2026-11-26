@@ -5,47 +5,29 @@ use crate::lir::{Arith, Cast, Comparing, ErasedType, Invoke, Kind, LabelId, LirI
 use super::classfile::{op, switch_layout, Label, VT};
 use super::classes::Declared;
 use super::gen::{FinallyFrame, Gen, Local};
+use super::lower::holds_recipe_tag;
 use super::names::*;
 use std::rc::Rc;
-
-/// scalac's `MaxIndySlots`: a concatenation's call is written before the operand that would
-/// bring it to this many operand slots.
-const CONCAT_SLOTS: usize = 200;
-/// What a constant of the class file holds, in bytes of modified UTF-8.
-const RECIPE_BYTES: usize = 65535;
 
 /// One call of `makeConcatWithConstants`: `\u{1}` in the recipe stands for an argument,
 /// `\u{2}` for a constant that holds one of the two itself.
 #[derive(Default)]
 struct ConcatCall {
     recipe: String,
-    bytes: usize,
     arguments: Vec<ErasedType>,
     constants: Vec<String>,
-    slots: usize,
 }
 
 impl ConcatCall {
-    fn text(&mut self, text: &str) {
-        self.recipe.push_str(text);
-        self.bytes += recipe_bytes(text);
-    }
-
     fn constant(&mut self, text: String) {
-        self.text("\u{2}");
+        self.recipe.push('\u{2}');
         self.constants.push(text);
-        self.slots += 1;
     }
 
-    fn argument(&mut self, t: ErasedType, slots: usize) {
-        self.text("\u{1}");
+    fn argument(&mut self, t: ErasedType) {
+        self.recipe.push('\u{1}');
         self.arguments.push(t);
-        self.slots += slots;
     }
-}
-
-fn recipe_bytes(text: &str) -> usize {
-    text.chars().map(|c| if c == '\0' { 2 } else if c as u32 >= 0x10000 { 6 } else { c.len_utf8() }).sum()
 }
 
 impl<'a> Gen<'a> {
@@ -79,11 +61,7 @@ impl<'a> Gen<'a> {
             Kind::Double(v) => self.dconst(v),
             Kind::Bool(v) => self.iconst(v as i32),
             Kind::Char(c) => self.iconst(c as i32),
-            Kind::Str(s) => {
-                let prog = self.cx.input.prog;
-                self.sconst(&prog.strings[s.idx()]);
-            }
-            Kind::Text(text) => self.sconst(&text),
+            Kind::Str(text) => self.sconst(&text),
             Kind::Unit => {}
             Kind::Null => {
                 self.code.op(op::ACONST_NULL);
@@ -387,7 +365,7 @@ impl<'a> Gen<'a> {
                 self.string_value_of(&of);
             }
             Kind::Underlying { value } => self.write(value),
-            Kind::Concat { parts } => self.write_concat(parts),
+            Kind::Concat { parts, calls, operands } => self.write_concat(parts, &calls, &operands),
             Kind::Try { body, catch, finalizer, returns } => {
                 self.check_returns(id, returns);
                 self.write_try(&ty, body, catch, finalizer, returns)
@@ -959,54 +937,45 @@ impl<'a> Gen<'a> {
     }
 
     /// A concatenation as scalac writes it: one `invokedynamic` call of
-    /// `makeConcatWithConstants`, the constant parts the text of its recipe and the others its
-    /// arguments, each evaluated before the call renders the first; a call past the slots one
-    /// takes is written before the part that would bring it there, and the calls' strings are
-    /// then joined by one more.
-    fn write_concat(&mut self, parts: List) {
-        let prog = self.cx.input.prog;
+    /// `makeConcatWithConstants` for each of the node's calls, its texts the text of its recipe
+    /// and its operands its arguments, each evaluated before the call renders the first (an
+    /// operand text a constant of the call where it holds a recipe tag, else loaded); more than
+    /// one call's strings are then joined by one more.
+    fn write_concat(&mut self, parts: List, calls: &[u32], operands: &[u32]) {
         let string = ErasedType::L(Rc::from(STRING));
         let mark = self.code.locals_mark();
         let mut call = ConcatCall::default();
-        let mut flushed = 0;
+        let mut next_call = calls.iter().copied().peekable();
         for i in 0..parts.len {
+            if next_call.next_if_eq(&i).is_some() {
+                self.concat_call(std::mem::take(&mut call));
+            }
             let part = self.lir.lists[(parts.start + i) as usize];
             let node = self.lir.node(part);
             let (kind, ty) = (node.kind.clone(), node.ty.clone());
-            let text: Option<&str> = match &kind {
-                Kind::Str(s) => Some(&prog.strings[s.idx()]),
-                Kind::Text(text) => Some(text),
-                _ => None,
-            };
-            // The parameter that renders the part: a `String`'s own, `Object`'s for any other
-            // reference, a primitive's.
-            let param = match ty {
-                ErasedType::L(ref n) if &**n != STRING => ErasedType::object(),
-                t => t,
-            };
-            let slots = if matches!(param, ErasedType::J | ErasedType::D) { 2 } else { 1 };
-            if call.slots + slots >= CONCAT_SLOTS {
-                self.concat_call(std::mem::take(&mut call));
-                flushed += 1;
-            }
-            match text {
-                Some(text) if text.contains(['\u{1}', '\u{2}']) => call.constant(text.to_string()),
-                Some(text) if call.bytes + recipe_bytes(text) > RECIPE_BYTES => {
-                    self.sconst(text);
-                    call.argument(string.clone(), 1);
+            match kind {
+                Kind::Str(text) if operands.contains(&i) && holds_recipe_tag(&text) => call.constant(text.to_string()),
+                Kind::Str(text) if operands.contains(&i) => {
+                    self.sconst(&text);
+                    call.argument(string.clone());
                 }
-                Some(text) => call.text(text),
-                None => {
+                Kind::Str(text) => call.recipe.push_str(&text),
+                _ => {
                     self.write(part);
-                    call.argument(param, slots);
+                    // The parameter that renders the part: a `String`'s own, `Object`'s for any
+                    // other reference, a primitive's.
+                    call.argument(match ty {
+                        ErasedType::L(ref n) if &**n != STRING => ErasedType::object(),
+                        t => t,
+                    });
                 }
             }
         }
         self.concat_call(call);
-        if flushed > 0 {
+        if !calls.is_empty() {
             let mut joined = ConcatCall::default();
-            for _ in 0..=flushed {
-                joined.argument(string.clone(), 1);
+            for _ in 0..=calls.len() {
+                joined.argument(string.clone());
             }
             self.concat_call(joined);
         }

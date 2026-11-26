@@ -252,7 +252,7 @@ impl<'a> Gen<'a> {
                 let exception: Rc<str> = Rc::from("java/lang/UnsupportedOperationException");
                 let string = ErasedType::L(Rc::from(STRING));
                 let ctor = Rc::new(reference(Invoke::Special, &exception, "<init>", vec![string.clone()], ErasedType::V));
-                let message = self.lir.push(Kind::Text(Rc::from("runs at compile time only")), string);
+                let message = self.lir.push(Kind::Str(Rc::from("runs at compile time only")), string);
                 let args = self.lir.list(&[message]);
                 let made = self.lir.push(Kind::New { touch: None, ctor, args }, ErasedType::L(exception));
                 self.lir.push(Kind::Throw(made), ErasedType::V)
@@ -533,7 +533,7 @@ impl<'a> Gen<'a> {
                 // concatenation's text alone is read off a `Text` node itself (`Gen::lower_concat`).
                 Op::Text(text) => {
                     let string = ErasedType::L(Rc::from(STRING));
-                    let constant = self.lir.push(Kind::Text(text.clone()), string.clone());
+                    let constant = self.lir.push(Kind::Str(text.clone()), string.clone());
                     self.lir.push(Kind::Typed(constant), string)
                 }
                 Op::Module(class) => self.lir.push(Kind::Module(class.clone()), ErasedType::L(class.clone())),
@@ -846,7 +846,7 @@ impl<'a> Gen<'a> {
         let under = stack.len().saturating_sub(top);
         for value in &mut stack[..under] {
             let node = self.lir.node(*value);
-            if matches!(node.kind, Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) | Kind::Null | Kind::Temp(_)) {
+            if matches!(node.kind, Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Null | Kind::Temp(_)) {
                 continue;
             }
             let ty = node.ty.clone();

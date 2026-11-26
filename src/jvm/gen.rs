@@ -2630,7 +2630,7 @@ impl<'a> Gen<'a> {
         let (kind, ty) = (node.kind.clone(), node.ty.clone());
         let syms = self.cx.input.syms;
         match kind {
-            Kind::Param(_) | Kind::Temp(_) | Kind::This | Kind::Null | Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Text(_) => {
+            Kind::Param(_) | Kind::Temp(_) | Kind::This | Kind::Null | Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) => {
                 Some(self.lir.push(kind, ty))
             }
             Kind::Local(s) if syms.sym(s).kind != SymKind::Var && !self.m.cells.contains(&s) => Some(self.lir.push(kind, ty)),
