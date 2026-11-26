@@ -71,6 +71,8 @@ ctororder	pass	-
 custommirror	pass	-	
 declaredsignature	pass	-	
 deepnesting	pass	-	
+defaultgetterslocal	fail	-	known js-run: over teq's products JavaScript loses the escaped local trait's default (10 for 21 on lines 3 and 4): the default getters' converted slice
+defaultgettersmember	fail	-	known bundle: the products' bundle lacks the getter m$default$1 the whole build writes: the top-level converter's second conversion, the default getters' converted slice
 defaults	pass	-	
 defaultsgivenreceiver	pass	-	
 defaultsimpurereceiver	fail	-	defaultsimpurereceiver js-run

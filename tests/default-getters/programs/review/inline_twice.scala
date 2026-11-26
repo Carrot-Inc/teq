@@ -1,0 +1,1 @@
+object Main { inline def f(x: Int): Int = { trait T { def m(a: Int = x): Int = a }; class C extends T; new C().m() }; def main(args: Array[String]): Unit = { println(f(10)); println(f(20)) } }

@@ -1,0 +1,813 @@
+AXIS-A-wlocaldef-l--zero-direct.interp	run 1121
+AXIS-A-wlocaldef-l--zero-direct.js	run 1121
+AXIS-A-wlocaldef-l--zero-direct.jvm	run 1121
+AXIS-A-wval-l--zero-direct.interp	run 1101
+AXIS-A-wval-l--zero-direct.js	run 1101
+AXIS-A-wval-l--zero-direct.jvm	run 1101
+AXIS-A-wvar-l--zero-direct.interp	run 1151
+AXIS-A-wvar-l--zero-direct.js	run 1151
+AXIS-A-wvar-l--zero-direct.jvm	run 1151
+AXIS-B-wlocaldef-lnone-zero-direct.interp	run 2122
+AXIS-B-wlocaldef-lnone-zero-direct.js	run 2122
+AXIS-B-wlocaldef-lnone-zero-direct.jvm	run 2122
+AXIS-B-wnone-lval-arity-as_A.interp	run 2001
+AXIS-B-wnone-lval-arity-as_A.js	crash 1
+AXIS-B-wnone-lval-arity-as_A.jvm	run 2001
+AXIS-B-wnone-lval-none-as_A.interp	run 2001
+AXIS-B-wnone-lval-none-as_A.js	crash 1
+AXIS-B-wnone-lval-none-as_A.jvm	run 2001
+AXIS-B-wnone-lval-string-as_A.interp	run 2001
+AXIS-B-wnone-lval-string-as_A.js	crash 1
+AXIS-B-wnone-lval-string-as_A.jvm	run 2001
+AXIS-B-wval-lnone-zero-direct.interp	run 2102
+AXIS-B-wval-lnone-zero-direct.js	run 2102
+AXIS-B-wval-lnone-zero-direct.jvm	run 2102
+AXIS-B-wval-lval-zero-direct.interp	run 2102
+AXIS-B-wval-lval-zero-direct.js	run 2102
+AXIS-B-wval-lval-zero-direct.jvm	run 2102
+AXIS-B-wvar-lnone-zero-direct.interp	run 2152
+AXIS-B-wvar-lnone-zero-direct.js	run 2152
+AXIS-B-wvar-lnone-zero-direct.jvm	run 2152
+AXIS-B_inherits-wlocaldef-l--arity-as_A.interp	crash 3
+AXIS-B_inherits-wlocaldef-l--arity-as_A.js	crash 1
+AXIS-B_inherits-wlocaldef-l--arity-as_A.jvm	crash 1
+AXIS-B_inherits-wlocaldef-l--arity-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wlocaldef-l--arity-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wlocaldef-l--arity-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wlocaldef-l--arity-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wlocaldef-l--arity-super.interp	crash 3
+AXIS-B_inherits-wlocaldef-l--arity-super.js	crash 1
+AXIS-B_inherits-wlocaldef-l--arity-super.jvm	crash 1
+AXIS-B_inherits-wlocaldef-l--none-as_A.interp	crash 3
+AXIS-B_inherits-wlocaldef-l--none-as_A.js	crash 1
+AXIS-B_inherits-wlocaldef-l--none-as_A.jvm	crash 1
+AXIS-B_inherits-wlocaldef-l--none-direct.interp	crash 3
+AXIS-B_inherits-wlocaldef-l--none-direct.js	crash 1
+AXIS-B_inherits-wlocaldef-l--none-direct.jvm	crash 1
+AXIS-B_inherits-wlocaldef-l--none-super.interp	crash 3
+AXIS-B_inherits-wlocaldef-l--none-super.js	crash 1
+AXIS-B_inherits-wlocaldef-l--none-super.jvm	crash 1
+AXIS-B_inherits-wlocaldef-l--string-as_A.interp	crash 3
+AXIS-B_inherits-wlocaldef-l--string-as_A.js	crash 1
+AXIS-B_inherits-wlocaldef-l--string-as_A.jvm	crash 1
+AXIS-B_inherits-wlocaldef-l--string-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wlocaldef-l--string-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wlocaldef-l--string-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wlocaldef-l--string-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wlocaldef-l--string-super.interp	crash 3
+AXIS-B_inherits-wlocaldef-l--string-super.js	crash 1
+AXIS-B_inherits-wlocaldef-l--string-super.jvm	crash 1
+AXIS-B_inherits-wnone-l--arity-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wnone-l--arity-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wnone-l--arity-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wnone-l--arity-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wnone-l--string-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wnone-l--string-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wnone-l--string-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wnone-l--string-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--arity-as_A.interp	crash 3
+AXIS-B_inherits-wval-l--arity-as_A.js	crash 1
+AXIS-B_inherits-wval-l--arity-as_A.jvm	crash 1
+AXIS-B_inherits-wval-l--arity-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--arity-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--arity-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--arity-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--arity-super.interp	crash 3
+AXIS-B_inherits-wval-l--arity-super.js	crash 1
+AXIS-B_inherits-wval-l--arity-super.jvm	crash 1
+AXIS-B_inherits-wval-l--none-as_A.interp	crash 3
+AXIS-B_inherits-wval-l--none-as_A.js	crash 1
+AXIS-B_inherits-wval-l--none-as_A.jvm	crash 1
+AXIS-B_inherits-wval-l--none-direct.interp	crash 3
+AXIS-B_inherits-wval-l--none-direct.js	crash 1
+AXIS-B_inherits-wval-l--none-direct.jvm	crash 1
+AXIS-B_inherits-wval-l--none-super.interp	crash 3
+AXIS-B_inherits-wval-l--none-super.js	crash 1
+AXIS-B_inherits-wval-l--none-super.jvm	crash 1
+AXIS-B_inherits-wval-l--string-as_A.interp	crash 3
+AXIS-B_inherits-wval-l--string-as_A.js	crash 1
+AXIS-B_inherits-wval-l--string-as_A.jvm	crash 1
+AXIS-B_inherits-wval-l--string-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--string-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--string-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--string-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--string-super.interp	crash 3
+AXIS-B_inherits-wval-l--string-super.js	crash 1
+AXIS-B_inherits-wval-l--string-super.jvm	crash 1
+AXIS-B_inherits-wvar-l--arity-as_A.interp	crash 3
+AXIS-B_inherits-wvar-l--arity-as_A.js	crash 1
+AXIS-B_inherits-wvar-l--arity-as_A.jvm	crash 1
+AXIS-B_inherits-wvar-l--arity-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wvar-l--arity-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wvar-l--arity-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wvar-l--arity-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wvar-l--arity-super.interp	crash 3
+AXIS-B_inherits-wvar-l--arity-super.js	crash 1
+AXIS-B_inherits-wvar-l--arity-super.jvm	crash 1
+AXIS-B_inherits-wvar-l--none-as_A.interp	crash 3
+AXIS-B_inherits-wvar-l--none-as_A.js	crash 1
+AXIS-B_inherits-wvar-l--none-as_A.jvm	crash 1
+AXIS-B_inherits-wvar-l--none-direct.interp	crash 3
+AXIS-B_inherits-wvar-l--none-direct.js	crash 1
+AXIS-B_inherits-wvar-l--none-direct.jvm	crash 1
+AXIS-B_inherits-wvar-l--none-super.interp	crash 3
+AXIS-B_inherits-wvar-l--none-super.js	crash 1
+AXIS-B_inherits-wvar-l--none-super.jvm	crash 1
+AXIS-B_inherits-wvar-l--string-as_A.interp	crash 3
+AXIS-B_inherits-wvar-l--string-as_A.js	crash 1
+AXIS-B_inherits-wvar-l--string-as_A.jvm	crash 1
+AXIS-B_inherits-wvar-l--string-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wvar-l--string-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wvar-l--string-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wvar-l--string-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wvar-l--string-super.interp	crash 3
+AXIS-B_inherits-wvar-l--string-super.js	crash 1
+AXIS-B_inherits-wvar-l--string-super.jvm	crash 1
+AXIS-class-wlocaldef-lval-arity-as_A.interp	run 3121
+AXIS-class-wlocaldef-lval-arity-as_A.js	crash 1
+AXIS-class-wlocaldef-lval-arity-as_A.jvm	run 3121
+AXIS-class-wlocaldef-lval-none-as_A.interp	run 3121
+AXIS-class-wlocaldef-lval-none-as_A.js	crash 1
+AXIS-class-wlocaldef-lval-none-as_A.jvm	run 3121
+AXIS-class-wlocaldef-lval-string-as_A.interp	run 3121
+AXIS-class-wlocaldef-lval-string-as_A.js	crash 1
+AXIS-class-wlocaldef-lval-string-as_A.jvm	run 3121
+AXIS-class-wnone-lval-arity-as_A.interp	run 3001
+AXIS-class-wnone-lval-arity-as_A.js	crash 1
+AXIS-class-wnone-lval-arity-as_A.jvm	run 3001
+AXIS-class-wnone-lval-none-as_A.interp	run 3001
+AXIS-class-wnone-lval-none-as_A.js	crash 1
+AXIS-class-wnone-lval-none-as_A.jvm	run 3001
+AXIS-class-wnone-lval-string-as_A.interp	run 3001
+AXIS-class-wnone-lval-string-as_A.js	crash 1
+AXIS-class-wnone-lval-string-as_A.jvm	run 3001
+AXIS-class-wval-lval-arity-as_A.interp	run 3101
+AXIS-class-wval-lval-arity-as_A.js	crash 1
+AXIS-class-wval-lval-arity-as_A.jvm	run 3101
+AXIS-class-wval-lval-none-as_A.interp	run 3101
+AXIS-class-wval-lval-none-as_A.js	crash 1
+AXIS-class-wval-lval-none-as_A.jvm	run 3101
+AXIS-class-wval-lval-string-as_A.interp	run 3101
+AXIS-class-wval-lval-string-as_A.js	crash 1
+AXIS-class-wval-lval-string-as_A.jvm	run 3101
+AXIS-subclass-wlocaldef-lval-arity-as_A.interp	run 5121
+AXIS-subclass-wlocaldef-lval-arity-as_A.js	run 5121
+AXIS-subclass-wlocaldef-lval-arity-as_A.jvm	run 5121
+AXIS-subclass-wlocaldef-lval-none-as_A.interp	run 5121
+AXIS-subclass-wlocaldef-lval-none-as_A.js	run 5121
+AXIS-subclass-wlocaldef-lval-none-as_A.jvm	run 5121
+AXIS-subclass-wlocaldef-lval-string-as_A.interp	run 5121
+AXIS-subclass-wlocaldef-lval-string-as_A.js	run 5121
+AXIS-subclass-wlocaldef-lval-string-as_A.jvm	run 5121
+AXIS-subclass-wnone-lval-arity-as_A.interp	run 5001
+AXIS-subclass-wnone-lval-arity-as_A.js	run 5001
+AXIS-subclass-wnone-lval-arity-as_A.jvm	run 5001
+AXIS-subclass-wnone-lval-none-as_A.interp	run 5001
+AXIS-subclass-wnone-lval-none-as_A.js	run 5001
+AXIS-subclass-wnone-lval-none-as_A.jvm	run 5001
+AXIS-subclass-wnone-lval-string-as_A.interp	run 5001
+AXIS-subclass-wnone-lval-string-as_A.js	run 5001
+AXIS-subclass-wnone-lval-string-as_A.jvm	run 5001
+AXIS-subclass-wval-lval-arity-as_A.interp	run 5101
+AXIS-subclass-wval-lval-arity-as_A.js	run 5101
+AXIS-subclass-wval-lval-arity-as_A.jvm	run 5101
+AXIS-subclass-wval-lval-none-as_A.interp	run 5101
+AXIS-subclass-wval-lval-none-as_A.js	run 5101
+AXIS-subclass-wval-lval-none-as_A.jvm	run 5101
+AXIS-subclass-wval-lval-string-as_A.interp	run 5101
+AXIS-subclass-wval-lval-string-as_A.js	run 5101
+AXIS-subclass-wval-lval-string-as_A.jvm	run 5101
+AXIS-superclass-wlocaldef-lval-arity-as_A.interp	run 4121
+AXIS-superclass-wlocaldef-lval-arity-as_A.js	crash 1
+AXIS-superclass-wlocaldef-lval-arity-as_A.jvm	run 4121
+AXIS-superclass-wlocaldef-lval-none-as_A.interp	run 4121
+AXIS-superclass-wlocaldef-lval-none-as_A.js	crash 1
+AXIS-superclass-wlocaldef-lval-none-as_A.jvm	run 4121
+AXIS-superclass-wlocaldef-lval-string-as_A.interp	run 4121
+AXIS-superclass-wlocaldef-lval-string-as_A.js	crash 1
+AXIS-superclass-wlocaldef-lval-string-as_A.jvm	run 4121
+AXIS-superclass-wnone-lval-arity-as_A.interp	run 4001
+AXIS-superclass-wnone-lval-arity-as_A.js	crash 1
+AXIS-superclass-wnone-lval-arity-as_A.jvm	run 4001
+AXIS-superclass-wnone-lval-none-as_A.interp	run 4001
+AXIS-superclass-wnone-lval-none-as_A.js	crash 1
+AXIS-superclass-wnone-lval-none-as_A.jvm	run 4001
+AXIS-superclass-wnone-lval-string-as_A.interp	run 4001
+AXIS-superclass-wnone-lval-string-as_A.js	crash 1
+AXIS-superclass-wnone-lval-string-as_A.jvm	run 4001
+AXIS-superclass-wval-lval-arity-as_A.interp	run 4101
+AXIS-superclass-wval-lval-arity-as_A.js	crash 1
+AXIS-superclass-wval-lval-arity-as_A.jvm	run 4101
+AXIS-superclass-wval-lval-none-as_A.interp	run 4101
+AXIS-superclass-wval-lval-none-as_A.js	crash 1
+AXIS-superclass-wval-lval-none-as_A.jvm	run 4101
+AXIS-superclass-wval-lval-string-as_A.interp	run 4101
+AXIS-superclass-wval-lval-string-as_A.js	crash 1
+AXIS-superclass-wval-lval-string-as_A.jvm	run 4101
+AXIS-superclass_trait-wlocaldef-lnone-arity-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-arity-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-string-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lnone-zero-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-arity-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-arity-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-arity-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-arity-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-arity-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-arity-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-arity-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-arity-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-string-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-string-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-string-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-string-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-string-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-string-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-string-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wlocaldef-lval-string-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-arity-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-string-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lnone-zero-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-arity-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-none-as_A.interp	run 2001
+AXIS-superclass_trait-wnone-lval-none-as_A.js	crash 1
+AXIS-superclass_trait-wnone-lval-none-as_A.jvm	run 2001
+AXIS-superclass_trait-wnone-lval-string-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-string-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wnone-lval-zero-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-arity-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-string-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lnone-zero-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-arity-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-string-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wval-lval-zero-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-arity-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-string-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-as_A.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-as_A.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-as_A.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-as_A.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-super.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-super.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-super.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lnone-zero-super.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lval-arity-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lval-arity-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lval-arity-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lval-arity-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lval-string-direct.check	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lval-string-direct.interp	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lval-string-direct.js	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+AXIS-superclass_trait-wvar-lval-string-direct.jvm	refused 8:11: class C inherits conflicting members: m in class S and m in trait B; declare an override in class C
+NATIVE-c0782.interp	crash 3
+NATIVE-c0782.js	crash 1
+NATIVE-c0782.jvm	crash 1
+NATIVE-c0784.interp	crash 3
+NATIVE-c0786.interp	crash 3
+NATIVE-c0786.js	crash 1
+NATIVE-c0786.jvm	crash 1
+NATIVE-c0788.interp	crash 3
+NATIVE-c0790.interp	crash 3
+NATIVE-c0790.js	crash 1
+NATIVE-c0790.jvm	crash 1
+NATIVE-c0792.interp	crash 3
+NATIVE-c0794.interp	crash 3
+NATIVE-c0794.js	crash 1
+NATIVE-c0794.jvm	crash 1
+NATIVE-c0796.interp	crash 3
+NATIVE-c0796.js	run 310
+NATIVE-c0796.jvm	run 310
+NATIVE-c0798.interp	crash 3
+NATIVE-c0798.js	crash 1
+NATIVE-c0798.jvm	crash 1
+NATIVE-c0800.interp	crash 3
+NATIVE-c0800.js	run 210
+NATIVE-c0800.jvm	run 210
+NATIVE-r0111.check	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0111.interp	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0111.js	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0111.jvm	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0113.check	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0113.interp	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0113.js	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0113.jvm	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0115.check	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0115.interp	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0115.js	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0115.jvm	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0117.check	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0117.interp	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0117.js	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0117.jvm	refused 7:11: class C inherits conflicting members: m in trait B and m in trait D; declare an override in class C
+NATIVE-r0121.check	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0121.interp	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0121.js	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0121.jvm	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0123.check	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0123.interp	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0123.js	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0123.jvm	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0125.check	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0125.interp	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0125.js	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0125.jvm	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0127.check	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0127.interp	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0127.js	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0127.jvm	refused 8:11: class C inherits conflicting members: m in trait E and m in trait D; declare an override in class C
+NATIVE-r0141.check	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0141.interp	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0141.js	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0141.jvm	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0143.check	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0143.interp	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0143.js	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0143.jvm	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0145.check	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0145.interp	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0145.js	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0145.jvm	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0147.check	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0147.interp	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0147.js	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+NATIVE-r0147.jvm	refused 7:11: trait E inherits conflicting members: m in trait B and m in trait D; declare an override in trait E
+OVERRIDE-efltlocalbodyoverrideanonclause2.interp	crash 3
+OVERRIDE-efltlocalbodyoverrideanonclause2.js	crash 1
+OVERRIDE-efltlocalbodyoverrideanonclause2.jvm	crash 1
+OVERRIDE-efltlocalbodyoverrideanonclause2.split-interp	refused 3:7: the body of lt_local_body_override_anon_clause2.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes
+OVERRIDE-efltlocalbodyoverrideanonclause2.split-js	refused 3:7: the body of lt_local_body_override_anon_clause2.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes
+OVERRIDE-efltlocalbodyoverrideanonclause2.split-jvm	crash 1
+OVERRIDE-efltlocalbodyoverrideanonfirst.interp	crash 3
+OVERRIDE-efltlocalbodyoverrideanonfirst.js	crash 1
+OVERRIDE-efltlocalbodyoverrideanonfirst.jvm	crash 1
+OVERRIDE-efltlocalbodyoverrideanonfirst.split-interp	refused 3:7: the body of lt_local_body_override_anon_first.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes i
+OVERRIDE-efltlocalbodyoverrideanonfirst.split-js	refused 3:7: the body of lt_local_body_override_anon_first.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes i
+OVERRIDE-efltlocalbodyoverrideanonfirst.split-jvm	crash 1
+OVERRIDE-efltlocalbodyoverrideanonlast.interp	crash 3
+OVERRIDE-efltlocalbodyoverrideanonlast.js	crash 1
+OVERRIDE-efltlocalbodyoverrideanonlast.jvm	crash 1
+OVERRIDE-efltlocalbodyoverrideanonlast.split-interp	refused 3:7: the body of lt_local_body_override_anon_last.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it
+OVERRIDE-efltlocalbodyoverrideanonlast.split-js	refused 3:7: the body of lt_local_body_override_anon_last.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it
+OVERRIDE-efltlocalbodyoverrideanonlast.split-jvm	crash 1
+OVERRIDE-efltlocalbothoverrideanonclause2.interp	crash 3
+OVERRIDE-efltlocalbothoverrideanonclause2.js	crash 1
+OVERRIDE-efltlocalbothoverrideanonclause2.jvm	crash 1
+OVERRIDE-efltlocalbothoverrideanonclause2.split-interp	refused 3:7: the body of lt_local_both_override_anon_clause2.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes
+OVERRIDE-efltlocalbothoverrideanonclause2.split-js	refused 3:7: the body of lt_local_both_override_anon_clause2.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes
+OVERRIDE-efltlocalbothoverrideanonclause2.split-jvm	crash 1
+OVERRIDE-efltlocalbothoverrideanonfirst.interp	crash 3
+OVERRIDE-efltlocalbothoverrideanonfirst.js	crash 1
+OVERRIDE-efltlocalbothoverrideanonfirst.jvm	crash 1
+OVERRIDE-efltlocalbothoverrideanonfirst.split-interp	refused 3:7: the body of lt_local_both_override_anon_first.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes i
+OVERRIDE-efltlocalbothoverrideanonfirst.split-js	refused 3:7: the body of lt_local_both_override_anon_first.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes i
+OVERRIDE-efltlocalbothoverrideanonfirst.split-jvm	crash 1
+OVERRIDE-efltlocalbothoverrideanonlast.interp	crash 3
+OVERRIDE-efltlocalbothoverrideanonlast.js	crash 1
+OVERRIDE-efltlocalbothoverrideanonlast.jvm	crash 1
+OVERRIDE-efltlocalbothoverrideanonlast.split-interp	refused 3:7: the body of lt_local_both_override_anon_last.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it
+OVERRIDE-efltlocalbothoverrideanonlast.split-js	refused 3:7: the body of lt_local_both_override_anon_last.Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it
+OVERRIDE-efltlocalbothoverrideanonlast.split-jvm	crash 1
+REVIEW-bad_type.check	refused 2:94: Found: "bad"
+REVIEW-bad_type.interp	refused 2:94: Found: "bad"
+REVIEW-bad_type.js	refused 2:94: Found: "bad"
+REVIEW-bad_type.jvm	refused 2:94: Found: "bad"
+REVIEW-default_generic.interp	crash 3
+REVIEW-default_generic.jvm	crash 3
+REVIEW-diamond_twin.jvm	crash 1
+REVIEW-line_drop.interp	crash 3
+REVIEW-line_drop.js	crash 1
+REVIEW-line_drop.jvm	crash 1
+REVIEW-line_inherited_drop.interp	crash 3
+REVIEW-line_inherited_drop.js	crash 1
+REVIEW-line_inherited_drop.jvm	crash 1
+REVIEW-line_second.interp	crash 3
+REVIEW-line_second.js	crash 1
+REVIEW-line_second.jvm	crash 1
+REVIEW-local_trait_default_clause.interp	crash 3
+REVIEW-local_trait_default_clause.js	crash 1
+REVIEW-local_trait_default_clause.jvm	crash 3
+REVIEW-local_trait_default_escape_prior.interp	crash 3
+REVIEW-local_trait_default_escape_prior.js	run 21
+REVIEW-local_trait_default_escape_prior.jvm	crash 1
+REVIEW-local_trait_default_inline_capture.interp	crash 3
+REVIEW-local_trait_default_inline_capture.js	crash 1
+REVIEW-local_trait_default_inline_capture.jvm	crash 1
+REVIEW-local_trait_default_super_prior.interp	crash 3
+REVIEW-local_trait_default_super_prior.js	crash 1
+REVIEW-local_trait_default_super_prior.jvm	crash 1
+REVIEW-local_trait_lifted_member_overridden.interp	crash 3
+REVIEW-local_trait_lifted_member_overridden.js	crash 1
+REVIEW-local_trait_lifted_member_overridden.jvm	crash 1
+REVIEW-local_trait_private_default_capture.interp	crash 3
+REVIEW-local_trait_private_default_capture.js	crash 1
+REVIEW-local_trait_private_default_capture.jvm	crash 1
+REVIEW-over_drop_only.check	refused 2:177: None of the overloaded alternatives of method m in class D with types
+REVIEW-over_drop_only.interp	refused 2:177: None of the overloaded alternatives of method m in class D with types
+REVIEW-over_drop_only.js	refused 2:177: None of the overloaded alternatives of method m in class D with types
+REVIEW-over_drop_only.jvm	refused 2:177: None of the overloaded alternatives of method m in class D with types
+REVIEW-over_dropped_local.check	refused 2:174: Found: "abc"
+REVIEW-over_dropped_local.interp	refused 2:174: Found: "abc"
+REVIEW-over_dropped_local.js	refused 2:174: Found: "abc"
+REVIEW-over_dropped_local.jvm	refused 2:174: Found: "abc"
+REVIEW-over_dropped_ordinary.check	refused 1:304: None of the overloaded alternatives of method m in class D with types
+REVIEW-over_dropped_ordinary.interp	refused 1:304: None of the overloaded alternatives of method m in class D with types
+REVIEW-over_dropped_ordinary.js	refused 1:304: None of the overloaded alternatives of method m in class D with types
+REVIEW-over_dropped_ordinary.jvm	refused 1:304: None of the overloaded alternatives of method m in class D with types
+REVIEW-over_generic_local.check	refused 2:162: Found: "s"
+REVIEW-over_generic_local.interp	refused 2:162: Found: "s"
+REVIEW-over_generic_local.js	refused 2:162: Found: "s"
+REVIEW-over_generic_local.jvm	refused 2:162: Found: "s"
+REVIEW-over_named_local.check	refused 2:170: there is no parameter named s
+REVIEW-over_named_local.interp	refused 2:170: there is no parameter named s
+REVIEW-over_named_local.js	refused 2:170: there is no parameter named s
+REVIEW-over_named_local.jvm	refused 2:170: there is no parameter named s
+REVIEW-over_varargs_local.check	refused 2:169: too many arguments: expected 1
+REVIEW-over_varargs_local.interp	refused 2:169: too many arguments: expected 1
+REVIEW-over_varargs_local.js	refused 2:169: too many arguments: expected 1
+REVIEW-over_varargs_local.jvm	refused 2:169: too many arguments: expected 1
+REVIEW-over_zero_local.interp	run 20 | 14
+REVIEW-over_zero_local.js	run 20 | 14
+REVIEW-over_zero_local.jvm	run 20 | 14
+REVIEW-record_default_nested.interp	crash 3
+REVIEW-record_default_nested.js	crash 1
+REVIEW-record_default_nested.jvm	crash 3
+REVIEW-vars_clause.interp	crash 3
+REVIEW-vars_clause.js	crash 1
+REVIEW-vars_clause.jvm	crash 3
+REVIEW-vars_clause_anon.interp	crash 3
+REVIEW-vars_clause_anon.js	crash 1
+REVIEW-vars_clause_anon.jvm	crash 3
+SPLIT-A-wlocaldef-l--none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wlocaldef-l--none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wlocaldef-l--none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wlocaldef-l--none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wval-l--none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wval-l--none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wval-l--none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wval-l--none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wvar-l--none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wvar-l--none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wvar-l--none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-A-wvar-l--none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wlocaldef-lnone-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wlocaldef-lnone-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wlocaldef-lnone-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wlocaldef-lnone-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wlocaldef-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wlocaldef-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wnone-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wnone-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wnone-lval-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wnone-lval-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wval-lnone-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wval-lnone-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wval-lnone-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wval-lnone-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wval-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wval-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wval-lval-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wval-lval-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wvar-lnone-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wvar-lnone-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wvar-lnone-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wvar-lnone-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wvar-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B-wvar-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wlocaldef-l--none-direct.interp	crash 3
+SPLIT-B_inherits-wlocaldef-l--none-direct.js	crash 1
+SPLIT-B_inherits-wlocaldef-l--none-direct.jvm	crash 1
+SPLIT-B_inherits-wlocaldef-l--none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wlocaldef-l--none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wlocaldef-l--none-direct.split-jvm	crash 1
+SPLIT-B_inherits-wlocaldef-l--none-super.interp	crash 3
+SPLIT-B_inherits-wlocaldef-l--none-super.js	crash 1
+SPLIT-B_inherits-wlocaldef-l--none-super.jvm	crash 1
+SPLIT-B_inherits-wlocaldef-l--none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wlocaldef-l--none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wlocaldef-l--none-super.split-jvm	crash 1
+SPLIT-B_inherits-wval-l--none-direct.interp	crash 3
+SPLIT-B_inherits-wval-l--none-direct.js	crash 1
+SPLIT-B_inherits-wval-l--none-direct.jvm	crash 1
+SPLIT-B_inherits-wval-l--none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wval-l--none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wval-l--none-direct.split-jvm	crash 1
+SPLIT-B_inherits-wval-l--none-super.interp	crash 3
+SPLIT-B_inherits-wval-l--none-super.js	crash 1
+SPLIT-B_inherits-wval-l--none-super.jvm	crash 1
+SPLIT-B_inherits-wval-l--none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wval-l--none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wval-l--none-super.split-jvm	crash 1
+SPLIT-B_inherits-wvar-l--none-direct.interp	crash 3
+SPLIT-B_inherits-wvar-l--none-direct.js	crash 1
+SPLIT-B_inherits-wvar-l--none-direct.jvm	crash 1
+SPLIT-B_inherits-wvar-l--none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wvar-l--none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wvar-l--none-direct.split-jvm	crash 1
+SPLIT-B_inherits-wvar-l--none-super.interp	crash 3
+SPLIT-B_inherits-wvar-l--none-super.js	crash 1
+SPLIT-B_inherits-wvar-l--none-super.jvm	crash 1
+SPLIT-B_inherits-wvar-l--none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wvar-l--none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-B_inherits-wvar-l--none-super.split-jvm	crash 1
+SPLIT-class-wlocaldef-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wlocaldef-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wnone-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wnone-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wnone-lval-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wnone-lval-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wval-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wval-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wval-lval-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wval-lval-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wvar-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-class-wvar-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wlocaldef-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wlocaldef-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wnone-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wnone-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wnone-lval-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wnone-lval-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wval-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wval-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wval-lval-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wval-lval-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wvar-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-subclass-wvar-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wlocaldef-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wlocaldef-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wnone-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wnone-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wnone-lval-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wnone-lval-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wval-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wval-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wval-lval-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wval-lval-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wvar-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass-wvar-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wlocaldef-lnone-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wlocaldef-lnone-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wlocaldef-lnone-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wlocaldef-lnone-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wlocaldef-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wlocaldef-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wnone-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wnone-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wnone-lval-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wnone-lval-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wval-lnone-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wval-lnone-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wval-lnone-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wval-lnone-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wval-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wval-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wval-lval-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wval-lval-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wvar-lnone-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wvar-lnone-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wvar-lnone-none-super.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wvar-lnone-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wvar-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-superclass_trait-wvar-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
+SPLIT-witness-products-local.split-interp	run 130 | 120 | 10 | 10
+SPLIT-witness-products-local.split-js	run 130 | 120 | 10 | 10
+SPLIT-witness-products-member.desc	desc lib.Base.m$default$1 ()I ; lib.Base.m$default$1$ (Llib/Base;)I ; lib.Lib$T.m$default$1 ()I ; lib.Lib$T.m$default$1$ (Llib/Lib$T;)I ; lib.Parent.m$default$1 ()I ; lib.Parent.m$default$1$ (Llib/Par
+WITNESS-bridge-local.jvm	run Bb | Bnull
+WITNESS-bridge-member.jvm	run Bb | Bnull
+WITNESS-callee-local.js	run Dd | Dd | D()
+WITNESS-callee-local.jvm	run Dd | Dd | Db
+WITNESS-callee-member.js	run Dd | Dd | D()
+WITNESS-callee-member.jvm	run Dd | Dd | Db
+WITNESS-chain-local.interp	crash 3
+WITNESS-chain-local.js	crash 1
+WITNESS-chain-local.jvm	crash 1
+WITNESS-chain-member.interp	run 210
+WITNESS-diamond-member.jvm	crash 1
+WITNESS-drop-local.interp	crash 3
+WITNESS-drop-local.js	crash 1
+WITNESS-drop-local.jvm	crash 1
+WITNESS-init-local.check	refused 3:26: Not found: y
+WITNESS-init-local.interp	refused 3:26: Not found: y
+WITNESS-init-local.js	refused 3:26: Not found: y
+WITNESS-init-local.jvm	refused 3:26: Not found: y
+WITNESS-init-member.js	run undefined
+WITNESS-lift-local.interp	run 3101
+WITNESS-lift-local.js	crash 1
+WITNESS-lift-local.jvm	run 3101
+WITNESS-named-local.interp	crash 3
+WITNESS-named-local.js	crash 1
+WITNESS-named-local.jvm	crash 3
+WITNESS-overload-local.check	refused 4:9: None of the overloaded alternatives of method m in trait B with types
+WITNESS-overload-local.interp	refused 4:9: None of the overloaded alternatives of method m in trait B with types
+WITNESS-overload-local.js	refused 4:9: None of the overloaded alternatives of method m in trait B with types
+WITNESS-overload-local.jvm	refused 4:9: None of the overloaded alternatives of method m in trait B with types
+WITNESS-overload-member.check	refused 3:29: None of the overloaded alternatives of method m in trait B with types
+WITNESS-overload-member.interp	refused 3:29: None of the overloaded alternatives of method m in trait B with types
+WITNESS-overload-member.js	refused 3:29: None of the overloaded alternatives of method m in trait B with types
+WITNESS-overload-member.jvm	refused 3:29: None of the overloaded alternatives of method m in trait B with types
+WITNESS-prior-local.interp	crash 3
+WITNESS-prior-local.js	crash 1
+WITNESS-prior-local.jvm	crash 3
+WITNESS-structural-local.check	refused 5:48: missing argument for parameter a
+WITNESS-structural-local.interp	refused 5:48: missing argument for parameter a
+WITNESS-structural-local.js	refused 5:48: missing argument for parameter a
+WITNESS-structural-local.jvm	refused 5:48: missing argument for parameter a
+WITNESS-structural-member.check	refused 4:68: missing argument for parameter a
+WITNESS-structural-member.interp	refused 4:68: missing argument for parameter a
+WITNESS-structural-member.js	refused 4:68: missing argument for parameter a
+WITNESS-structural-member.jvm	refused 4:68: missing argument for parameter a
+WITNESS-traitoverride-local.interp	run 303 | 303
+WITNESS-traitoverride-local.js	run 303 | 303
+WITNESS-traitoverride-local.jvm	run 303 | 303
+WITNESS-unrelated-local.jvm	crash 1
+WITNESS-unrelated-member.jvm	crash 1
+WITNESS-views-local.interp	run 210 | 210 | 210
+WITNESS-views-member.interp	run 210 | 210 | 210

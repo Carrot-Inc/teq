@@ -77,6 +77,8 @@ modules.2/2 642
 modules.2/2@16 310
 right-assoc 89
 right-assoc-readers 1
+# estimated: default-getters on eight CPUs and on sixteen, from its 49 s at --jobs 6 and 27 s at --jobs 16 on the agent host
+default-getters 50
 tasty-exec 74
 # estimated: tasty-exec on sixteen CPUs, from its 57 s on eight by every measured line's ratio 0.89 (17 lines)
 tasty-exec@16 51
@@ -223,6 +225,7 @@ kept-body-cut@16 6
 kept-body-lists 34
 # estimated: kept-body-lists on sixteen CPUs, from its 34 s on eight by its family kept's ratio 0.86 (1 lines)
 kept-body-lists@16 29
+default-getters@16 30
 native-link 74
 # measured: native-link on sixteen CPUs, in the gates of 25 Nov that preceded these rows
 native-link@16 67

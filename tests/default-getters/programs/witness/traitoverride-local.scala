@@ -1,0 +1,1 @@
+object Main { def run(): Unit = { val y = 10; val z = "xyz"; trait A { def m(a: Int = 100 + y): Int = a }; trait B extends A { override def m(a: Int = 300 + z.length): Int = a }; class C extends B; println((new C(): A).m()); println(new C().m()) }; def main(args: Array[String]): Unit = run() }

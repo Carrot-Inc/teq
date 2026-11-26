@@ -238,6 +238,7 @@ machine=(
   "constants ./tests/constants/run.sh"
   "right-assoc ./tests/right-assoc/run.sh"
   "right-assoc-readers python3 tests/right-assoc/readers.py"
+  "default-getters ./tests/default-getters/run.sh"
   "interp ./tests/run_interp.sh"
   "interp-script ./tests/interp-script.sh"
   "fix ./teq interp tests/fix.scala"
