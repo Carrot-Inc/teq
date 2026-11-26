@@ -1401,6 +1401,8 @@ inline_check_transparent_member	pass	-
 inline_class_copy_whole	pass	-	
 inline_collapsed_nullary_plus	pass	-	
 inline_collapsed_plus_over_negation	pass	-	
+inline_condition_branch_returns	pass	-	
+inline_condition_branch_returns_many_expansions	pass	-	
 inline_conditional_condition	pass	-	
 inline_constant_cast_conversion	pass	-	
 inline_constant_cast_effect	pass	-	
@@ -3419,6 +3421,7 @@ val_implements_def_and_val	pass	-
 val_operator_names	pass	-	
 val_overrides_tostring	pass	-	
 val_refinement_subst	pass	-	
+value_class_argument_returns_in_branch	pass	-	
 value_class_array_store	pass	-	
 value_class_can_equal	pass	-	
 value_class_default_getter_owners	pass	-	

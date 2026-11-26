@@ -1391,6 +1391,8 @@ cases/inline_check_transparent_member	pass	-
 cases/inline_class_copy_whole	pass	-	
 cases/inline_collapsed_nullary_plus	pass	-	
 cases/inline_collapsed_plus_over_negation	pass	-	
+cases/inline_condition_branch_returns	pass	-	
+cases/inline_condition_branch_returns_many_expansions	pass	-	
 cases/inline_conditional_condition	pass	-	
 cases/inline_constant_cast_conversion	pass	-	
 cases/inline_constant_cast_effect	pass	-	
@@ -3416,6 +3418,7 @@ cases/val_implements_def_and_val	pass	-
 cases/val_operator_names	pass	-	
 cases/val_overrides_tostring	pass	-	
 cases/val_refinement_subst	pass	-	
+cases/value_class_argument_returns_in_branch	pass	-	
 cases/value_class_array_store	pass	-	
 cases/value_class_can_equal	pass	-	
 cases/value_class_default_getter_owners	pass	-	

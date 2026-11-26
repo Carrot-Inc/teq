@@ -346,6 +346,10 @@ pub enum Kind {
     /// The constructor `ctor` run on the instance being made, over the arguments at its
     /// parameters' types: a superclass's, or another of the class's own, in a constructor.
     InitCall { ctor: Rc<MethodRef>, args: List },
+    /// Written as its operand and nothing else: a walk that asks how control leaves a node
+    /// (whether code goes on after it, whether it leaves the method) asks the operand; a
+    /// comparison with `null` reads the node itself (a null it holds is loaded).
+    ///
     /// The operand's value as the node's, with no operation: an expression that is its operand
     /// seen at the node's type, which the operand's type represents as the node's does (a value
     /// class's instance made of its constructor's argument, held as that underlying value; a

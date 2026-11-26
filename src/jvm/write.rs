@@ -554,6 +554,7 @@ impl<'a> Gen<'a> {
     fn falls_through(&self, id: LirId) -> bool {
         match &self.lir.node(id).kind {
             Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::Break { .. } | Kind::While { cond: None, .. } => false,
+            Kind::Typed(value) => self.falls_through(*value),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| self.falls_through(self.lir.lists[(stmts.start + i) as usize])) && self.falls_through(*result),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.falls_through(*then) || self.falls_through(*otherwise),
             Kind::Switch { cases, default, .. } => cases.iter().any(|c| self.falls_through(c.body)) || self.falls_through(*default),
@@ -673,7 +674,7 @@ impl<'a> Gen<'a> {
     fn branch_leaves(&self, id: LirId) -> bool {
         match &self.lir.node(id).kind {
             Kind::Return(_) | Kind::SelfTailCall { .. } => true,
-            Kind::Block { result, .. } => self.branch_leaves(*result),
+            Kind::Typed(value) | Kind::Block { result: value, .. } => self.branch_leaves(*value),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.branch_leaves(*then) && self.branch_leaves(*otherwise),
             Kind::Switch { cases, default, .. } => cases.iter().all(|c| self.branch_leaves(c.body)) && self.branch_leaves(*default),
             _ => false,
@@ -690,6 +691,7 @@ impl<'a> Gen<'a> {
     fn completes(&self, id: LirId) -> bool {
         match &self.lir.node(id).kind {
             Kind::Return(_) | Kind::SelfTailCall { .. } => false,
+            Kind::Typed(value) => self.completes(*value),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.completes(*then) || self.completes(*otherwise),
             Kind::Switch { cases, default, .. } => cases.iter().any(|c| self.completes(c.body)) || self.completes(*default),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| {
