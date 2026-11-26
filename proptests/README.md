@@ -25,7 +25,10 @@ The properties, each stated in its source's header:
   scalac is asked about in one run (`TEQ_PROP_PROGRAMS`); `scalac_batched_answers_as_alone`,
   ignored by default, checks that the batch answers as the programs alone do and measures both.
 - `tests/order.rs`: the order of the input files and directories does not change what
-  `teq compiler check` and `teq compiler build --split` answer (`src/order.rs`).
+  `teq compiler check` and `teq compiler build --split` answer (`src/order.rs`): the drawn
+  directories against the same files named by name, the two builds made one after the other
+  with every file at the same path; `files_named_answer_as_directories_listed`, ignored by
+  default, checks over the whole corpus that files named and directories listed answer alike.
 - `tests/controls.rs`: the session property over `tests/split/retype` for the controls on
   known defects, run by hand against a chosen binary (`src/fixture.rs`).
 - `tests/footprint.rs`: two trivial properties, for measuring the crate's cost.

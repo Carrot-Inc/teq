@@ -1,6 +1,18 @@
 //! Property three: the order of the inputs does not matter. A program of a corpus is given to
 //! teq as a subset of its files in a drawn order, split over one to three directories, and
-//! what teq answers is held against the answer for the same files in their sorted order:
+//! what teq answers is held against its answer for the same files named one by one in their
+//! sorted order. Sorted is by file name, the order teq itself takes a program's files in
+//! (`program_keys` in src/main.rs: a file's path under the directory it was found in, or its
+//! name where it is named, which is its name either way here, ties by the whole path; the files
+//! of a program have distinct names). The two builds are made one after the other in one
+//! directory, emptied between them, every file at the same absolute path in both, so that a
+//! program that reads its source's path prints alike: the arranged build is given the
+//! directories, in the order of their first file, the sorted build the files. So this property
+//! does not hold a program to the same output wherever its files sit, which a program that
+//! reads its source's path does not give: that is a property of its own. What else tells
+//! the two apart is files named against files a directory's listing gives, which
+//! `files_named_answer_as_directories_listed` (tests/order.rs, run by hand) holds to the same
+//! bytes over the corpus.
 //!
 //! - `teq compiler check` ends alike and reports the same diagnostics, complete with their continuation
 //!   and caret lines, as a set: their order follows the inputs';
@@ -14,6 +26,7 @@
 //! those under `TEQ_PROP_CORPUS`; a program with a `// jars:` or a `// teq:` line is left out.
 
 use crate::session::run;
+use crate::tree::{self, Tree};
 use hegel::generators as gs;
 use hegel::TestCase;
 use std::collections::{BTreeMap, BTreeSet};
@@ -101,6 +114,10 @@ pub struct Answer {
     pub build: BTreeSet<String>,
     pub modules: BTreeSet<String>,
     pub printed: String,
+    /// What check and build printed and what the build wrote, whole: the control compares these,
+    /// the property the forms above.
+    pub said: String,
+    pub written: Tree,
 }
 
 /// The diagnostics of teq's text, each complete (its position line, the continuation lines
@@ -148,12 +165,17 @@ pub fn diagnostics_of(text: &str, src: &Path) -> BTreeSet<String> {
     found
 }
 
-/// teq's answers for the files laid out as `layout` says, under `work`.
-pub fn answer(work: &Path, layout: &[(usize, String, String)], others: &[(String, Vec<u8>)], with_node: bool) -> Result<Answer, String> {
-    let teq = crate::teq();
-    let _ = std::fs::remove_dir_all(work);
+/// Lays the files out under `work` as `layout` says (`(group, name, text)` written to
+/// `src/d<group>/<name>`, the program's other files in every directory), `work` emptied first:
+/// nothing an earlier build left there may serve a later one, so a directory that cannot be
+/// emptied is an error.
+pub fn lay_out(work: &Path, layout: &[(usize, String, String)], others: &[(String, Vec<u8>)]) -> Result<(), String> {
+    if let Err(e) = std::fs::remove_dir_all(work) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            return Err(format!("cannot empty {}: {e}", work.display()));
+        }
+    }
     let src = work.join("src");
-    let mut inputs: Vec<PathBuf> = Vec::new();
     let mut seen = BTreeSet::new();
     for (group, name, text) in layout {
         let dir = src.join(format!("d{group}"));
@@ -163,9 +185,30 @@ pub fn answer(work: &Path, layout: &[(usize, String, String)], others: &[(String
             for (name, bytes) in others {
                 std::fs::write(dir.join(name), bytes).map_err(|e| e.to_string())?;
             }
-            inputs.push(dir);
         }
     }
+    Ok(())
+}
+
+/// The arranged build's inputs, under the build's directory: the directories, in the order of
+/// their first file.
+pub fn directories(layout: &[(usize, String, String)]) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    layout.iter().filter(|(group, _, _)| seen.insert(*group)).map(|(group, _, _)| format!("src/d{group}")).collect()
+}
+
+/// The sorted build's inputs, under the build's directory: every file, by name.
+pub fn files_by_name(layout: &[(usize, String, String)]) -> Vec<String> {
+    let mut files: Vec<(&String, usize)> = layout.iter().map(|(group, name, _)| (name, *group)).collect();
+    files.sort();
+    files.iter().map(|(name, group)| format!("src/d{group}/{name}")).collect()
+}
+
+/// teq's answers for `inputs`, paths under `work`, where `lay_out` put the files.
+pub fn answer(work: &Path, inputs: &[String], with_node: bool) -> Result<Answer, String> {
+    let teq = crate::teq();
+    let src = work.join("src");
+    let inputs: Vec<PathBuf> = inputs.iter().map(|input| work.join(input)).collect();
     let mut check = Command::new(&teq);
     check.args(["compiler", "check"]).args(&inputs).current_dir(work);
     let checked = refused(run(check, b"", Duration::from_secs(60), work)?)?;
@@ -180,6 +223,8 @@ pub fn answer(work: &Path, layout: &[(usize, String, String)], others: &[(String
         build: diagnostics_of(&format!("{}\n{}", built.stdout, built.stderr), &src),
         modules: BTreeSet::new(),
         printed: String::new(),
+        said: [checked.status, checked.stdout, checked.stderr, built.status, built.stdout, built.stderr].join("\n"),
+        written: tree::read(&out),
     };
     if built.success {
         answer.modules = std::fs::read_dir(&out).map_err(|e| e.to_string())?.map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned()).collect();
@@ -229,20 +274,44 @@ pub fn layout_of(program: &Program, arrangement: &Arrangement) -> Vec<(usize, St
     arrangement.order.iter().zip(&arrangement.groups).map(|(file, group)| (*group, program.files[*file].0.clone(), program.files[*file].1.clone())).collect()
 }
 
-pub fn canonical_layout(program: &Program, arrangement: &Arrangement) -> Vec<(usize, String, String)> {
-    let mut taken: Vec<usize> = arrangement.order.clone();
-    taken.sort();
-    taken.iter().map(|file| (0, program.files[*file].0.clone(), program.files[*file].1.clone())).collect()
+/// What differs between two answers taken whole (`Answer::said`, `Answer::written`, what the
+/// program printed).
+pub fn whole_differences(a: &Answer, b: &Answer, a_name: &str, b_name: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    for (what, a_text, b_text) in [("teq printed", &a.said, &b.said), ("the program printed", &a.printed, &b.printed)] {
+        if a_text != b_text {
+            let line = a_text.lines().zip(b_text.lines()).position(|(x, y)| x != y).unwrap_or_else(|| a_text.lines().count().min(b_text.lines().count()));
+            found.push(format!(
+                "{what} differs at line {}:\n    {a_name}: {}\n    {b_name}: {}",
+                line + 1,
+                a_text.lines().nth(line).unwrap_or("<the text ends>"),
+                b_text.lines().nth(line).unwrap_or("<the text ends>")
+            ));
+        }
+    }
+    found.extend(tree::differences(&a.written, &b.written, a_name, b_name));
+    found
 }
 
-pub fn describe(program: &Program, arrangement: &Arrangement) -> String {
+/// The arrangement and both builds' inputs, as given under `work` to `teq compiler check` and
+/// `teq compiler build ... --split out`, so that a failure can be built again by hand.
+pub fn describe(program: &Program, arrangement: &Arrangement, work: &Path) -> String {
     let mut dirs: BTreeMap<usize, Vec<&str>> = BTreeMap::new();
     for (file, group) in arrangement.order.iter().zip(&arrangement.groups) {
         dirs.entry(*group).or_default().push(&program.files[*file].0);
     }
     let dirs: Vec<String> = dirs.iter().map(|(group, names)| format!("d{group}: {}", names.join(" "))).collect();
     let count = program.files.len();
-    format!("{} ({} of its {count} files), given as {}", program.name, arrangement.order.len(), dirs.join("; "))
+    let layout = layout_of(program, arrangement);
+    format!(
+        "{} ({} of its {count} files), given as {}\n  the inputs under {}: arranged {}; sorted {}",
+        program.name,
+        arrangement.order.len(),
+        dirs.join("; "),
+        work.display(),
+        directories(&layout).join(" "),
+        files_by_name(&layout).join(" ")
+    )
 }
 
 #[cfg(test)]
@@ -264,5 +333,29 @@ mod tests {
         .map(String::from)
         .collect();
         assert_eq!(found, expected);
+    }
+
+    fn layout(files: &[(usize, &str)]) -> Vec<(usize, String, String)> {
+        files.iter().map(|(group, name)| (*group, name.to_string(), format!("// {name}\n"))).collect()
+    }
+
+    #[test]
+    fn gives_the_directories_in_their_order_and_the_files_by_name() {
+        let drawn = layout(&[(1, "use.scala"), (0, "macros.scala"), (1, "b.scala")]);
+        assert_eq!(directories(&drawn), ["src/d1", "src/d0"]);
+        assert_eq!(files_by_name(&drawn), ["src/d1/b.scala", "src/d0/macros.scala", "src/d1/use.scala"]);
+    }
+
+    #[test]
+    fn lays_out_in_an_emptied_directory() {
+        let work = crate::work_root().join(format!("order/unit-{}", crate::driver::invocation()));
+        let others = [("data.txt".to_string(), b"data".to_vec())];
+        lay_out(&work, &layout(&[(0, "a.scala"), (2, "b.scala")]), &others).unwrap();
+        std::fs::create_dir_all(work.join("out")).unwrap();
+        std::fs::write(work.join("out/main.mjs"), "left by a build").unwrap();
+        lay_out(&work, &layout(&[(1, "a.scala")]), &others).unwrap();
+        let found: Vec<String> = tree::read(&work).into_keys().collect();
+        std::fs::remove_dir_all(&work).unwrap();
+        assert_eq!(found, ["src/d1/a.scala", "src/d1/data.txt"]);
     }
 }
