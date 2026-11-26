@@ -868,6 +868,12 @@ impl<'a> Gen<'a> {
             }
             Step::Test { kind: TestKind::Type(test), origin, .. } => {
                 let TPat::Test(_, tested, inner) = prog.pats[origin.idx()] else { unreachable!("a type test's pattern") };
+                // A primitive's box (`Integer` for `Int`) is never an instance of the class a test of no box's supertype
+                // names: the value never matches, as `ClassInstance::Never` decides for a class pattern.
+                if !ty.is_ref() && self.never_a_box(test, ty) {
+                    out.push(self.lir.push(Kind::Break { label: fail, value: None }, ErasedType::V));
+                    return None;
+                }
                 // A primitive is boxed for the tests that look at its class.
                 let (temp, ty) = if ty.is_ref() {
                     (temp, ty.clone())
@@ -955,6 +961,31 @@ impl<'a> Gen<'a> {
             ref other => unreachable!("a step its parent's step lowers: {:?}", other),
         }
         Some(next)
+    }
+
+    /// Whether a type test can never pass on the box of a primitive of the type `ty` (`Integer` for `Int`), a class of
+    /// the JDK's whose ancestors are all the JDK's (`java/...`): a test of a class or trait outside `java/` (a Scala
+    /// class's, trait's or value class's); one of a JDK class that is neither the box's class nor among its ancestors,
+    /// where the box's own record holds them (`Number`, `Comparable` and `Serializable` are an `Integer`'s); and
+    /// `String`'s, as no box is a `String`. Where the box's record is none of the program's classes, or was never
+    /// completed, a JDK class's test runs as before, and so does every test of a `Unit`'s box.
+    fn never_a_box(&self, test: TestId, ty: &ErasedType) -> bool {
+        let class = match self.cx.input.prog.tests[test.idx()] {
+            TypeTest::Proven(inner, _) => return self.never_a_box(inner, ty),
+            TypeTest::Str => return true,
+            TypeTest::Class(c) | TypeTest::Trait(c) => c,
+            _ => return false,
+        };
+        if *ty == ErasedType::V {
+            return false;
+        }
+        if !self.cx.class_names[class.idx()].starts_with("java/") {
+            return true;
+        }
+        let Some(boxed) = self.cx.class_named(ty.box_class()) else { return false };
+        // Its ancestors, itself first; a record holding itself alone was never completed, and tells nothing.
+        let bases = &self.cx.input.syms.class(boxed).base_types;
+        bases.len() > 1 && !bases.iter().any(|&(b, _)| b == class)
     }
 
     /// `case v` and `case null` against the value in `temp`: by identity, as numbers, or by runtime equality.
