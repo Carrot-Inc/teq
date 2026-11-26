@@ -16,9 +16,9 @@ scala-java-locales named below and the character tables made from the Unicode Ch
 --hot carries the react-refresh runtime; a native executable whose program links idn2 carries teq's IDNA code
 and its tables made from the Unicode Character Database. Those entries' notices accompany a distribution of a
 program that contains them. The entries for the test programs, the rules of `teq fix`, the Zed extension's
-files, the compiler's hash algorithm, the reader of Scala Native's intermediate representation, the link, the
-lowering, the LLVM IR writer and the build over it, the Rust crates linked into teq's binary and the two
-signature files of OpenJDK compiled into it concern teq itself, not the programs it compiles.
+files, the compiler's hash algorithm, the reader and the writer of Scala Native's intermediate representation,
+the link, the lowering, the LLVM IR writer and the build over it, the Rust crates linked into teq's binary and the
+two signature files of OpenJDK compiled into it concern teq itself, not the programs it compiles.
 
 This product includes test programs adapted from the Scala 3 compiler
 (https://github.com/scala/scala3), Copyright 2012-2026 EPFL and
@@ -302,8 +302,8 @@ not copied. Its license for the code:
 
 This product includes code adapted from Scala Native (https://github.com/scala-native/scala-native,
 tag v0.5.12, commit 65dd513df188300d0180514ad828308facc5ca61), Copyright (c) 2013-2018 EPFL, licensed
-under the Apache License, Version 2.0: the model, the reader, the printer and the names of its intermediate
-representation under src/native/nir (from nir/src/main/scala/scala/scalanative/nir), its linker in
+under the Apache License, Version 2.0: the model, the reader, the writer, the printer and the names of its
+intermediate representation under src/native/nir (from nir/src/main/scala/scala/scalanative/nir), its linker in
 src/native/reach.rs and src/native/classpath.rs (from tools/src/main/scala/scala/scalanative/linker), the
 lowering and the LLVM IR writer of its code generator in src/native/meta.rs, src/native/generate.rs,
 src/native/lower.rs and src/native/codegen.rs (from tools/src/main/scala/scala/scalanative/codegen and

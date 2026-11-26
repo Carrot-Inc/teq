@@ -39,8 +39,8 @@ src/jvm/           typed IR → class files and jars: classfile.rs (stack map fr
 src/interp/        the interpreter over the typed IR: `teq interp` and macro expansion
 src/tasty/         the TASTy reader and printer (`teq tasty`); write/ the TASTy writer
 src/scala2/        Scala 2 pickles rewritten as TASTy; src/classfile/ Java class files
-src/native/        the native target; nir/ Scala Native's intermediate representation, its reader and its
-                   printer (`teq nir`); classpath.rs and reach.rs the link, what a program reaches of a
+src/native/        the native target; nir/ Scala Native's intermediate representation, its reader, its
+                   writer and its printer (`teq nir`); classpath.rs and reach.rs the link, what a program reaches of a
                    class path's NIR (`teq nir --link`), scala.rs the Scala collections whose order it
                    keeps; meta.rs, generate.rs and lower.rs its lowering to the runtime's object model
                    (`teq nir --lower`), codegen.rs the LLVM IR of it (`--ll`); build.rs and tools.rs the

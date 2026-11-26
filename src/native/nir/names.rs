@@ -540,7 +540,7 @@ impl Rt {
                 cx.ty(Type::StructValue(tys.into_boxed_slice()))
             }
             Val::ArrayValue(of, vals) => cx.ty(Type::ArrayValue(*of, vals.len() as i32)),
-            Val::ByteString(bytes) => cx.ty(Type::ArrayValue(self.byte, bytes.len() as i32 + 1)),
+            Val::ByteString(bytes, _) => cx.ty(Type::ArrayValue(self.byte, bytes.len() as i32 + 1)),
             Val::Unit => self.unit,
             Val::Const(_) => self.ptr,
             Val::String(_) => cx.ty(Type::Ref { name: self.string, exact: true, nullable: false }),

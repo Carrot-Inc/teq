@@ -1,10 +1,13 @@
 //> using file ../tools/script
-// Tests of the NIR reader: `teq nir` over the fixtures under tests/nir/fixtures (written by Scala
+// Tests of the NIR reader and writer: `teq nir` over the fixtures under tests/nir/fixtures (written by Scala
 // Native's compiler plugin from tests/nir/src; see tests/nir/README) has to print, byte for byte,
 // what Scala Native's own reader and printer printed for them, tests/nir/expected.txt; damaged
 // files have to be refused with a message, never a crash, and so has a file that nests deeper than
 // the reader follows; and for each jar of tests/nir/digests.txt
-// the listing has to have the SHA-256 of Scala Native's own. A jar that is not in the coursier
+// the listing has to have the SHA-256 of Scala Native's own. The writer has to write every fixture and
+// every file of those jars again, from what the reader decoded, as the bytes the plugin wrote
+// (`teq nir --rewrite`), a file it writes otherwise has to be named, and the damaged files must not crash it.
+// A jar that is not in the coursier
 // cache (tests/support/jars.sh names them for the fetch) is skipped on a line that says so, and
 // passes nothing. Run from the repository's root:
 // `./teq interp tests/nir.scala [-- --teq <binary>]`, the compiler `--teq`, else $TEQ, else
@@ -83,6 +86,15 @@ import java.nio.file.{Files, Path, Paths}
   else
     fail += 1
     println(s"FAIL damaged input: $refused of ${damaged.length} refused")
+  // The writer over what the reader makes of the damaged files: each written as it is, written otherwise or
+  // refused, all of them counted, never a crash.
+  val damagedAgain = Sh(teq, "nir", "--rewrite", bad.toString).timeout(60).check(false).run()
+  if damagedAgain.status <= 1 && !damagedAgain.err.contains("panicked") && damagedAgain.lines.headOption.exists(_.startsWith(s"${damaged.length} files, ")) then
+    pass += 1
+  else
+    fail += 1
+    println(s"FAIL damaged input rewritten: exit code ${damagedAgain.status}, ${damagedAgain.lines.headOption.getOrElse("")}")
+    damagedAgain.err.linesIterator.take(3).foreach(println)
   val short = Sh(teq, "nir", bad.resolve("trunc44.nir").toString).mergeErr.timeout(30).check(false).run()
   if short.status == 1 && short.out.contains("no NIR file: shorter than a prelude") then pass += 1
   else
@@ -94,7 +106,26 @@ import java.nio.file.{Files, Path, Paths}
     fail += 1
     println(s"FAIL a file nested deeper than the reader follows: exit code ${deep.status}, ${deep.out.take(120)}")
 
-  // Whole jars against the digests of Scala Native's own listings.
+  // The writer: each fixture written again from what was read, byte for byte.
+  val rewritten = Sh(teq, "nir", "--rewrite", "tests/nir/fixtures").mergeErr.timeout(60).check(false).run()
+  if rewritten.ok && rewritten.out.trim == "22 files, 214 definitions, 22 rewritten byte for byte, 0 differ" then pass += 1
+  else
+    fail += 1
+    println(s"FAIL fixtures rewritten: ${rewritten.out.linesIterator.take(5).mkString("\n")}")
+  // A file that is not what the writer writes is named with the first byte that differs: the prelude's last
+  // byte says that a file holds an entry point, and Shape.nir holds none.
+  val flagged = Files.readAllBytes(Paths.get("tests/nir/fixtures/fix/Shape.nir"))
+  flagged(44) = 1
+  val flaggedFile = bad.resolve("flagged.nir")
+  Files.write(flaggedFile, flagged)
+  val named = Sh(teq, "nir", "--rewrite", flaggedFile.toString).mergeErr.timeout(30).check(false).run()
+  val naming = List("1 files, 4 definitions, 0 rewritten byte for byte, 1 differ", s"differs: $flaggedFile: first difference at byte 44 of 247/247")
+  if named.status == 1 && named.out.linesIterator.toList == naming then pass += 1
+  else
+    fail += 1
+    println(s"FAIL a file the writer writes otherwise: exit code ${named.status}, ${named.out.take(300)}")
+
+  // Whole jars against the digests of Scala Native's own listings, and written again byte for byte.
   val caches = Option(System.getenv("COURSIER_CACHE")).filter(_.nonEmpty).toList ++
     List("/Library/Caches/Coursier/v1", "/.cache/coursier/v1").map(System.getProperty("user.home") + _)
   for line <- Files.readString(Paths.get("tests/nir/digests.txt")).linesIterator if line.nonEmpty && !line.startsWith("#") do
@@ -109,6 +140,11 @@ import java.nio.file.{Files, Path, Paths}
         else
           fail += 1
           println(s"FAIL $name: $said")
+        val again = Sh(teq, "nir", "--rewrite", jar.toString).mergeErr.timeout(120).check(false).run()
+        if again.ok && again.out.trim == s"$files files, $definitions definitions, $files rewritten byte for byte, 0 differ" then pass += 1
+        else
+          fail += 1
+          println(s"FAIL $name rewritten: ${again.out.linesIterator.take(5).mkString("\n")}")
 
   println(s"nir: $pass passed, $fail failed")
   Script.exit(if fail == 0 then 0 else 1)

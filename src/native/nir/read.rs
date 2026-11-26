@@ -47,6 +47,8 @@ pub fn entry_points_flag(start: &[u8]) -> Option<bool> {
 /// which a reference to it met deeper adds to the depth it is met at.
 pub struct NirFile<'a> {
     buf: &'a [u8],
+    /// The revision of the format the file was written in, which an earlier Scala Native's is.
+    pub revision: u32,
     sections: Sections,
     strings: FxMap<u32, Str>,
     globals: FxMap<u32, Global>,
@@ -80,6 +82,7 @@ impl<'a> NirFile<'a> {
         };
         Ok(NirFile {
             buf,
+            revision,
             sections,
             strings: FxMap::default(),
             globals: FxMap::default(),
@@ -89,20 +92,29 @@ impl<'a> NirFile<'a> {
         })
     }
 
-    /// Every definition's name with its offset in the definitions' section, in the file's order.
-    /// The plugin writes some names twice (a bridge beside the method it stands for): the table's
-    /// last entry of a name is the definition, as in the map Scala Native reads the table into.
-    pub fn offsets(&mut self, cx: &mut Cx) -> Res<Vec<(Global, u32)>> {
+    /// The table as the file has it: the name and the offset in the definitions' section of every
+    /// definition written, in the order they were written in.
+    pub fn table(&mut self, cx: &mut Cx) -> Res<Vec<(Global, u32)>> {
         let pos = self.sections.offsets as usize;
         let mut r = Reader::new(self, cx, pos);
         let mut entries: Vec<(Global, u32)> = Vec::new();
-        let mut index: FxMap<Global, usize> = FxMap::default();
         loop {
             let global = r.global()?;
             let offset = r.signed_int()? as u32;
             if global == Global::NONE {
                 return Ok(entries);
             }
+            entries.push((global, offset));
+        }
+    }
+
+    /// Every definition's name with its offset in the definitions' section, in the file's order.
+    /// The plugin writes some names twice (a bridge beside the method it stands for): the table's
+    /// last entry of a name is the definition, as in the map Scala Native reads the table into.
+    pub fn offsets(&mut self, cx: &mut Cx) -> Res<Vec<(Global, u32)>> {
+        let mut entries: Vec<(Global, u32)> = Vec::new();
+        let mut index: FxMap<Global, usize> = FxMap::default();
+        for (global, offset) in self.table(cx)? {
             match index.get(&global) {
                 Some(&at) => entries[at].1 = offset,
                 None => {
@@ -111,6 +123,7 @@ impl<'a> NirFile<'a> {
                 }
             }
         }
+        Ok(entries)
     }
 
     pub fn defn(&mut self, cx: &mut Cx, offset: u32) -> Res<Defn> {
@@ -130,6 +143,17 @@ impl<'a> NirFile<'a> {
 
     pub fn defns(&mut self, cx: &mut Cx) -> Res<Vec<Defn>> {
         let offsets = self.offsets(cx)?;
+        self.defns_at(cx, offsets)
+    }
+
+    /// Every definition written, in the file's order: a name's every definition, where `defns`
+    /// has its last.
+    pub fn written_defns(&mut self, cx: &mut Cx) -> Res<Vec<Defn>> {
+        let table = self.table(cx)?;
+        self.defns_at(cx, table)
+    }
+
+    fn defns_at(&mut self, cx: &mut Cx, offsets: Vec<(Global, u32)>) -> Res<Vec<Defn>> {
         let mut defns = Vec::with_capacity(offsets.len());
         for (name, offset) in offsets {
             let defn = self.defn(cx, offset).map_err(|e| {
@@ -450,7 +474,8 @@ impl<'r, 'a, 'c> Reader<'r, 'a, 'c> {
     }
 
     fn val(&mut self) -> Res<Val> {
-        let target = self.file.sections.vals as usize + self.unsigned_int()? as usize;
+        let place = self.unsigned_int()?;
+        let target = self.file.sections.vals as usize + place as usize;
         if let Some((v, levels)) = self.file.vals.get(&target) {
             let (v, levels) = (v.clone(), *levels);
             self.shared(levels)?;
@@ -477,7 +502,7 @@ impl<'r, 'a, 'c> Reader<'r, 'a, 'c> {
                 13 => Val::ArrayValue(r.ty()?, r.vals()?.into()),
                 14 => {
                     let n = r.count()?;
-                    Val::ByteString(r.take(n)?.into())
+                    Val::ByteString(r.take(n)?.into(), place)
                 }
                 15 => Val::Local(r.local()?, r.ty()?),
                 16 => Val::Global(r.global()?, r.ty()?),
@@ -669,12 +694,8 @@ impl<'r, 'a, 'c> Reader<'r, 'a, 'c> {
         for _ in 0..n {
             local_names.push((self.local()?, self.string()?));
         }
-        // A local named twice keeps its last name, as the map this is read into does.
-        local_names.reverse();
-        local_names.sort_by_key(|&(l, _)| l);
-        local_names.dedup_by_key(|&mut (l, _)| l);
         let scopes = self.seq(|r| Ok(LexicalScope { id: r.unsigned_int()?, parent: r.unsigned_int()?, pos: r.position()? }))?;
-        Ok(DebugInfo { local_names, scopes: scopes.into_vec() })
+        Ok(DebugInfo::new(local_names, scopes.into_vec()))
     }
 
     fn defn(&mut self) -> Res<Defn> {

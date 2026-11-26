@@ -10,7 +10,7 @@ pub struct Show<'c> {
     indent: usize,
 }
 
-const NO_DEBUG: &DebugInfo = &DebugInfo { local_names: Vec::new(), scopes: Vec::new() };
+const NO_DEBUG: &DebugInfo = &DebugInfo::NONE;
 
 impl<'c> Show<'c> {
     pub fn new(cx: &'c Cx) -> Show<'c> {
@@ -203,7 +203,7 @@ impl<'c> Show<'c> {
                 self.sep(values, ", ", |s, v| s.val(v, debug));
                 self.str("}");
             }
-            Val::ByteString(bytes) => {
+            Val::ByteString(bytes, _) => {
                 let mut latin1 = Vec::with_capacity(bytes.len());
                 for &b in bytes.iter() {
                     if b < 0x80 {

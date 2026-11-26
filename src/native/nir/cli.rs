@@ -3,12 +3,13 @@
 //! `--link` prints in the same text what a program reaches on a class path, which is what the
 //! link is checked with, and `--lower` the same lowered to the runtime's object model, which is
 //! what the lowering is checked with; `--ll` writes the lowered program as LLVM IR instead, and
-//! `--build` the executable built from it.
+//! `--build` the executable built from it; `--rewrite` is what the writer is checked with, each
+//! file written again from what was read.
 
 use super::names::Rt;
 use super::read::NirFile;
 use super::show::Show;
-use super::{Cx, Str};
+use super::{write, Cx, Global, Str};
 use crate::native::classpath::{self, ClassPath};
 use crate::native::reach::{self, Config, Triple};
 use crate::native::{build, codegen, generate, lower, meta, tools};
@@ -20,6 +21,7 @@ fn usage() -> ! {
     eprintln!(
         "usage: teq nir <jar|dir|.nir> [filter]            print every definition as Scala Native prints it\n\
          \x20      teq nir --verify <jar|dir|.nir> [filter]   decode them, and print their count and the listing's SHA-256\n\
+         \x20      teq nir --rewrite <jar|dir|.nir> [filter]  decode them, write each file again, and print how many came out byte for byte\n\
          \x20      teq nir --link <main class> <class path>   print the definitions the program reaches, as Scala Native links them\n\
          \x20      teq nir --lower <main class> <class path>  print them lowered to the runtime's object model, as Scala Native lowers them\n\
          a filter is a substring of the entry's name (java/lang/String.nir)\n\
@@ -188,22 +190,73 @@ fn link(args: &[String], lowers: bool) -> ! {
     std::process::exit(0);
 }
 
+/// One file read whole, every definition its table names, and written again: the number of its
+/// definitions as the listing counts them, and how the bytes written differ from the file's.
+fn rewrite(item: &Item, cx: &mut Cx) -> (usize, Result<(), String>) {
+    let bytes = match (item.read)() {
+        Ok(bytes) => bytes,
+        Err(e) => return (0, Err(format!("not read: {}", e))),
+    };
+    let read = NirFile::open(&bytes).and_then(|mut f| Ok((f.written_defns(cx)?, f.revision)));
+    let (defns, revision) = match read {
+        Ok(read) => read,
+        Err(e) => return (0, Err(format!("not read: {}", e))),
+    };
+    let mut names: Vec<Global> = defns.iter().map(|d| d.name).collect();
+    names.sort_unstable();
+    names.dedup();
+    let compared = match write::file(cx, &defns, revision) {
+        Err(e) => Err(format!("not written: {}", e)),
+        Ok(written) if written == bytes => Ok(()),
+        Ok(written) => {
+            let shorter = written.len().min(bytes.len());
+            let first = written.iter().zip(&bytes).position(|(a, b)| a != b).unwrap_or(shorter);
+            Err(format!("first difference at byte {} of {}/{}", first, written.len(), bytes.len()))
+        }
+    };
+    (names.len(), compared)
+}
+
+fn rewrite_all(items: &[Item]) -> ! {
+    let mut cx = Cx::new();
+    let mut definitions = 0usize;
+    let mut differing = Vec::new();
+    for item in items {
+        let (count, compared) = rewrite(item, &mut cx);
+        definitions += count;
+        if let Err(how) = compared {
+            differing.push(format!("differs: {}: {}", item.name, how));
+        }
+    }
+    let same = items.len() - differing.len();
+    let mut out = std::io::stdout().lock();
+    let _ = writeln!(out, "{} files, {} definitions, {} rewritten byte for byte, {} differ", items.len(), definitions, same, differing.len());
+    for line in &differing {
+        let _ = writeln!(out, "{}", line);
+    }
+    std::process::exit(if differing.is_empty() { 0 } else { 1 });
+}
+
 pub fn run(args: &[String]) -> ! {
     match args.first().map(String::as_str) {
         Some("--link") => link(&args[1..], false),
         Some("--lower") => link(&args[1..], true),
         _ => {}
     }
-    let (verify, rest) = match args.first().map(String::as_str) {
-        Some("--verify") => (true, &args[1..]),
-        _ => (false, args),
+    let (mode, rest) = match args.first().map(String::as_str) {
+        Some(mode @ ("--verify" | "--rewrite")) => (mode, &args[1..]),
+        _ => ("", args),
     };
+    let verify = mode == "--verify";
     let (input, filter) = match rest {
         [input] if !input.starts_with("--") => (input, None),
         [input, filter] if !input.starts_with("--") => (input, Some(filter.as_str())),
         _ => usage(),
     };
     let items = items(input, filter).unwrap_or_else(|e| fail(e));
+    if mode == "--rewrite" {
+        rewrite_all(&items);
+    }
     let mut cx = Cx::new();
     let stdout = std::io::stdout();
     let mut out = std::io::BufWriter::with_capacity(1 << 16, stdout.lock());

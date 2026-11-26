@@ -7,6 +7,7 @@ pub mod cli;
 pub mod names;
 pub mod read;
 pub mod show;
+pub mod write;
 
 use crate::intern::FxMap;
 use std::sync::Arc;
@@ -86,8 +87,11 @@ pub enum Val {
     Double(u64),
     StructValue(Arc<[Val]>),
     ArrayValue(Ty, Arc<[Val]>),
-    /// A C string's bytes, without the terminating zero it is emitted with.
-    ByteString(Arc<[u8]>),
+    /// A C string's bytes, without the terminating zero it is emitted with, and which of its
+    /// file's literals it is: Scala Native tells two byte strings apart by the arrays that hold
+    /// them, never by their bytes, so a file has an entry for each literal of the source and the
+    /// reader numbers a literal by its entry's place.
+    ByteString(Arc<[u8]>, u32),
     Local(Local, Ty),
     Global(Global, Ty),
     Unit,
@@ -214,7 +218,7 @@ pub enum Next {
 }
 
 /// A position in a source file, zero-based; the file is the empty string where there is none.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Pos {
     pub file: Str,
     pub line: u32,
@@ -302,14 +306,37 @@ pub struct LexicalScope {
 
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct DebugInfo {
-    /// The source names of the locals that have one, by local.
-    pub local_names: Vec<(Local, Str)>,
+    local_names: Vec<(Local, Str)>,
+    /// The names by local, where `local_names` are not in their locals' order.
+    by_local: Vec<(Local, Str)>,
     pub scopes: Vec<LexicalScope>,
 }
 
 impl DebugInfo {
+    pub const NONE: DebugInfo = DebugInfo { local_names: Vec::new(), by_local: Vec::new(), scopes: Vec::new() };
+
+    /// `local_names` are the source names of the locals that have one, in the order a file has
+    /// them, which is the order Scala Native's writer met them in the map its plugin made: a
+    /// file's bytes keep it, and a reader makes a map of them again, so any order reads the same.
+    pub fn new(local_names: Vec<(Local, Str)>, scopes: Vec<LexicalScope>) -> DebugInfo {
+        let mut by_local = Vec::new();
+        if !local_names.is_sorted_by(|a, b| a.0 < b.0) {
+            // A local named twice keeps its last name, as the map this is read into does.
+            by_local = local_names.clone();
+            by_local.reverse();
+            by_local.sort_by_key(|&(l, _)| l);
+            by_local.dedup_by_key(|&mut (l, _)| l);
+        }
+        DebugInfo { local_names, by_local, scopes }
+    }
+
+    pub fn local_names(&self) -> &[(Local, Str)] {
+        &self.local_names
+    }
+
     pub fn local_name(&self, local: Local) -> Option<Str> {
-        self.local_names.binary_search_by_key(&local, |&(l, _)| l).ok().map(|i| self.local_names[i].1)
+        let names = if self.by_local.is_empty() { &self.local_names } else { &self.by_local };
+        names.binary_search_by_key(&local, |&(l, _)| l).ok().map(|i| names[i].1)
     }
 }
 

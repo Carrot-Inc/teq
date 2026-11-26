@@ -108,7 +108,7 @@ impl PartialEq for Constant {
     fn eq(&self, other: &Self) -> bool {
         fn same(a: &Val, b: &Val) -> bool {
             match (a, b) {
-                (Val::ByteString(x), Val::ByteString(y)) => Arc::ptr_eq(x, y),
+                (Val::ByteString(x, _), Val::ByteString(y, _)) => Arc::ptr_eq(x, y),
                 (Val::StructValue(xs), Val::StructValue(ys)) => xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(x, y)| same(x, y)),
                 (Val::ArrayValue(t, xs), Val::ArrayValue(u, ys)) => t == u && xs.len() == ys.len() && xs.iter().zip(ys.iter()).all(|(x, y)| same(x, y)),
                 (Val::Const(x), Val::Const(y)) => same(x, y),
@@ -126,7 +126,7 @@ impl Hash for Constant {
         fn hash<H: Hasher>(v: &Val, state: &mut H) {
             std::mem::discriminant(v).hash(state);
             match v {
-                Val::ByteString(bytes) => Arc::as_ptr(bytes).cast::<u8>().hash(state),
+                Val::ByteString(bytes, _) => Arc::as_ptr(bytes).cast::<u8>().hash(state),
                 Val::StructValue(vs) | Val::ArrayValue(_, vs) => vs.iter().for_each(|v| hash(v, state)),
                 Val::Const(inner) => hash(inner, state),
                 _ => v.hash(state),
@@ -453,7 +453,7 @@ impl<'a> Codegen<'a> {
                 self.ty(*of);
                 self.str("]");
             }
-            Val::ByteString(bytes) => {
+            Val::ByteString(bytes, _) => {
                 self.str("[");
                 self.num(bytes.len() + 1);
                 self.str(" x i8]");
@@ -547,7 +547,7 @@ impl<'a> Codegen<'a> {
                 }
                 self.str(" ]");
             }
-            Val::ByteString(bytes) => {
+            Val::ByteString(bytes, _) => {
                 self.str("c\"");
                 for &b in bytes.iter() {
                     match b {
