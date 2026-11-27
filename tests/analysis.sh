@@ -9,10 +9,11 @@
 # and the relations zinc stored. tests/analysis/compare.py then compares the two per project: each
 # class by its name and kind, definition by definition, and zinc's hashes of it (`apiHash`,
 # `extraHash`, the name hashes); the dependencies per referring class and part, exactly, and the
-# stored relations beside them. A difference that tests/analysis/expected.txt does not name
-# fails, as does a line there that names nothing that differs; the exact-match cases listed there
-# under `exact` may name none. Then tests/analysis/relations.txt: the hash of a name that must
-# change, or stay, from one project to another, on both sides. Before sbt starts,
+# stored relations beside them. Documented mappings are in tests/analysis/expected.txt and
+# outstanding differences in tests/analysis/pending.txt. An unlisted or stale difference fails.
+# Cases marked `exact` allow only pending records. A teq build without a dump requires
+# `<project> (no-analysis) - pending`. Then tests/analysis/relations.txt: the hash of a name
+# that must change, or stay, from one project to another, on both sides. Before sbt starts,
 # tests/analysis/compare_test.py checks that compare.py fails recorded dumps with any part of one
 # side taken away, changed, added or moved.
 #
@@ -21,22 +22,46 @@
 # of tests/analysis/cases. The oracle has to be there: without sbt, or when a scalac compile
 # fails, the suite fails.
 #
-#   tests/analysis.sh [case...]      TEQ names the binary (target/release/teq by default)
+#   tests/analysis.sh [--update [--add-new]] [case...]      TEQ names the binary (target/release/teq by default)
+#   --update removes stale pending records for the cases run; --add-new also records new ones.
 #
-# sbt runs on a remote machine (it takes minutes: sbt's start, 96 scalac compiles); the results
-# go to target/analysis-results/ (the dumps and the comparison), the exit code says whether
-# every project passed.
+# The dumps and comparisons go to target/analysis-results/. The exit code says whether every
+# project passed.
 cd "$(dirname "$0")/.."
 root=$PWD
 teq=${TEQ:-./target/release/teq}
 case $teq in /*) ;; *) teq=$root/$teq ;; esac
+pending=tests/analysis/pending.txt
+update=0
+add_new=0
+selected=()
+for arg in "$@"; do
+  case $arg in
+    --update) update=1 ;;
+    --add-new) add_new=1 ;;
+    --*) echo "unknown option: $arg" >&2; exit 2 ;;
+    *) selected+=("$arg") ;;
+  esac
+done
+if (( add_new && !update )); then
+  echo "--add-new requires --update" >&2
+  exit 2
+fi
 if ! command -v sbt > /dev/null 2>&1; then
   echo "FAIL sbt is not on the PATH: the oracle is unavailable"
   exit 1
 fi
 out=$root/target/analysis-results
-rm -rf "$out"
-mkdir -p "$out"
+rm -rf "${root:?}/target/analysis-results" || exit 1
+mkdir -p "$out" || exit 1
+export LC_ALL=C
+set -o pipefail
+old=$out/previous.pending
+if [[ -f $pending || $update = 0 ]]; then
+  awk 'NF && $1 !~ /^#/' "$pending" | sort -u > "$old" || exit 1
+else
+  : > "$old"
+fi
 
 pass=0
 fail=0
@@ -46,13 +71,14 @@ else
   fail=$((fail + 1))
   echo "FAIL compare_test"
   head -20 "$out/compare_test.txt"
+  (( update )) && exit 1
 fi
 tail -1 "$out/compare_test.txt"
 
 cases=()
-if [ $# -gt 0 ]; then
-  for c in "$@"; do
-    if [ -d tests/modules/$c ]; then cases+=("$root/tests/modules/$c"); else cases+=("$root/tests/analysis/cases/$c"); fi
+if (( ${#selected[@]} )); then
+  for c in "${selected[@]}"; do
+    if [ -d "tests/modules/$c" ]; then cases+=("$root/tests/modules/$c"); else cases+=("$root/tests/analysis/cases/$c"); fi
   done
 else
   for d in tests/modules/*/; do
@@ -89,35 +115,85 @@ for p in "${projects[@]}"; do
 done
 list=$(IFS=,; echo "${cases[*]}")
 (
-  cd integrations/sbt/analysis
+  cd integrations/sbt/analysis || exit 1
   rm -rf target/teq-products target/scalac-products target/out/jvm/scala-3.8.4/*/analysis
   ANALYSIS_CASES=$list TEQ=$teq sbt --server --batch "${commands#; }"
 ) > "$out/sbt.log" 2>&1
 sbt_status=$?
 
+if (( sbt_status )); then
+  tail -20 "$out/sbt.log"
+  echo "FAIL sbt exited $sbt_status; $out/sbt.log"
+  exit 1
+fi
+
+printf '%s\n' "${projects[@]}" > "$out/projects"
+awk 'NR == FNR {project[$1]; next} !($1 in project)' "$out/projects" "$old" > "$out/unselected.pending"
+next=$out/next.pending
+: > "$next"
+if (( ${#selected[@]} )); then
+  cat "$out/unselected.pending" >> "$next"
+elif (( !update )) && [[ -s $out/unselected.pending ]]; then
+  sed 's/^/stale   /' "$out/unselected.pending"
+  fail=$((fail + 1))
+fi
+
 for p in "${projects[@]}"; do
   dir=integrations/sbt/analysis/target/out/jvm/scala-3.8.4/$p/analysis
-  if [ ! -f "$dir/scalac.json" ] || [ ! -f "$dir/teq.json" ]; then
-    why="sbt exited $sbt_status; $out/sbt.log"
-    [ -f "$dir/scalac-error.txt" ] && why="scalac: $(head -c 300 "$dir/scalac-error.txt")"
-    [ -f "$dir/teq-error.txt" ] && why="teq: $(head -c 300 "$dir/teq-error.txt")"
-    echo "FAIL $p: no analysis ($why)"
-    fail=$((fail + 1))
-    continue
-  fi
-  cp "$dir/scalac.json" "$out/$p.scalac.json"
-  cp "$dir/teq.json" "$out/$p.teq.json"
-  [ -f "$dir/teq-costs.json" ] && cp "$dir/teq-costs.json" "$out/$p.costs.json"
-  if python3 tests/analysis/compare.py "$dir/scalac.json" "$dir/teq.json" --expect tests/analysis/expected.txt --case "$p" > "$out/$p.txt" 2>&1; then
-    pass=$((pass + 1))
+  before=$out/$p.previous
+  actual=$out/$p.pending
+  awk -v p="$p" '$1 == p' "$old" > "$before"
+  missing="$p (no-analysis) - pending"
+  status=0
+  if [[ ! -f $dir/scalac.json || ! -f $dir/teq.json ]]; then
+    if [[ ! -f $dir/scalac.json || ! -f $dir/teq-error.txt ]]; then
+      echo "FAIL $p: missing oracle output; $out/sbt.log"
+      exit 1
+    fi
+    echo "$missing" > "$actual"
+    if (( !update )); then
+      if ! grep -Fxq "$missing" "$before"; then
+        echo "FAIL $p: no analysis (teq: $(head -c 300 "$dir/teq-error.txt"))"
+        status=1
+      fi
+      if grep -Fvx "$missing" "$before" > "$out/$p.stale"; then
+        sed 's/^/stale   /' "$out/$p.stale"
+        status=1
+      fi
+    fi
   else
-    fail=$((fail + 1))
-    echo "FAIL $p"
-    grep -v "^exact\|^mapped\|^shape" "$out/$p.txt" | head -20
+    cp "$dir/scalac.json" "$out/$p.scalac.json" || exit 1
+    cp "$dir/teq.json" "$out/$p.teq.json" || exit 1
+    [ -f "$dir/teq-costs.json" ] && cp "$dir/teq-costs.json" "$out/$p.costs.json"
+    compare=(python3 tests/analysis/compare.py "$dir/scalac.json" "$dir/teq.json" --expect tests/analysis/expected.txt --case "$p")
+    if (( update )); then
+      "${compare[@]}" --emit-pending > "$actual" 2> "$out/$p.txt" || status=$?
+    else
+      "${compare[@]}" --pending "$before" > "$out/$p.txt" 2>&1 || status=$?
+    fi
+    if (( status )); then
+      echo "FAIL $p"
+      grep -v "^exact\|^mapped\|^shape" "$out/$p.txt" | head -20
+      (( update )) && exit 1
+    fi
+    tail -1 "$out/$p.txt"
   fi
-  tail -1 "$out/$p.txt"
+  if (( update )); then
+    if (( add_new )); then
+      cat "$actual" >> "$next"
+    else
+      comm -12 "$before" "$actual" >> "$next" || exit 1
+      comm -13 "$before" "$actual" > "$out/$p.new" || exit 1
+      if [[ -s $out/$p.new ]]; then
+        echo "FAIL $p: --add-new required for"
+        cat "$out/$p.new"
+        status=1
+      fi
+    fi
+  fi
+  if (( status )); then fail=$((fail + 1)); else pass=$((pass + 1)); fi
 done
-if [ $# -eq 0 ]; then
+if (( ! ${#selected[@]} )); then
   if python3 tests/analysis/relations.py tests/analysis/relations.txt "$out" > "$out/relations.txt" 2>&1; then
     pass=$((pass + 1))
   else
@@ -127,4 +203,16 @@ if [ $# -eq 0 ]; then
   tail -1 "$out/relations.txt"
 fi
 echo "analysis: $pass passed, $fail failed (${#projects[@]} projects, compare_test and the relations)"
+if (( update )); then
+  sort -u -o "$next" "$next" || exit 1
+  removed=$(comm -23 "$old" "$next" | wc -l) || exit 1
+  added=$(comm -13 "$old" "$next" | wc -l) || exit 1
+  {
+    echo "# Generated by tests/analysis.sh --update. These lines are what teq's analysis DIFFERS FROM SCALAC"
+    echo "# in and is NOT YET MENDED. None is a mapping. A line leaves only by tests/analysis.sh --update"
+    echo "# once its difference is gone."
+    cat "$next"
+  } > "$out/generated.pending" && mv "$out/generated.pending" "$pending" || exit 1
+  echo "analysis --update: records removed $removed, records added $added"
+fi
 [ $fail = 0 ]

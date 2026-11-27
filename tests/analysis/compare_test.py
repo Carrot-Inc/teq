@@ -21,6 +21,8 @@ scenarios (`invalidation_tests`).
 import copy
 import json
 import os
+from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -339,6 +341,112 @@ def invalidation_tests():
     return passed, failed
 
 
+def pending_tests(scalac, teq):
+    """Run analysis.sh on the recorded basic dumps supplied by a stand-in for sbt."""
+    passed = failed = 0
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        analysis = root / "tests/analysis"
+        case = analysis / "cases/basic_a"
+        case.mkdir(parents=True)
+        (root / "integrations/sbt/analysis").mkdir(parents=True)
+        suite = root / "tests/analysis.sh"
+        shutil.copy(Path(here).parent / "analysis.sh", suite)
+        shutil.copy(Path(here) / "compare.py", analysis)
+        (analysis / "compare_test.py").touch()
+        expected = analysis / "expected.txt"
+        expected.write_text("exact basic_a\n")
+        sbt = root / "sbt"
+        sbt.write_text('#!/bin/sh\ndir=target/out/jvm/scala-3.8.4/basic_a/analysis\n'
+                       'mkdir -p "$dir" && cp "$ANALYSIS_CASES"/* "$dir/"\n')
+        sbt.chmod(0o755)
+        env = dict(os.environ, PATH=d + os.pathsep + os.environ["PATH"])
+        (case / "scalac.json").write_text(json.dumps(scalac))
+
+        def check(what, options, want, message, records):
+            nonlocal passed, failed
+            r = subprocess.run(["bash", suite, *options, "basic_a"], env=env, capture_output=True, text=True, timeout=60)
+            actual = {line for line in pending.read_text().splitlines() if line and not line.startswith("#")}
+            if r.returncode == want and message in r.stdout and actual == records:
+                passed += 1
+            else:
+                failed += 1
+                print("FAIL    %s: analysis.sh exited %d\n%s%s\npending: %s" % (what, r.returncode, r.stdout, r.stderr, sorted(actual)))
+
+        pending = analysis / "pending.txt"
+        first = "basic_a ma.Util twice pending"
+        second = "basic_a ma.Rect <products> pending"
+        pending.write_text(first + "\n")
+        changed = copy.deepcopy(teq)
+        drop_declaration(changed)
+        drop_product(changed)
+        dump = case / "teq.json"
+        dump.write_text(json.dumps(changed))
+        check("one more difference", [], 1, "ma.Rect: <products>", {first})
+        check("update refuses the addition", ["--update"], 1, second, {first})
+        check("update records the addition", ["--update", "--add-new"], 0, "records added 1", {first, second})
+        check("the listed differences remain", [], 0, "0 failed", {first, second})
+        changed = copy.deepcopy(teq)
+        drop_declaration(changed)
+        dump.write_text(json.dumps(changed))
+        check("one fewer difference", [], 1, "stale   ma.Rect <products> pending", {first, second})
+        check("update removes the mended record", ["--update"], 0, "records removed 1, records added 0", {first})
+        dump.unlink()
+        (case / "teq-error.txt").write_text("build failed")
+        missing = "basic_a (no-analysis) - pending"
+        check("one more project without analysis", ["--update"], 1, missing, set())
+        check("record the missing analysis", ["--update", "--add-new"], 0, "records added 1", {missing})
+        check("the listed project still has no analysis", [], 0, "0 failed", {missing})
+        dump.write_text(json.dumps(teq))
+        check("the listed project now has dumps", [], 1, "stale   (no-analysis) - pending", {missing})
+        check("remove the stale no-analysis record", ["--update"], 0, "records removed 1, records added 0", set())
+
+        changed = copy.deepcopy(teq)
+        library, representative = deps(scalac, "relations")["libraryClasses"][0]
+        change_library_class(changed)
+        dump.write_text(json.dumps(changed))
+        rel = f"(relation) libraryClasses {library} pending"
+        records = {f"basic_a {rel} scalac {representative}", f"basic_a {rel} teq scala.Zzz"}
+        check("record both representatives", ["--update", "--add-new"], 0, "records added 2", records)
+        check("both representatives still differ", [], 0, "0 failed", records)
+        deps(changed, "relations")["libraryClasses"][0][1] = "scala.Int"
+        dump.write_text(json.dumps(changed))
+        check("a different representative", [], 1, "only teq: scala.Int", records)
+        changed = copy.deepcopy(teq)
+        drop_binary_dependency(changed)
+        change_library_class(changed)
+        dump.write_text(json.dumps(changed))
+        missing_binary = deps(scalac, "binaryDependency")[0]
+        entry, binary, cls, src, ctx = missing_binary
+        dependency = f"basic_a binaryDependency {cls} {binary} pending scalac {entry},{src},{ctx}"
+        assert entry == library
+        kept = {dependency, f"basic_a {rel} teq scala.Zzz"}
+        check("a tuple now explains one representative", ["--update", "--add-new"], 0,
+              "records removed 1, records added 1", kept)
+        check("the tuple and the other representative", [], 0, "0 failed", kept)
+        dump.write_text(json.dumps(teq))
+        check("a representative no longer differs", [], 1, f"stale   {rel} teq scala.Zzz", kept)
+
+        mapping = "ma.Util twice some-mapping"
+        expected.write_text(f"basic_a {mapping}\n")
+        stale = f"(stale-mapping) {mapping} pending"
+        records = {f"basic_a {stale}"}
+        check("record the stale mapping", ["--update", "--add-new"], 0, "records removed 2, records added 1", records)
+        check("the mapping is still stale", [], 0, "0 failed", records)
+        changed = copy.deepcopy(teq)
+        drop_declaration(changed)
+        dump.write_text(json.dumps(changed))
+        check("the mapping explains a difference again", [], 1, f"stale   {stale}", records)
+        dump.write_text(json.dumps(teq))
+        expected.write_text("")
+        check("the mapping has left expected.txt", [], 1, f"stale   {stale}", records)
+        changed = copy.deepcopy(teq)
+        bump("apiHash")(changed)
+        dump.write_text(json.dumps(changed))
+        check("an unexplained hash stops regeneration", ["--update", "--add-new"], 1, "<apiHash>", records)
+    return passed, failed
+
+
 def main():
     scalac = json.load(open(os.path.join(here, "fixtures", "basic_a.scalac.json")))
     teq = json.load(open(os.path.join(here, "fixtures", "basic_a.teq.json")))
@@ -452,6 +560,9 @@ def main():
         else:
             failed += 1
             print("FAIL    %s: compare.py passed it\n%s" % (what, out))
+    p, f = pending_tests(scalac, teq)
+    passed += p
+    failed += f
     p, f = invalidation_tests()
     passed += p
     failed += f

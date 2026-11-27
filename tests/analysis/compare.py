@@ -10,7 +10,7 @@ two places is written out at both), the declarations and the inherited definitio
 multisets, its header, self type, sealed children and parents as they are, the source that
 defines it; then zinc's hashes, the name hashes name by name, and the products.
 
-  compare.py <scalac.json> <teq.json> [--expect <file>] [--case <name>] [--show]
+  compare.py <scalac.json> <teq.json> [--expect <file>] [--pending <file>] [--case <name>] [--show] [--emit-pending]
 
 Then the dependencies (`deps`), the callbacks the compile made as canonical tuples, per
 referring class: `usedName` (the class, the name, its scopes), `classDependency` (the class
@@ -39,8 +39,16 @@ fails, and so does a line that explains nothing (it is stale). `apiHash` and `ex
 differ only in a class with an explained difference: where nothing else differs, they tell of
 what the text does not show, the objects zinc hashes as one. Hash data or dependencies missing
 on either side fail. Prints one line per class and the totals; the exit code is 1 when anything
-fails."""
+fails. `--pending` adds generated records after the mappings, even in an `exact` case:
+the same definition or dependency fields with `pending` in place of a mapping, or
+`<case> (relation) <table> <key> pending <side> <item>` for a stored relation no tuple
+explains (the item's fields joined by commas), or `<case> (stale-mapping) <fields> pending`
+for a stale mapping with those fields after its project. `--emit-pending` writes the
+additional records needed to stdout and the comparison to stderr. Its status compares with
+those records in place, so a failure they cannot explain is still reported."""
 
+import argparse
+from contextlib import redirect_stdout
 import json
 import sys
 
@@ -259,7 +267,7 @@ def shape_diffs(a, b):
     return diffs
 
 
-def compare_deps(scalac, teq, explained):
+def compare_deps(scalac, teq, explained, pending_record):
     """The dependencies of the two sides, per referring class and part; then the stored
     relations. Returns the failures, the exact and the mapped (part, class) pairs."""
     failures = exact = mapped = 0
@@ -308,70 +316,89 @@ def compare_deps(scalac, teq, explained):
         return any(p == "binaryDependency" and r[0] == key for p, _, _, r in tuples)
 
     for item in sorted(sr ^ tr, key=repr):
-        if not relation_explained(item, "scalac" if item in sr else "teq"):
+        side = "scalac" if item in sr else "teq"
+        if relation_explained(item, side):
+            continue
+        rel, key, value = item
+        if rel == "classes":
+            detail = ",".join(value)
+        elif rel == "names":
+            detail = ",".join((value[0], *value[1]))
+        else:
+            detail = value
+        if not pending_record("(relation)", rel, key, "pending", side, detail):
             failures += 1
-            rel, key, value = item
-            print("FAIL    relations %s %s: only %s: %s" % (rel, key, "scalac" if item in sr else "teq", value))
+            print("FAIL    relations %s %s: only %s: %s" % (rel, key, side, value))
     return failures, exact, mapped
 
 
-def main():
-    args = sys.argv[1:]
-    expect_path = None
-    case = ""
-    show = False
-    if "--expect" in args:
-        i = args.index("--expect")
-        expect_path = args[i + 1]
-        del args[i:i + 2]
-    if "--case" in args:
-        i = args.index("--case")
-        case = args[i + 1]
-        del args[i:i + 2]
-    if "--show" in args:
-        args.remove("--show")
-        show = True
+def compare(args, emitted):
+    case = args.case
     try:
-        scalac, teq = load(args[0]), load(args[1])
+        scalac, teq = load(args.scalac), load(args.teq)
         sh, th = hashes_of(scalac, "scalac"), hashes_of(teq, "teq")
     except Missing as e:
         print("FAIL    %s" % e)
-        print("summary %s: 0 exact, 0 mapped, 1 failing" % (case or args[0]))
-        sys.exit(1)
+        print("summary %s: 0 exact, 0 mapped, 1 failing" % (case or args.scalac))
+        return 1
     expected = []
     unconstrained = []
     exact_case = False
-    if expect_path:
-        for line in open(expect_path):
+    if args.expect:
+        for line in open(args.expect):
             line = line.split("#", 1)[0].strip()
             if not line:
                 continue
             parts = line.split()
-            if parts[0] == "exact" and len(parts) == 2 and parts[1] == case:
+            if parts == ["exact", case]:
                 exact_case = True
-            elif len(parts) == 4 and parts[0] in (case, ANY):
-                expected.append(("api", parts[1], parts[2], parts[3], None, None))
-            elif len(parts) == 7 and parts[1] in PARTS and parts[0] in (case, ANY):
-                expected.append((parts[1], parts[2], parts[3], parts[4], parts[5], parts[6]))
-            elif len(parts) > 4 and parts[1] in PARTS and parts[0] in (case, ANY):
-                print("FAIL    %s: a dependency's mapping names its side and its tuple's other fields" % line)
-                unconstrained.append(line)
+            elif parts[0] in (case, ANY):
+                if len(parts) == 4 or (len(parts) == 7 and parts[1] in PARTS):
+                    expected.append(tuple(parts[1:]))
+                elif len(parts) > 4 and parts[1] in PARTS:
+                    print("FAIL    %s: a dependency's mapping names its side and its tuple's other fields" % line)
+                    unconstrained.append(line)
+
+    pending = set()
+    if args.pending:
+        for line in open(args.pending):
+            parts = line.split("#", 1)[0].split()
+            if parts and parts[0] == case:
+                pending.add(tuple(parts[1:]))
+
+    used_pending = set()
+
+    def pending_record(*fields):
+        if fields in pending:
+            used_pending.add(fields)
+            return "pending"
+        if args.emit_pending:
+            record = " ".join((case, *fields))
+            if record.split("#", 1)[0].split() == [case, *fields]:
+                emitted.add(record)
+                return "pending"
+        return None
 
     used = set()
 
     def explained(cls, name, part="api", side=None, rest=None):
-        if exact_case:
-            return None
         detail = None if rest is None else ",".join(rest)
-        for line in expected:
-            p, c, n, m, s, d = line
-            if p != part or not (c == ANY or c == cls) or not (n == ANY or n == name):
-                continue
-            if p != "api" and (s != side or d != detail):
-                continue
-            used.add(line)
-            return m
-        return None
+        if not exact_case:
+            for line in expected:
+                if part == "api" and len(line) == 3:
+                    c, n, mapping = line
+                elif len(line) == 6 and (line[0], line[4], line[5]) == (part, side, detail):
+                    c, n, mapping = line[1:4]
+                else:
+                    continue
+                if c in (cls, ANY) and n in (name, ANY):
+                    used.add(line)
+                    return mapping
+        if ANY in (cls, name):
+            return None
+        if part == "api":
+            return pending_record(cls, name, "pending")
+        return pending_record(part, cls, name, "pending", side, detail)
 
     sc, tc = classes_of(scalac), classes_of(teq)
     sp, tp = products_of(scalac), products_of(teq)
@@ -432,19 +459,42 @@ def main():
         else:
             failures += 1
             print("FAIL    %s: %s" % (cname, ", ".join(sorted(set(d[0] for d in unexplained)))))
-        shown = (found if show else [d for d in found if d[4] is None]) + [d for d in unexplained if d not in found]
+        shown = (found if args.show else [d for d in found if d[4] is None]) + [d for d in unexplained if d not in found]
         for n, part, x, y, m in shown:
             print("  %s\n    scalac: %s\n    teq:    %s" % (part, x, y))
-    f, dep_exact, dep_mapped = compare_deps(scalac, teq, explained)
+    f, dep_exact, dep_mapped = compare_deps(scalac, teq, explained, pending_record)
     failures += f + len(unconstrained)
     for line in expected:
-        p, c, n, m, s, d = line
-        if c != ANY and n != ANY and line not in used:
-            where = "" if p == "api" else " (only %s: %s)" % (s, d)
-            print("stale   %s%s %s %s%s: nothing differs there now" % ("" if p == "api" else p + " ", c, n, m, where))
-            failures += 1
-    print("summary %s: %d exact, %d mapped, %d failing; dependencies of %d referring classes by part exact, %d mapped" % (case or args[0], exact, mapped, failures, dep_exact, dep_mapped))
-    sys.exit(1 if failures else 0)
+        cls, name = line[:2] if len(line) == 3 else line[1:3]
+        if ANY not in (cls, name) and line not in used:
+            if not pending_record("(stale-mapping)", *line, "pending"):
+                print("stale   %s: nothing differs there now" % " ".join(line))
+                failures += 1
+    for line in sorted(pending - used_pending):
+        print("stale   %s: nothing differs there now" % " ".join(line))
+        failures += 1
+    print("summary %s: %d exact, %d mapped, %d failing; dependencies of %d referring classes by part exact, %d mapped" % (case or args.scalac, exact, mapped, failures, dep_exact, dep_mapped))
+    return 1 if failures else 0
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("scalac")
+    parser.add_argument("teq")
+    parser.add_argument("--expect")
+    parser.add_argument("--pending")
+    parser.add_argument("--case", default="")
+    parser.add_argument("--show", action="store_true")
+    parser.add_argument("--emit-pending", action="store_true")
+    args = parser.parse_args()
+    if args.emit_pending and not args.case:
+        parser.error("--emit-pending requires --case")
+    emitted = set()
+    with redirect_stdout(sys.stderr if args.emit_pending else sys.stdout):
+        status = compare(args, emitted)
+    for line in sorted(emitted):
+        print(line)
+    sys.exit(status)
 
 
 if __name__ == "__main__":
