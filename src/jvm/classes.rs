@@ -157,10 +157,21 @@ struct HeldMethod {
     what: &'static str,
     /// The line its code starts at, where its writer gives one before the body (`Code::line`).
     first_line: Option<u32>,
+    /// Where in its class the method was held: what its write reads of the class being made (`Gen::write_held`).
+    under: HeldUnder,
     m: MethodCx,
     lir: crate::lir::Body,
     declared: FxMap<SymId, (ErasedType, bool)>,
     code: HeldCode,
+}
+
+/// What a method's write reads of its class's maker, as the maker stood where the method was held: the member named in a
+/// refusal (`Gen::context`) and the order its super calls' targets take among the class's (`Gen::super_call_place`):
+/// constructor code, a lifted body's text.
+struct HeldUnder {
+    context: String,
+    ctor_code: bool,
+    lifted_body: Option<(u32, u32)>,
 }
 
 /// What a held method is written from.
@@ -460,10 +471,9 @@ impl<'a> Gen<'a> {
             held.sort_by_key(|(h, _)| h.method.place.map_or((1, 0), |place| (0, place)));
             let held = self.refuse_second_methods(held);
             for (mut h, span) in held {
-                self.lifted_body = Some(span);
+                h.under.lifted_body = Some(span);
                 self.enter_plan(&mut h);
                 self.write_held(h);
-                self.lifted_body = None;
             }
         }
     }
@@ -707,7 +717,8 @@ impl<'a> Gen<'a> {
     fn hold_method(&mut self, what: &'static str, code: HeldCode) -> HeldMethod {
         let method = self.planned.take().expect("a planned method is held");
         let (m, lir, declared) = (std::mem::take(&mut self.m), std::mem::take(&mut self.lir), std::mem::take(&mut self.lower_declared));
-        HeldMethod { method, entered: false, what, first_line: None, m, lir, declared, code }
+        let under = HeldUnder { context: self.context.clone(), ctor_code: self.ctor_code, lifted_body: self.lifted_body };
+        HeldMethod { method, entered: false, what, first_line: None, under, m, lir, declared, code }
     }
 
     /// A member of the class whose body is the tree `compose` lowers, held and written at once where a writer would
@@ -838,7 +849,8 @@ impl<'a> Gen<'a> {
     /// method begun and written at once is.
     fn write_held(&mut self, held: HeldMethod) {
         self.plan_phase(false);
-        let HeldMethod { method, entered, first_line, m, lir, declared, code, .. } = held;
+        let HeldMethod { method, entered, first_line, under, m, lir, declared, code, .. } = held;
+        let maker = self.enter_held_under(under);
         self.lir = lir;
         self.lower_declared = declared;
         self.open_method(&method, m);
@@ -860,7 +872,18 @@ impl<'a> Gen<'a> {
             }
         }
         self.end_method(method, entered);
+        self.enter_held_under(maker);
         self.plan_phase(true);
+    }
+
+    /// The class's maker as it stood where a method was held, set for its write; the maker's own given back.
+    fn enter_held_under(&mut self, under: HeldUnder) -> HeldUnder {
+        let HeldUnder { context, ctor_code, lifted_body } = under;
+        HeldUnder {
+            context: std::mem::replace(&mut self.context, context),
+            ctor_code: std::mem::replace(&mut self.ctor_code, ctor_code),
+            lifted_body: std::mem::replace(&mut self.lifted_body, lifted_body),
+        }
     }
 
     /// The class's plan is made (`planning`) or one of its methods written: in checks builds the pool takes nothing
