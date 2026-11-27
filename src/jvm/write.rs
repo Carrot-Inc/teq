@@ -300,6 +300,7 @@ impl<'a> Gen<'a> {
                 self.super_call_at = None;
             }
             Kind::ArrayOf { elem, items } => {
+                debug_assert_eq!(Self::array_element(&ty).as_ref(), Some(&elem), "an array's items of its element type");
                 self.iconst(items.len as i32);
                 self.new_array(&ty);
                 for i in 0..items.len {
@@ -307,7 +308,7 @@ impl<'a> Gen<'a> {
                     self.dup();
                     self.iconst(i as i32);
                     self.write(item);
-                    self.array_store(&ty, &elem);
+                    self.array_store(&ty);
                 }
             }
             Kind::ArrayLoad { array, index } => {
@@ -320,8 +321,9 @@ impl<'a> Gen<'a> {
                 self.write(array);
                 self.write(index);
                 self.write(value);
-                let (of, held) = (self.lir.ty(array).clone(), self.lir.ty(value).clone());
-                self.array_store(&of, &held);
+                let of = self.lir.ty(array).clone();
+                debug_assert_eq!(Self::array_element(&of).as_ref(), Some(self.lir.ty(value)), "a value stored of the array's element type");
+                self.array_store(&of);
             }
             Kind::ArrayLength(array) => {
                 self.write(array);

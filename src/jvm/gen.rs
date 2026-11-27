@@ -2173,14 +2173,15 @@ impl<'a> Gen<'a> {
         elem
     }
 
-    /// `array(i) = v` with the array, the index and the value (of type `value`) on the stack.
-    pub fn array_store(&mut self, array: &ErasedType, value: &ErasedType) {
+    /// `array(i) = v` with the array, the index and the value on the stack, the value of the array's element type:
+    /// the lowering adapts it, and makes a store into an array of no array class the runtime's call.
+    pub fn array_store(&mut self, array: &ErasedType) {
         let Some(elem) = Self::array_element(array) else {
-            self.adapt(value, &ErasedType::object());
-            self.erased_array_op("array_update");
+            let message = format!("internal error: an element stored into an array of the type {}, which is no array class", self.desc_of(array));
+            self.refuse_written(&message, None);
+            self.code.popn(3);
             return;
         };
-        self.adapt(value, &elem);
         let opcode = match elem {
             ErasedType::I => op::IASTORE,
             ErasedType::J => op::LASTORE,
@@ -3411,14 +3412,6 @@ impl<'a> Gen<'a> {
             (_, ErasedType::L(_)) => Adaptation::Box,
             _ => Adaptation::Convert,
         }
-    }
-
-    pub fn adapt(&mut self, from: &ErasedType, to: &ErasedType) {
-        if from == to {
-            return;
-        }
-        let how = self.adaptation(from, to);
-        self.write_adaptation(how, from, to);
     }
 
     /// Writes the adaptation `how` (`Gen::adaptation`) of the value of `from` on the stack to `to`.
