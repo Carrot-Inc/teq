@@ -586,3 +586,14 @@ scenario lookup-shadowing-literal
   expect not-compiled b/UserB.scala
   expect not-compiled b/Tagged.scala
   expect not-compiled b/Held.scala
+
+scenario inline-trait-args
+  change an inline method's anonymous class passes another argument to its trait parent (`new Arg(7) {}` to `new Arg(9) {}`)
+  modules a b
+  pad 3
+  edit replace a/Api.scala
+  status pass
+  rule an inline method's body hash in its API (ExtractAPI's marker), the body as pickled: the stored class's parents hold the trait's argument
+  rule on teq's side the edit leaves Api's API as it was (the stored anonymous class is pickled with `Object()` and Arg as a type, without the argument), and b is compiled again only because teq's analysis reports Arg$'s trait private members modified: the four differences this scenario freezes in tests/analysis/expected.txt, which A2's normalisation turns
+  obligation the downstream caller of the inline method is compiled again
+  expect compiled b/Use.scala

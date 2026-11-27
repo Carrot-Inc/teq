@@ -256,6 +256,7 @@ fpinlineanonnoparams	fail	-	known classes: master's own, as inlinesam: the class
 fpinlinelocaldefaults	fail	-	known classes: master's own, as ledgerlocalclass: the classes the expansions of the product's inline bodies make carry the pseudo file's SourceFile and line numbers
 fpinlinelocalgeneric	fail	-	known classes: master's own, as ledgerlocalclass: the classes the expansions of the product's inline bodies make carry the pseudo file's SourceFile and line numbers
 fpinlinelocalnoparams	fail	-	known classes: master's own, as ledgerlocalclass: the classes the expansions of the product's inline bodies make carry the pseudo file's SourceFile and line numbers
+fpinlinemacro	fail	-	known classes: master's own: the class the macro's quote makes (`new T {}` over `T extends C`, C's `x = 31`), typed where the macro runs from the implementation's pickled body, takes its class parent'
 fpinlinetraitargs	fail	-	known classes: master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
 fpladder	fail	-	known positions: A2's normalisation, the writer's evidence of a synthesized given (ValueOf; with the generic mirror's evidence in the writer): in a2/Api.tasty, scalac's parent node `APPLY 419 .. 419`
 fpobjectdefaults	fail	-	known positions: A2's normalisation: in a2/O.tasty, scalac's parent node `SELECT 80 .. 80` is not in teq's pickle (the object writer writes `Object()` and its parents as types)

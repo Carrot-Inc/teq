@@ -32,6 +32,9 @@
 #            such uses (`own-shared`); a quote's copy's uncalled member whose signature names a type of
 #            `scala.quoted` written in the split and the whole products, which a later caller invokes
 #            (`quoted-member`, which no list waives);
+#   routes   (a case with inline-routes.txt) the last module's inline calls of its upstreams' inline methods, built
+#            split on the JVM, take the routes the file's line gives, `substituted <n> fell back <m>`
+#            (tests/support/inline-routes.sh, whose header says which routes products can reach);
 #   members  (a case with members.txt) each line `<module> <class> <member>...` names a class the module's
 #            products must hold whole: the class, a regular expression over a class file's path without
 #            `.class`, matches exactly one class file of the module's split products and one of the whole
@@ -620,6 +623,7 @@ run_case() {
       result "$name" build 0 "$(cat "$out/$name.whole.log"; for m in $split_failed; do cat "$out/$name.$m.log"; done)"
       return
     fi
+    [ -f "$dir/inline-routes.txt" ] && { routes=$("$root/tests/support/inline-routes.sh" "$teq" "$dir" "$out/$name.routes" "$SL" 2>&1); result "$name" routes $(( $? == 0 )) "$routes"; }
     ok=1
     detail=""
     for m in "${mods[@]}"; do

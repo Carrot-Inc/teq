@@ -744,6 +744,8 @@ inv-status tasty-only/default a both passed
 inv-status tasty-only/default b both passed
 inv-status lookup-shadowing-literal/default a both passed
 inv-status lookup-shadowing-literal/default b both passed
+inv-status inline-trait-args/default a both passed
+inv-status inline-trait-args/default b both passed
 inv-batch result-type/default a both 1 a/Lib.scala
 inv-batch result-type/default a both 2 a/UserA.scala
 inv-batch result-type/default b both 1 b/UserB.scala
@@ -864,6 +866,8 @@ inv-batch lookup-shadowing/default b both 1 b/Shadow.scala
 inv-batch tasty-only/default a both 1 a/Lib.scala
 inv-batch tasty-only/default b both 1 b/UserB.scala
 inv-batch lookup-shadowing-literal/default b both 1 b/Shadow.scala
+inv-batch inline-trait-args/default a both 1 a/Api.scala
+inv-batch inline-trait-args/default b both 1 b/Use.scala
 
 # The invalidation oracle's differences, by reason.
 
@@ -971,3 +975,7 @@ inv-diff lookup-shadowing-literal/default b teq relation - classes:run:llb.UserB
 inv-diff lookup-shadowing-literal/default b teq stale - llb/Held$.class:differs zinc-shadowing
 inv-diff lookup-shadowing-literal/default b teq stale - llb/Held.tasty:differs zinc-shadowing
 inv-diff lookup-shadowing-literal/default b teq stale - llb/UserB$.class:differs zinc-shadowing
+inv-diff inline-trait-args/default a scalac change 1 inl.Api:NamesChange inline-trait-args
+inv-diff inline-trait-args/default a scalac event 1 inheritance:inl.Api>inl.Api inline-trait-args
+inv-diff inline-trait-args/default b scalac initial-external - inl.Api$:NamesChange:mk/Default inline-trait-args
+inv-diff inline-trait-args/default b teq initial-external - inl.Arg$:TraitPrivateMembersModified: inline-trait-args

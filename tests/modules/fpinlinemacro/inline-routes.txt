@@ -1,0 +1,3 @@
+# the routes the last module's expansions take on master a4c91a911 (tests/support/inline-routes.sh): its two
+# inline calls; the class its quote makes is typed where the macro runs, no inline call's route
+substituted 2 fell back 0
