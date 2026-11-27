@@ -2205,6 +2205,10 @@ mixin_default_getter_bridge	fail	-	output differs
 mixin_default_getter_dropped	pass	-	
 mixin_default_getters	pass	-	
 mixin_forwarder_through_superclass	pass	-	
+mixin_getter_bridge_clash	pass	-	
+mixin_getter_bridge_class	pass	-	
+mixin_getter_bridge_overload	pass	-	
+mixin_getter_bridge_trait	pass	-	
 mixin_parent_getter	pass	-	
 mkstring	pass	-	
 module_init	pass	-	

@@ -759,8 +759,6 @@ SPLIT-superclass_trait-wvar-lval-none-direct.split-js	refused 2:7: the body of L
 SPLIT-witness-products-local.split-interp	run 130 | 120 | 10 | 10
 SPLIT-witness-products-local.split-js	run 130 | 120 | 10 | 10
 SPLIT-witness-products-member.desc	desc lib.Base.m$default$1 ()I ; lib.Base.m$default$1$ (Llib/Base;)I ; lib.Lib$T.m$default$1 ()I ; lib.Lib$T.m$default$1$ (Llib/Lib$T;)I ; lib.Parent.m$default$1 ()I ; lib.Parent.m$default$1$ (Llib/Par
-WITNESS-bridge-local.jvm	run Bb | Bnull
-WITNESS-bridge-member.jvm	run Bb | Bnull
 WITNESS-callee-local.js	run Dd | Dd | D()
 WITNESS-callee-member.js	run Dd | Dd | D()
 WITNESS-chain-local.interp	crash 3

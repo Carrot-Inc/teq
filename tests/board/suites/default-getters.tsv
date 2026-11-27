@@ -3998,12 +3998,12 @@ WITNESS-bodycapture-member.workers	pass	-
 WITNESS-bridge-local.check	pass	-	
 WITNESS-bridge-local.interp	pass	-	
 WITNESS-bridge-local.js	pass	-	
-WITNESS-bridge-local.jvm	fail	-	run Bb | Bnull
+WITNESS-bridge-local.jvm	pass	-	
 WITNESS-bridge-local.workers	pass	-	
 WITNESS-bridge-member.check	pass	-	
 WITNESS-bridge-member.interp	pass	-	
 WITNESS-bridge-member.js	pass	-	
-WITNESS-bridge-member.jvm	fail	-	run Bb | Bnull
+WITNESS-bridge-member.jvm	pass	-	
 WITNESS-bridge-member.workers	pass	-	
 WITNESS-callee-local.check	pass	-	
 WITNESS-callee-local.interp	pass	-	

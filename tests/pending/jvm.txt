@@ -176,6 +176,7 @@ map_key_contract	output
 mapped_class_constants	output
 method_type_arg_kind	compile
 method_type_arg_kinds_accepted	compile
+mixin_getter_bridge_clash	output
 module_selection_effectful_qualifier	compile
 named_reorder_block_prefix_defaults	output
 native_overload_reflection	output

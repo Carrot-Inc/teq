@@ -2196,6 +2196,10 @@ cases/mixin_default_getter_bridge	pass	-
 cases/mixin_default_getter_dropped	pass	-	
 cases/mixin_default_getters	pass	-	
 cases/mixin_forwarder_through_superclass	pass	-	
+cases/mixin_getter_bridge_clash	pass	-	
+cases/mixin_getter_bridge_class	pass	-	
+cases/mixin_getter_bridge_overload	pass	-	
+cases/mixin_getter_bridge_trait	pass	-	
 cases/mixin_parent_getter	pass	-	
 cases/mkstring	pass	-	
 cases/module_init	pass	-	

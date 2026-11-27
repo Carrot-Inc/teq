@@ -1662,6 +1662,12 @@ impl<'a> Gen<'a> {
             Some(sig) => (sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.ty)).collect(), sig.ret),
             None => (Vec::new(), NO_TYPE),
         };
+        self.bridge_of(&declared, declared_ret, bm, m);
+    }
+
+    /// The bridge `bm` to `m` on `this`, the parameters and the result adapted by the types `declared` and
+    /// `declared_ret` the implementation declares them at (a value class's box where it takes or gives one).
+    fn bridge_of(&mut self, declared: &[TypeId], declared_ret: TypeId, bm: &MethodRef, m: &MethodRef) {
         let params: Vec<(Option<SymId>, ErasedType)> = bm.params.iter().map(|t| (None, t.clone())).collect();
         let flags = MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC };
         let kind = if self.is_interface { Invoke::Interface } else { Invoke::Virtual };
@@ -3865,6 +3871,70 @@ impl<'a> Gen<'a> {
             self.pair_bridged.push((bm.name.to_string(), bm.desc.to_string()));
             self.bridge(o, &bm, &m);
         }
+        for (bm, m, (declared, declared_ret)) in self.getter_pairs(tc.id) {
+            if self.plan.has_method(&bm.name, &bm.desc) {
+                continue;
+            }
+            self.pair_bridged.push((bm.name.to_string(), bm.desc.to_string()));
+            self.bridge_of(&declared, declared_ret, &bm, &m);
+        }
+    }
+
+    /// The overriding pairs of the class's default getters that owe it a bridge, in scalac's class form, a getter
+    /// being a member of its own name (`Desugar.defaultGetters`) and no member symbol here: for each getter name the
+    /// member is the first class or trait of the class's linearisation that declares it, and each later declaration
+    /// of another erased descriptor is overridden by it (Bridges.scala 68-104), unless the superclass holds the pair:
+    /// both declarations in its linearisation and the member its own (the cursor's one parent, Bridges.scala 24-41).
+    /// A trait holds none (Erasure.scala 1065-1066): the classes mixing it in do. Each with the types the member
+    /// declares its getter at: the parameters before the default and the default's own.
+    fn getter_pairs(&mut self, c: ClassId) -> Vec<(Rc<MethodRef>, Rc<MethodRef>, (Vec<TypeId>, TypeId))> {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let info = syms.class(c);
+        if self.is_interface || info.kind == ClassKind::Trait {
+            return Vec::new();
+        }
+        let lin: Vec<ClassId> = info.base_types.iter().map(|&(b, _)| b).collect();
+        let slin: Vec<ClassId> = info.superclass.map(|s| syms.class(s).base_types.iter().map(|&(b, _)| b).collect()).unwrap_or_default();
+        let mut by_name: Vec<(String, Vec<(ClassId, Rc<MethodRef>, SymId, usize)>)> = Vec::new();
+        for &b in &lin {
+            let methods: Vec<SymId> = syms.class(b).member_order.iter().copied().filter(|&s| syms.sym(s).kind == SymKind::Def && syms.sym(s).owner == Owner::Class(b)).collect();
+            for s in methods {
+                for (index, (name, getter, _)) in self.own_default_getters_at(s) {
+                    match by_name.iter_mut().find(|(n, _)| *n == name) {
+                        Some((_, decls)) => decls.push((b, getter, s, index)),
+                        None => by_name.push((name, vec![(b, getter, s, index)])),
+                    }
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for (_, decls) in by_name {
+            let (mb, member, ms, mi) = decls[0].clone();
+            let held_by_superclass = slin.contains(&mb) && decls.iter().find(|d| slin.contains(&d.0)).map(|d| d.0) == Some(mb);
+            let mut owed: Vec<String> = Vec::new();
+            for (b, other, _, _) in &decls[1..] {
+                if other.desc == member.desc || held_by_superclass && slin.contains(b) || owed.contains(&other.desc.to_string()) {
+                    continue;
+                }
+                owed.push(other.desc.to_string());
+                let target = Rc::new(MethodRef { owner: self.this_name.clone(), owner_is_interface: false, kind: Invoke::Virtual, ..(*member).clone() });
+                out.push((other.clone(), target, self.getter_declared(ms, mi)));
+            }
+        }
+        out
+    }
+
+    /// The types the getter of the default `i` of `s` declares: the parameters of the clauses before the default's
+    /// and the default's own type (`Gen::default_getter_shape` reads the getter's erasure from the same).
+    fn getter_declared(&mut self, s: SymId, i: usize) -> (Vec<TypeId>, TypeId) {
+        let cx = self.cx;
+        let Some(sig) = cx.input.syms.sym(s).info.sig.as_ref() else { return (Vec::new(), NO_TYPE) };
+        let params: Vec<TypeId> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.ty)).collect();
+        let shape = self.default_getter_shape(s, i);
+        let own = cx.input.getters.and_then(|t| crate::typer::getters::getter_type(t, cx.input.syms, crate::tir::DefaultOf::Method(s), i));
+        let ret = own.or_else(|| params.get(i).copied()).unwrap_or(NO_TYPE);
+        (params[..shape.before.min(params.len())].to_vec(), ret)
     }
 
     /// In link mode, the bridges scalac's mixin phase puts in a class for the jar traits it
@@ -4065,6 +4135,11 @@ impl<'a> Gen<'a> {
     /// (`emit_fun`), abstract where the member reads the block's values (`emit_proxied_fun`: the
     /// classes' forwarders implement it); another module's products hold one per declared default.
     fn own_default_getters(&mut self, s: SymId) -> Vec<(String, Rc<MethodRef>, bool)> {
+        self.own_default_getters_at(s).into_iter().map(|(_, g)| g).collect()
+    }
+
+    /// `own_default_getters` with each getter's default: its parameter's index in the method's signature.
+    fn own_default_getters_at(&mut self, s: SymId) -> Vec<(usize, (String, Rc<MethodRef>, bool))> {
         let cx = self.cx;
         let defaults: Vec<(usize, bool)> = match cx.fun_of_sym[s.idx()] {
             u32::MAX => {
@@ -4090,7 +4165,7 @@ impl<'a> Gen<'a> {
             let shape = self.default_getter_shape(s, i);
             let (name, desc) = self.default_getter_ref(s, i, &m.params[..shape.before]);
             let (params, ret) = parse_method_desc(&desc);
-            out.push((name.clone(), method_ref(Invoke::Interface, &m.owner, true, &name, &params, &ret), has_body));
+            out.push((i, (name.clone(), method_ref(Invoke::Interface, &m.owner, true, &name, &params, &ret), has_body)));
         }
         out
     }
