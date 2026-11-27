@@ -1055,7 +1055,7 @@ compare_on() {
       # a status still for the stall bound: whether the job lives, asked once a bound
       if [ $(($(now) - moved)) -ge $stall ] && [ $(($(now) - asked)) -ge $stall ]; then
         asked=$(now)
-        answer=$("$ra/run.sh" "$handle" teq -t 30 'p=$(cat out/compare/pid 2> /dev/null); if [ -n "$p" ] && kill -0 "$p" 2> /dev/null; then echo alive "$p"; else echo gone "${p:-none}"; fi' 2> /dev/null | tail -1)
+        answer=$("$ra/run.sh" "$handle" teq -t 30 'p=$(cat out/compare/pid 2> /dev/null); if [ -n "$p" ] && kill -0 "$p" 2> /dev/null; then echo alive "$p"; elif [ "$(tail -1 out/compare/status 2> /dev/null)" = done ]; then echo done; else echo gone "${p:-none}"; fi' 2> /dev/null | tail -1)
         case $answer in gone*) gone=$answer; break ;; esac
       fi
       if [ $answered = 0 ] && grep -q '^head-wanted ' "$t/status"; then

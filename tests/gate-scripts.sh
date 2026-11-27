@@ -1591,6 +1591,14 @@ log=$work/driver-dead.log
 git -C "$landing" reset -q --hard HEAD~1
 check "driver: a comparison job killed fails its line within the stall bound, naming its machine, its process gone and its last status" "$log" eval '[ $code = 1 ] && [ $took -lt 240 ] &&
   grep -q -E "^compare +m[0-9] .* FAIL +the job on m[0-9] ended without its done line: its process is gone \(pid [0-9]+\); its last status line, unchanged for [0-9]+ s: " "$log"'
+# A finished comparison whose last status poll still lacks done: its pid file is gone when the gate asks whether
+# it lives. The stand-in records the ask after seeing done and the next fresh poll completes the comparison.
+GATE_AGENT_STALE_DONE=6 compare_stall=3 gate "$work/driver-done.log" "$(printf 'm1 free\nm2 free\nm3 free')" --only parser,budget --master-rev HEAD
+code=$?
+log=$work/driver-done.log
+check "driver: a finished comparison with a stale status poll passes its line after the liveness check" "$log" eval '[ $code = 0 ] &&
+  ! grep -q "^compare .*ended without its done line" "$log" && row budget "m[0-9]" "$log" | grep -q " ok " &&
+  grep -qF "kill -0 " "$agent"/machines/*/rw/teq/out/compare/after-done'
 sed -i -E 's/^(budget|runtime|sentinel) [0-9]+$/\1 1500/' "$landing/tests/gate-times.txt"
 echo budget > "$landing/bench/pairs-stand-in.txt"
 git -C "$landing" add -A && git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "times past thirty minutes on one machine; budget inconclusive"

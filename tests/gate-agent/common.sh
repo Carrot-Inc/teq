@@ -5,6 +5,7 @@
 # mirror with HOME the machine's directory, its env file sourced (its login environment) and the stand-ins of cargo
 # and rustc of $GATE_AGENT_ROOT/bin first on the PATH. GATE_AGENT_CORRUPT=<machine> spoils the binary mirrored to
 # that machine as teq-head.
+# GATE_AGENT_STALE_DONE=<seconds> hides the final done line from comparison status polls for that long.
 [ -n "$GATE_AGENT_ROOT" ] || { echo "GATE_AGENT_ROOT names no stand-in pool" >&2; exit 2; }
 machine_of() { echo "${1%%/*}"; }
 claimed() { [ -e "$GATE_AGENT_ROOT/claims/$1" ] && [ "$(cat "$GATE_AGENT_ROOT/claims/$1")" = "$2" ]; }
