@@ -2925,7 +2925,7 @@ REVIEW-default_nested.workers	pass	-
 REVIEW-diamond_twin.check	pass	-	
 REVIEW-diamond_twin.interp	pass	-	
 REVIEW-diamond_twin.js	pass	-	
-REVIEW-diamond_twin.jvm	fail	-	crash 1
+REVIEW-diamond_twin.jvm	pass	-	
 REVIEW-diamond_twin.workers	pass	-	
 REVIEW-inherited_default.check	pass	-	
 REVIEW-inherited_default.interp	pass	-	
@@ -4008,12 +4008,12 @@ WITNESS-bridge-member.workers	pass	-
 WITNESS-callee-local.check	pass	-	
 WITNESS-callee-local.interp	pass	-	
 WITNESS-callee-local.js	fail	-	run Dd | Dd | D()
-WITNESS-callee-local.jvm	fail	-	run Dd | Dd | Db
+WITNESS-callee-local.jvm	pass	-	
 WITNESS-callee-local.workers	pass	-	
 WITNESS-callee-member.check	pass	-	
 WITNESS-callee-member.interp	pass	-	
 WITNESS-callee-member.js	fail	-	run Dd | Dd | D()
-WITNESS-callee-member.jvm	fail	-	run Dd | Dd | Db
+WITNESS-callee-member.jvm	pass	-	
 WITNESS-callee-member.workers	pass	-	
 WITNESS-chain-local.check	pass	-	
 WITNESS-chain-local.interp	fail	-	crash 3
@@ -4053,7 +4053,7 @@ WITNESS-diamond-local.workers	pass	-
 WITNESS-diamond-member.check	pass	-	
 WITNESS-diamond-member.interp	pass	-	
 WITNESS-diamond-member.js	pass	-	
-WITNESS-diamond-member.jvm	fail	-	crash 1
+WITNESS-diamond-member.jvm	pass	-	
 WITNESS-diamond-member.workers	pass	-	
 WITNESS-drop-local.check	pass	-	
 WITNESS-drop-local.interp	fail	-	crash 3
@@ -4188,12 +4188,12 @@ WITNESS-traitoverride-member.workers	pass	-
 WITNESS-unrelated-local.check	pass	-	
 WITNESS-unrelated-local.interp	pass	-	
 WITNESS-unrelated-local.js	pass	-	
-WITNESS-unrelated-local.jvm	fail	-	crash 1
+WITNESS-unrelated-local.jvm	pass	-	
 WITNESS-unrelated-local.workers	pass	-	
 WITNESS-unrelated-member.check	pass	-	
 WITNESS-unrelated-member.interp	pass	-	
 WITNESS-unrelated-member.js	pass	-	
-WITNESS-unrelated-member.jvm	fail	-	crash 1
+WITNESS-unrelated-member.jvm	pass	-	
 WITNESS-unrelated-member.workers	pass	-	
 WITNESS-views-local.check	pass	-	
 WITNESS-views-local.interp	fail	-	run 210 | 210 | 210

@@ -3958,7 +3958,9 @@ impl<'a> Gen<'a> {
     /// What a class takes from its traits where the JVM's resolution of default methods does not
     /// give what Scala's linearisation gives: a forwarder to the winning trait when two
     /// unrelated traits define the member, and a bridge when a trait declares it under another
-    /// erased signature than the one that implements it.
+    /// erased signature than the one that implements it. A method's default getters are members
+    /// of their own (`Desugar.defaultGetters`, Desugar.scala 419-433), each judged by the same
+    /// rule right after it.
     fn mixin_members(&mut self, c: ClassId) {
         let cx = self.cx;
         let syms = cx.input.syms;
@@ -3967,9 +3969,8 @@ impl<'a> Gen<'a> {
         if bases.len() < 2 {
             return;
         }
-        let has_body = |s: SymId| implemented(cx, s);
-        let mut by_name: FxMap<(crate::intern::Name, bool), Vec<(ClassId, SymId)>> = FxMap::default();
-        let mut order: Vec<(crate::intern::Name, bool)> = Vec::new();
+        let mut by_name: FxMap<(Name, bool), Vec<Inherited>> = FxMap::default();
+        let mut order: Vec<(Name, bool)> = Vec::new();
         for &b in &bases {
             let binfo = syms.class(b);
             for &s in binfo.member_order.iter().chain(binfo.extensions.iter()) {
@@ -3982,47 +3983,116 @@ impl<'a> Gen<'a> {
                 if entry.is_empty() {
                     order.push(key);
                 }
-                entry.push((b, s));
+                entry.push(Inherited { base: b, decl: MixinDecl::Member(s) });
             }
         }
+        let own = own_mixins(cx, c);
         for key in order {
             let decls = &by_name[&key];
             if decls.len() < 2 {
                 continue;
             }
-            let own = if key.1 {
-                info.extensions.iter().any(|&e| syms.sym(e).name == key.0)
-            } else {
-                defines(cx, &info, key.0)
-            };
-            if own {
-                continue;
-            }
-            let Some(&(ib, isym)) = decls.iter().find(|&&(_, s)| has_body(s)) else { continue };
-            if !key.1 && redeclared_away(cx, &info, isym, ib) {
-                continue;
-            }
-            let im = self.mref(isym);
-            let winner_bases: Vec<ClassId> = syms.class(ib).base_types.iter().map(|&(b, _)| b).collect();
-            for &(b, s) in decls {
-                if s == isym || winner_bases.contains(&b) {
-                    continue;
-                }
-                let m = self.mref(s);
-                if m.name != im.name || m.params.len() != im.params.len() {
-                    continue;
-                }
-                // The losing trait's bridge defines the winner's erased signature as a default
-                // too, which the class has to decide.
-                if m.desc != im.desc && self.trait_holds(b, s, &im.desc) {
-                    self.mixin_forwarder(&im, &im);
-                }
-                if m.desc == im.desc && !has_body(s) {
-                    continue;
-                }
-                self.mixin_forwarder(&m, &im);
+            self.mixin_member(c, &own, &MixinKey::Member(key.0, key.1), decls);
+            for (getter, getter_decls) in self.default_getter_keys(key, decls) {
+                self.mixin_member(c, &own, &getter, &getter_decls);
             }
         }
+    }
+
+    /// The forwarders of the member `key` of the class's traits, `decls` its declarations in the
+    /// linearisation's order, where the class does not declare it itself: the first with a body
+    /// is the class's member, and each concrete one of a trait the winner does not extend competes
+    /// with it (`needsForwarder`, MixinOps.scala 74-84), so the class forwards it to the winner. A
+    /// winner among the traits the class inherits through its superclass is no member of its own
+    /// mixins (`own`): the superclass's chain gives it (`isInImplementingClass`, MixinOps.scala 53-56).
+    fn mixin_member(&mut self, c: ClassId, own: &[ClassId], key: &MixinKey, decls: &[Inherited]) {
+        let cx = self.cx;
+        let info = cx.input.syms.class(c);
+        if decls.len() < 2 || key.declared_by(self, c) {
+            return;
+        }
+        let Some(w) = decls.iter().find(|d| d.has_body(cx)) else { return };
+        if !own.contains(&w.base) || !key.is_extension() && w.redeclared_away(cx, &info, decls) {
+            return;
+        }
+        let im = w.reference(self);
+        let winner_bases: Vec<ClassId> = cx.input.syms.class(w.base).base_types.iter().map(|&(b, _)| b).collect();
+        for d in decls {
+            if d.is(w) || winner_bases.contains(&d.base) {
+                continue;
+            }
+            let m = d.reference(self);
+            if m.name != im.name || m.params.len() != im.params.len() {
+                continue;
+            }
+            // The losing trait's bridge defines the winner's erased signature as a default
+            // too, which the class has to decide.
+            if m.desc != im.desc && d.holds(self, &im.desc) {
+                self.mixin_forwarder(&im, &im);
+            }
+            if m.desc == im.desc && !d.has_body(cx) {
+                continue;
+            }
+            self.mixin_forwarder(&m, &im);
+        }
+    }
+
+    /// The default getters the declarations `decls` of the member `of` give, each a member key of
+    /// its own name with the traits' declarations of it in the linearisation's order: a trait's
+    /// own declaration of the member gives its own (`own_default_getters`).
+    fn default_getter_keys(&mut self, of: (Name, bool), decls: &[Inherited]) -> Vec<(MixinKey, Vec<Inherited>)> {
+        let syms = self.cx.input.syms;
+        let mut keys: Vec<(MixinKey, Vec<Inherited>)> = Vec::new();
+        for d in decls {
+            let &MixinDecl::Member(s) = &d.decl else { continue };
+            if syms.sym(s).owner != Owner::Class(d.base) {
+                continue;
+            }
+            for (name, getter, has_body) in self.own_default_getters(s) {
+                let entry = Inherited { base: d.base, decl: MixinDecl::Getter(getter, has_body) };
+                match keys.iter_mut().find(|k| matches!(&k.0, MixinKey::Getter { name: n, .. } if *n == name)) {
+                    Some(k) => k.1.push(entry),
+                    None => keys.push((MixinKey::Getter { of, name }, vec![entry])),
+                }
+            }
+        }
+        keys
+    }
+
+    /// The default getters the class file of `s`'s owner holds for the defaults `s` itself
+    /// declares, as the owner writes them: each its name, its reference there and whether it has
+    /// a body. A program member writes one per own default where it is written at all
+    /// (`emit_fun`), abstract where the member reads the block's values (`emit_proxied_fun`: the
+    /// classes' forwarders implement it); another module's products hold one per declared default.
+    fn own_default_getters(&mut self, s: SymId) -> Vec<(String, Rc<MethodRef>, bool)> {
+        let cx = self.cx;
+        let defaults: Vec<(usize, bool)> = match cx.fun_of_sym[s.idx()] {
+            u32::MAX => {
+                let info = cx.input.syms.sym(s);
+                let Owner::Class(o) = info.owner else { return Vec::new() };
+                if !cx.input.reach.product_classes.get(o.idx()).copied().unwrap_or(false) {
+                    return Vec::new();
+                }
+                let Some(sig) = &info.sig else { return Vec::new() };
+                sig.clauses.iter().flat_map(|c| c.params.iter()).enumerate().filter(|(_, p)| p.has_default).map(|(i, _)| (i, true)).collect()
+            }
+            f => {
+                let fun = &cx.input.prog.funs[f as usize];
+                if !cx.input.reach.funs[f as usize] {
+                    return Vec::new();
+                }
+                fun.own_defaults().map(|(i, _)| (i, fun.captures == 0)).collect()
+            }
+        };
+        let m = self.mref(s);
+        let mut out = Vec::with_capacity(defaults.len());
+        for (i, has_body) in defaults {
+            let shape = self.default_getter_shape(s, i);
+            let (name, desc) = self.default_getter_ref(s, i, &m.params[..shape.before]);
+            let (params, ret) = parse_method_desc(&desc);
+            out.push((name.clone(), method_ref(Invoke::Interface, &m.owner, true, &name, &params, &ret), has_body));
+        }
+        out
     }
 
     /// `m` in the class, calling the trait's default `im`.
@@ -4079,10 +4149,7 @@ impl<'a> Gen<'a> {
         let Some(parent) = info.superclass else { return };
         let inherited: Vec<ClassId> = syms.class(parent).base_types.iter().map(|&(b, _)| b).collect();
         let mut done: Vec<crate::intern::Name> = Vec::new();
-        for &(b, _) in info.base_types.iter().skip(1) {
-            if inherited.contains(&b) || syms.class(b).kind != ClassKind::Trait {
-                continue;
-            }
+        for b in own_mixins(cx, c) {
             for &s in &syms.class(b).member_order {
                 let sinfo = syms.sym(s);
                 // A product's getter is its method's, as the whole program's class has it
@@ -5091,6 +5158,125 @@ enum BridgeDecision {
     Not(&'static str),
     /// A bridge of the inherited declaration's reference, and whether its parameters may override it.
     Owed(Rc<MethodRef>, bool),
+}
+
+/// A member `Gen::mixin_members` judges: a name of the class's traits' members with whether it is
+/// an extension, or a default getter of such a member, by the getter's name.
+enum MixinKey {
+    Member(Name, bool),
+    Getter { of: (Name, bool), name: String },
+}
+
+impl MixinKey {
+    fn is_extension(&self) -> bool {
+        match self {
+            MixinKey::Member(_, extension) => *extension,
+            MixinKey::Getter { of, .. } => of.1,
+        }
+    }
+
+    /// Whether the class declares the member itself: an entry of its own for the name, a
+    /// getter's where its own declaration of the method gives the default. The day a getter is a
+    /// member symbol, a getter's answer is `defines`'s.
+    fn declared_by(&self, g: &mut Gen<'_>, c: ClassId) -> bool {
+        let cx = g.cx;
+        let syms = cx.input.syms;
+        let info = syms.class(c);
+        match self {
+            MixinKey::Member(name, true) => info.extensions.iter().any(|&e| syms.sym(e).name == *name),
+            MixinKey::Member(name, false) => defines(cx, &info, *name),
+            MixinKey::Getter { of, name } => own_declarations(cx, c, *of).into_iter().any(|s| g.own_default_getters(s).iter().any(|own| own.0 == *name)),
+        }
+    }
+}
+
+/// A declaration `Gen::mixin_members` weighs: the trait base that holds it, and what it declares.
+struct Inherited {
+    base: ClassId,
+    decl: MixinDecl,
+}
+
+enum MixinDecl {
+    Member(SymId),
+    /// A default getter, which teq writes from its method's defaults, no symbol of its own
+    /// (`Gen::own_default_getters`): its reference on the trait and whether it has a body there.
+    Getter(Rc<MethodRef>, bool),
+}
+
+impl Inherited {
+    fn is(&self, other: &Inherited) -> bool {
+        match (&self.decl, &other.decl) {
+            (MixinDecl::Member(a), MixinDecl::Member(b)) => a == b,
+            (MixinDecl::Getter(a, _), MixinDecl::Getter(b, _)) => Rc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+
+    fn has_body(&self, cx: &super::Cx) -> bool {
+        match &self.decl {
+            MixinDecl::Member(s) => implemented(cx, *s),
+            MixinDecl::Getter(_, has_body) => *has_body,
+        }
+    }
+
+    /// Whether its trait's class file holds, beside it, a method of its name with a body of the erased signature
+    /// `desc` (`Gen::trait_holds`): a getter's trait writes the getter alone (`Gen::own_default_getters`). What the
+    /// class file holds, today and once a class writes its getters' bridges (scalac's form).
+    fn holds(&self, g: &mut Gen<'_>, desc: &str) -> bool {
+        match &self.decl {
+            MixinDecl::Member(s) => g.trait_holds(self.base, *s, desc),
+            MixinDecl::Getter(getter, _) => getter.desc == desc,
+        }
+    }
+
+    fn reference(&self, g: &mut Gen<'_>) -> Rc<MethodRef> {
+        match &self.decl {
+            MixinDecl::Member(s) => g.mref(*s),
+            MixinDecl::Getter(getter, _) => getter.clone(),
+        }
+    }
+
+    /// Whether an abstract redeclaration overrides it, so that it is no member of the class
+    /// (`redeclared_away`): a getter's over the bases' declarations of the getter, `decls`.
+    fn redeclared_away(&self, cx: &super::Cx, info: &ClassInfo, decls: &[Inherited]) -> bool {
+        match &self.decl {
+            MixinDecl::Member(s) => redeclared_away(cx, info, *s, self.base),
+            MixinDecl::Getter(..) => {
+                let declared: Vec<(ClassId, bool)> = decls.iter().map(|d| (d.base, d.has_body(cx))).collect();
+                declared.iter().any(|&(_, concrete)| !concrete) && cx.input.syms.member_declaration(&declared) != Some(self.base)
+            }
+        }
+    }
+}
+
+/// The traits the class mixes in itself, in its linearisation's order: those before its superclass there
+/// (dotty's `mixins`, `directlyInheritedTraits`, SymUtils.scala 33-49). A trait its superclass inherits stays in the
+/// superclass's part of the linearisation, the class naming it again or not, so the set is the traits outside the
+/// superclass's linearisation. A class forwards only its own mixins' members (Mixin.scala 345-353, MixinOps.scala 17).
+fn own_mixins(cx: &super::Cx, c: ClassId) -> Vec<ClassId> {
+    let syms = cx.input.syms;
+    let info = syms.class(c);
+    info.base_types
+        .iter()
+        .skip(1)
+        .map(|&(b, _)| b)
+        .take_while(|&b| Some(b) != info.superclass)
+        .filter(|&b| syms.class(b).kind == ClassKind::Trait)
+        .collect()
+}
+
+/// The class's own declarations of the member name `key` (an extension's among its extensions): an
+/// entry that joins inherited alternatives (`Worker::join_inherited_members`) holds none of them.
+fn own_declarations(cx: &super::Cx, c: ClassId, key: (Name, bool)) -> Vec<SymId> {
+    let syms = cx.input.syms;
+    let info = syms.class(c);
+    if key.1 {
+        return info.extensions.iter().copied().filter(|&e| syms.sym(e).name == key.0 && syms.sym(e).owner == Owner::Class(c)).collect();
+    }
+    let Some(&m) = info.members.get(&key.0) else { return Vec::new() };
+    let single = [m];
+    let alts = syms.alternatives(m).unwrap_or(&single);
+    alts.iter().copied().filter(|&a| syms.sym(a).owner == Owner::Class(c) && syms.sym(a).kind == SymKind::Def).collect()
 }
 
 /// Whether a member has a body, as the member choice reads it: an `abstract override` of

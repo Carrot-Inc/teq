@@ -561,7 +561,6 @@ REVIEW-bad_type.js	refused 2:94: Found: "bad"
 REVIEW-bad_type.jvm	refused 2:94: Found: "bad"
 REVIEW-default_generic.interp	crash 3
 REVIEW-default_generic.jvm	crash 3
-REVIEW-diamond_twin.jvm	crash 1
 REVIEW-line_drop.interp	crash 3
 REVIEW-line_drop.js	crash 1
 REVIEW-line_drop.jvm	crash 1
@@ -763,14 +762,11 @@ SPLIT-witness-products-member.desc	desc lib.Base.m$default$1 ()I ; lib.Base.m$de
 WITNESS-bridge-local.jvm	run Bb | Bnull
 WITNESS-bridge-member.jvm	run Bb | Bnull
 WITNESS-callee-local.js	run Dd | Dd | D()
-WITNESS-callee-local.jvm	run Dd | Dd | Db
 WITNESS-callee-member.js	run Dd | Dd | D()
-WITNESS-callee-member.jvm	run Dd | Dd | Db
 WITNESS-chain-local.interp	crash 3
 WITNESS-chain-local.js	crash 1
 WITNESS-chain-local.jvm	crash 1
 WITNESS-chain-member.interp	run 210
-WITNESS-diamond-member.jvm	crash 1
 WITNESS-drop-local.interp	crash 3
 WITNESS-drop-local.js	crash 1
 WITNESS-drop-local.jvm	crash 1
@@ -807,7 +803,5 @@ WITNESS-structural-member.jvm	refused 4:68: missing argument for parameter a
 WITNESS-traitoverride-local.interp	run 303 | 303
 WITNESS-traitoverride-local.js	run 303 | 303
 WITNESS-traitoverride-local.jvm	run 303 | 303
-WITNESS-unrelated-local.jvm	crash 1
-WITNESS-unrelated-member.jvm	crash 1
 WITNESS-views-local.interp	run 210 | 210 | 210
 WITNESS-views-member.interp	run 210 | 210 | 210

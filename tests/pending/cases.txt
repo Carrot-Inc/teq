@@ -171,6 +171,7 @@ macro_unapply_seq_plan	< two 1 2
 mapped_class_constants	< classOf[Array[String]]
 method_type_arg_kind	< 1
 method_type_arg_kinds_accepted	< 77
+mixin_default_getter_bridge	< Dd
 module_init_after_try	< before
 module_selection_effectful_qualifier	< receiver
 named_reorder_block_prefix_defaults	< init

@@ -313,6 +313,7 @@ member_retry_splice	output differs
 method_type_arg_kind	error: type argument P#F[Int] does not have the same kind as its bound [_]
 method_type_arg_kinds_accepted	error: type AnyKind not found
 mirror_declared_parent_interfaces	TypeError: c.getInterfaces is not a function
+mixin_default_getter_bridge	output differs
 module_init_after_try	output differs
 module_selection_effectful_qualifier	error: missing parameter type
 mutable_multimap	its summaries of hidden warnings are not scalac's (tests/stdlib-summaries.txt)

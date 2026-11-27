@@ -2244,6 +2244,11 @@ mirror_singleton_identity	pass	-
 mirror_unchecked_members	pass	-	
 mirror_within_companion	pass	-	
 mirror_written_from_product	pass	-	
+mixin_default_getter_bridge	fail	-	< Dd
+mixin_default_getter_dropped	pass	-	
+mixin_default_getters	pass	-	
+mixin_forwarder_through_superclass	pass	-	
+mixin_parent_getter	pass	-	
 mkstring	pass	-	
 module_init	pass	-	
 module_init_after_try	fail	-	< before

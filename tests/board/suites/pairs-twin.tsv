@@ -2192,6 +2192,11 @@ cases/mirror_singleton_identity	pass	-
 cases/mirror_unchecked_members	pass	-	
 cases/mirror_within_companion	pass	-	
 cases/mirror_written_from_product	pass	-	
+cases/mixin_default_getter_bridge	pass	-	
+cases/mixin_default_getter_dropped	pass	-	
+cases/mixin_default_getters	pass	-	
+cases/mixin_forwarder_through_superclass	pass	-	
+cases/mixin_parent_getter	pass	-	
 cases/mkstring	pass	-	
 cases/module_init	pass	-	
 cases/module_init_after_try	pass	-	

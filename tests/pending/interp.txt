@@ -187,6 +187,7 @@ mapped_class_constants	output
 method_type_arg_kind	compile
 method_type_arg_kinds_accepted	compile
 mirror_declared_parent_interfaces	compile
+mixin_default_getter_dropped	output
 module_selection_effectful_qualifier	compile
 named_reorder_block_prefix_defaults	output
 native_overload_reflection	output
