@@ -137,8 +137,9 @@ impl Underlying {
     }
 }
 
-/// An object's constructor tree, kept from the first of the class file's two methods written
-/// from it to the second (`Gen::hold_module_part`), with the locals its lowering declared.
+/// An object's constructor tree in its class's plan, with the locals its lowering declared: both of the class file's
+/// methods written from it are held over it (`Gen::hold_module_part`) and written from it (`Gen::write_held`), each
+/// taking it and putting it back.
 pub(super) struct ModuleTree {
     lir: crate::lir::Body,
     declared: FxMap<SymId, (ErasedType, bool)>,
@@ -860,8 +861,18 @@ impl<'a> Gen<'a> {
         self.plan_phase(false);
         let HeldMethod { method, entered, first_line, under, m, lir, declared, code, .. } = held;
         let maker = self.enter_held_under(under);
-        self.lir = lir;
-        self.lower_declared = declared;
+        // An object's two methods are written from its one constructor tree, which the class's plan keeps.
+        let mut tree = matches!(code, HeldCode::ModulePart(_)).then(|| self.module_tree.take().expect("an object's constructor tree in its class's plan"));
+        match tree.as_mut() {
+            Some(tree) => {
+                self.lir = std::mem::take(&mut tree.lir);
+                self.lower_declared = std::mem::take(&mut tree.declared);
+            }
+            None => {
+                self.lir = lir;
+                self.lower_declared = declared;
+            }
+        }
         self.open_method(&method, m);
         if let Some(line) = first_line {
             self.code.line(line);
@@ -881,6 +892,11 @@ impl<'a> Gen<'a> {
             }
         }
         self.end_method(method, entered);
+        if let Some(mut tree) = tree {
+            tree.lir = std::mem::take(&mut self.lir);
+            tree.declared = std::mem::take(&mut self.lower_declared);
+            self.module_tree = Some(tree);
+        }
         self.enter_held_under(maker);
         self.plan_phase(true);
     }
@@ -2781,10 +2797,10 @@ impl<'a> Gen<'a> {
 
     /// One of the two methods of the class file an object's constructor tree is written in
     /// (`Gen::write_module_part`), its `<init>` (`init`) or its `<clinit>`, held in the context `held_context` made
-    /// and written. The first of the two held lowers the tree with `make`; the second takes it from the store, with
-    /// the locals its lowering declared and what the first one's writing added to it. The `<clinit>`'s head is lowered
-    /// at its own hold, before the tree where the `<clinit>` comes first, and stands for `this` while the tree is
-    /// lowered (`MethodCx::this_kept`). Each part asks for the lifted bodies of its own statements alone
+    /// and written. The first of the two held lowers the tree with `make` into the plan's store (`Gen::module_tree`);
+    /// the second takes it from there, with the locals its lowering declared, and puts it back. The `<clinit>`'s head
+    /// is lowered at its own hold, before the tree where the `<clinit>` comes first, and stands for `this` while the
+    /// tree is lowered (`MethodCx::this_kept`). Each part asks for the lifted bodies of its own statements alone
     /// (`Gen::held_roots`), in the order they are written.
     pub(super) fn hold_module_part(&mut self, init: bool, make: impl FnOnce(&mut Self) -> (LirId, Vec<Declared>)) {
         let kept = self.module_tree.take().map(|kept| {
@@ -2792,7 +2808,6 @@ impl<'a> Gen<'a> {
             self.lower_declared = kept.declared;
             (kept.root, kept.fields)
         });
-        let first = kept.is_none();
         let head = (!init).then(|| self.lowering(|g| g.lower_module_head()));
         self.m.this_kept = head.as_ref().map(|&(_, temp)| temp);
         let (root, fields) = match kept {
@@ -2803,15 +2818,12 @@ impl<'a> Gen<'a> {
         for s in self.held_roots(&code) {
             self.ask_lifted(s);
         }
+        let (lir, declared) = (std::mem::take(&mut self.lir), std::mem::take(&mut self.lower_declared));
+        self.module_tree = Some(ModuleTree { lir, declared, root, fields });
         let what = if init { "object's constructor" } else { "object's static initialiser" };
         let mut held = self.hold_method(what, code);
         self.enter_plan(&mut held);
         self.write_held(held);
-        if first {
-            let lir = std::mem::take(&mut self.lir);
-            let declared = std::mem::take(&mut self.lower_declared);
-            *self.module_tree = Some(ModuleTree { lir, declared, root, fields });
-        }
     }
 
     /// How a primary constructor passes the arguments of its superclass's constructor

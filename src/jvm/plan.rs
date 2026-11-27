@@ -83,7 +83,7 @@ impl<'a> Gen<'a> {
         super::gen::write_phase(None);
         self.cw.cp.plan_frozen = cfg!(debug_assertions);
         self.plan = class;
-        *self.module_tree = None;
+        self.module_tree = None;
         self.writing_mirror = false;
         *self.long_name_refused = false;
         self.checked_methods.clear();

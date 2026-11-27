@@ -635,7 +635,6 @@ pub enum PhasedField {
     LazyHolders,
     CheckedMethods,
     LongNameRefused,
-    ModuleTree,
 }
 
 thread_local! {
@@ -819,9 +818,9 @@ pub struct Gen<'a> {
     pub(super) local_defs: Vec<SymId>,
     /// The templates read, by their text (`Gen::template`).
     pub(super) templates: FxMap<Box<str>, Rc<super::template::Template>>,
-    /// The constructor tree of the object being written, between its two methods
-    /// (`Gen::hold_module_part`).
-    pub(super) module_tree: Phased<Option<super::classes::ModuleTree>>,
+    /// The constructor tree of the object being written, which its two methods are held over and written from
+    /// (`Gen::hold_module_part`, `Gen::write_held`).
+    pub(super) module_tree: Option<super::classes::ModuleTree>,
     /// The temporaries of the matches being lowered that hold a value class's primitive
     /// underlying value, with the class and its arguments: a type pattern tests, and a
     /// `MatchError` holds, its box.
@@ -935,7 +934,7 @@ impl<'a> Gen<'a> {
             method_open: false,
             local_defs: Vec::new(),
             templates: FxMap::default(),
-            module_tree: Phased::new(PhasedField::ModuleTree, None),
+            module_tree: None,
             vc_temps: FxMap::default(),
             m: MethodCx::default(),
             context: String::new(),
@@ -1030,7 +1029,7 @@ impl<'a> Gen<'a> {
         self.an = Analysis::default();
         self.lambdas.clear();
         self.class_captures.clear();
-        *self.module_tree = None;
+        self.module_tree = None;
     }
 
     // ---- types ----
