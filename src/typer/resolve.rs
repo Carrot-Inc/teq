@@ -7015,7 +7015,7 @@ impl<'a> Worker<'a> {
                     ty,
                     by_name,
                     repeated,
-                    has_default: p.default.is_some(),
+                    has_default: p.default.is_some() || p.kept_default,
                     sym,
                 });
             }

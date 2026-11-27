@@ -641,6 +641,14 @@ impl<'a> Worker<'a> {
         out
     }
 
+    /// The method a def of the DefaultGetter name kind is the default getter of, by its name's kind (dotty's
+    /// `DefaultGetterName`), never by its spelling.
+    fn default_getter_kind(&self, cv: &Conv, n: u32) -> Option<Name> {
+        let Some(&crate::tasty::TName::DefaultGetter(u, _)) = cv.tasty.names.get(cv.tasty.source_name(n) as usize) else { return None };
+        let owner = cv.tasty.name(u);
+        Some(if owner == "$lessinit$greater" || owner == "<init>" { names::INIT } else { self.interner.intern(&owner) })
+    }
+
     /// `name$default$N`: the method the default belongs to and the 1-based position of the
     /// parameter, for a default getter.
     fn default_getter(&mut self, cv: &Conv, n: u32) -> Option<(Name, usize)> {
@@ -666,7 +674,7 @@ impl<'a> Worker<'a> {
                 let ty = if p.repeated { cv.ty(TyExpr::Repeated(elem)) } else { elem };
                 let default = defaults.get(&index).copied();
                 let m = self.syms.sym(sym).mods;
-                params.push(Param { name: p.name, span: cv.span, full: crate::source::Span::default(), ty, default, mods: m, annots: ListRef::EMPTY });
+                params.push(Param { name: p.name, span: cv.span, full: crate::source::Span::default(), ty, default, mods: m, annots: ListRef::EMPTY, kept_default: false });
             }
             clauses.push(ParamClause { params, is_using: cl.is_using, is_implicit: cl.is_implicit, span: crate::source::Span::default() });
         }
@@ -1155,7 +1163,7 @@ impl<'a> Worker<'a> {
                         let own = defaults.get(&(name, index)).or_else(|| synthetic_apply.then(|| defaults.get(&(names::INIT, index))).flatten());
                         let default = own.filter(|_| p.has_default).map(|(_, d)| self.conv_expr(cv, d));
                         let is_inline = self.param_is_inline(cv, sig, index - 1);
-                        params.push(Param { name: p.name, span, full: crate::source::Span::default(), ty, default, mods: if is_inline { mods::INLINE } else { 0 }, annots: ListRef::EMPTY });
+                        params.push(Param { name: p.name, span, full: crate::source::Span::default(), ty, default, mods: if is_inline { mods::INLINE } else { 0 }, annots: ListRef::EMPTY, kept_default: false });
                     }
                     clauses.push(ParamClause { params, is_using: cl.is_using, is_implicit: cl.is_implicit, span: crate::source::Span::default() });
                 }
@@ -1169,7 +1177,7 @@ impl<'a> Worker<'a> {
                 let body = rhs.as_ref().map(|r| self.conv_expr(cv, r));
                 let info = self.syms.sym(sym);
                 let m = info.mods & (mods::PRIVATE | mods::PROTECTED | mods::OVERRIDE | mods::FINAL | mods::INLINE | mods::TRANSPARENT | mods::IMPLICIT | mods::GIVEN | mods::ABSTRACT);
-                let fun = FunDef {
+                let fun = FunDef { default_getter: false,
                     tparams: Vec::new(),
                     clauses,
                     ret,
@@ -5306,7 +5314,7 @@ impl<'a> Worker<'a> {
                                 }
                                 None => None,
                             };
-                            params.push(Param { name: pname, span: cv.span, full: crate::source::Span::default(), ty, default, mods: field, annots: ListRef::EMPTY });
+                            params.push(Param { name: pname, span: cv.span, full: crate::source::Span::default(), ty, default, mods: field, annots: ListRef::EMPTY, kept_default: false });
                         }
                         clauses.push(ParamClause { params, is_using: false, is_implicit: false, span: crate::source::Span::default() });
                     }
@@ -5502,7 +5510,7 @@ impl<'a> Worker<'a> {
             let ty = self.conv_param_type(cv, &p.ty);
             let field = if p.flags.has(tags::LOCAL) { 0 } else { mods::FIELD | flag_mods(p.flags) & mods::MUTABLE };
             let default = getters.get(&(i + 1)).map(|rhs| self.conv_expr(cv, rhs));
-            params.push(Param { name: pname, span: cv.span, full: crate::source::Span::default(), ty, default, mods: field, annots: ListRef::EMPTY });
+            params.push(Param { name: pname, span: cv.span, full: crate::source::Span::default(), ty, default, mods: field, annots: ListRef::EMPTY, kept_default: false });
         }
         let clauses = if cd.template.params.is_empty() { Vec::new() } else { vec![ParamClause { params, is_using: false, is_implicit: false, span: crate::source::Span::default() }] };
         for s in &cd.template.stats {
@@ -5959,7 +5967,10 @@ impl<'a> Worker<'a> {
     }
 
     /// A local method, or a member of a local class, as a definition whose parameters and type
-    /// parameters are spelled out; the body refers to them by name.
+    /// parameters are spelled out; the body refers to them by name. A `member` is one of a class
+    /// `conv_local_class_with` makes, which declares its getters as members
+    /// (`Symbols::declares_getter_members`): its getter is marked by its name's kind, and its
+    /// parameters keep the pickle's HASDEFAULT with no default of their own.
     fn conv_def(&mut self, cv: &mut Conv, sig: &DefSig, rhs: Option<&Term>, member: bool) -> DefId {
         cv.at(sig.addr, |cv| self.conv_def_now(cv, sig, rhs, member))
     }
@@ -6018,7 +6029,7 @@ impl<'a> Worker<'a> {
                         }
                         let ty = self.conv_param_type(cv, &p.ty);
                         let pm = if p.flags.has(tags::INLINE) { mods::INLINE } else { 0 };
-                        params.push(Param { name: n, span: cv.span, full: crate::source::Span::default(), ty, default: None, mods: pm, annots: ListRef::EMPTY });
+                        params.push(Param { name: n, span: cv.span, full: crate::source::Span::default(), ty, default: None, mods: pm, annots: ListRef::EMPTY, kept_default: member && name != names::INIT && p.flags.has(tags::HASDEFAULT) });
                     }
                     let is_implicit = ps.iter().any(|p| p.flags.has(tags::IMPLICIT) && !p.flags.has(tags::GIVEN));
                     clauses.push(ParamClause { params, is_using, is_implicit, span: crate::source::Span::default() });
@@ -6042,7 +6053,11 @@ impl<'a> Worker<'a> {
         let is_extension = sig.mods.flags.has(tags::EXTENSION);
         let ext_tparams = if is_extension { sig.clauses.iter().take_while(|c| matches!(c, Clause::Types(_))).map(|c| match c { Clause::Types(ps) => ps.len(), _ => 0 }).sum() } else { 0 };
         let ext_clauses = if is_extension && !clauses.is_empty() { 1 } else { 0 };
-        let fun = FunDef { tparams, clauses, ret, body, ext_tparams: ext_tparams as u8, ext_clauses, is_extension, ext_group: 0 };
+        // A member named of the DefaultGetter kind is a default's getter, recorded on its symbol and its class
+        // (`Symbols::declares_getter_members`; the loader records a loaded member's alike); a constructor's getters are the
+        // companion's.
+        let default_getter = member && matches!(self.default_getter_kind(cv, sig.name), Some(owner) if owner != names::INIT);
+        let fun = FunDef { default_getter, tparams, clauses, ret, body, ext_tparams: ext_tparams as u8, ext_clauses, is_extension, ext_group: 0 };
         let d = cv.ast.add_def(Def { name, span: cv.span, mods: m, annots: Vec::new(), kind: DefKind::Fun(Box::new(fun)) });
         cv.def_at.push((d, sig.addr));
         d

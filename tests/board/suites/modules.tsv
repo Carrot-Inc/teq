@@ -71,7 +71,7 @@ ctororder	pass	-
 custommirror	pass	-	
 declaredsignature	pass	-	
 deepnesting	pass	-	
-defaultgetterslocal	fail	-	known js-run: over teq's products JavaScript loses the escaped local trait's default (10 for 21 on lines 3 and 4): the default getters' converted slice
+defaultgetterslocal	fail	-	known bundle: the whole build folds the escaped local trait's default into its method's parameter (`m(a = 21)`), the products do not: the top-level converter's fold, the default getters' converted sli
 defaultgettersmember	fail	-	known bundle: the products' bundle lacks the getter m$default$1 the whole build writes: the top-level converter's second conversion, the default getters' converted slice
 defaults	pass	-	
 defaultsgivenreceiver	pass	-	
@@ -97,12 +97,18 @@ diamond2	pass	-
 downstreammirror	pass	-	
 dupnames	pass	-	
 dynamic	pass	-	
-efabstract	fail	-	known js-run: the escape family's method defaults: over teq's products the local trait's own getter is not the one the omitted argument reaches, the inherited one answers (11 for 12); over scalac's cl
-efabstractmember	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
+efabstract	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the whole build writes the interface's getter (`a + 7`), w
+efabstractmember	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the whole build writes the interface's getter (`a + 7`), w
+efcapturediamond	fail	-	deferred build: a local trait's default and the block's values (tests/cases/local_trait_default_*): the JVM backend refuses the whole build's getter of a local trait's default in a second clause that
+efcaptureone	fail	-	deferred build: a local trait's default and the block's values (tests/cases/local_trait_default_*): the JVM backend refuses the whole build's getter of a local trait's default in a second clause that
+efcaptureoverloaded	fail	-	deferred build: a local trait's default and the block's values (tests/cases/local_trait_default_*): the JVM backend refuses the whole build's getter of a local trait's default in a second clause that
+efcapturesecond	fail	-	deferred build: a local trait's default and the block's values (tests/cases/local_trait_default_*): the JVM backend refuses the whole build's getter of a local trait's default in a second clause that
+efcapturetwo	fail	-	deferred build: a local trait's default and the block's values (tests/cases/local_trait_default_*): the JVM backend refuses the whole build's getter of a local trait's default in a second clause that
+efcaptureval	fail	-	deferred build: a local trait's default and the block's values (tests/cases/local_trait_default_*): the JVM backend refuses the whole build's getter of a local trait's default in a second clause that
 efdefaultonly	fail	-	deferred build: a local trait's default and the block's values (tests/cases/local_trait_default_*): the JVM backend refuses the whole build's getter of a local trait's default in a second clause that
 efextension	fail	-	known bundle: an extension's default: the products' class keeps the extension's getter `m$default$2` as a method of its own and its parameter without a default, where the whole build writes `y = 7` in
 efhandgetter	pass	-	
-efinherit	fail	-	known js-run: the escape family's method defaults: over teq's products the local trait's own getter is not the one the omitted argument reaches, the inherited one answers (11 for 12); over scalac's cl
+efinherit	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
 eflpescape	fail	-	known js-run: a local trait's default and the block's values (tests/cases/local_trait_default_*): the products withhold the body whose local trait declares the default, its getter one the writer canno
 eflpescapeprior	fail	-	known subset: the same as jvm-run, the module built alone
 efltlocalbodyoverrideanonclause2	fail	-	known subset: the same as jvm-run, the module built alone
@@ -122,38 +128,45 @@ eflxiobjclause	fail	-	deferred build: a local trait's default and the block's va
 eflxiobjdefaultleft	fail	-	known js-run: a local trait's default and the block's values (tests/cases/local_trait_default_*): the products withhold the body whose local trait declares the default, its getter one the writer canno
 eflxiobjdefaultsuper	fail	-	known subset: the same as jvm-run, the module built alone
 eflxiobjdefaultwritten	fail	-	known js-run: a local trait's default and the block's values (tests/cases/local_trait_default_*): the products withhold the body whose local trait declares the default, its getter one the writer canno
-efoperator	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
+efnestedinit	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efnestedlazy	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efnestedmethod	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efnestedobject	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efnestedone	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efnestedtwo	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efoperator	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
 efouterscope	fail	-	deferred build: a local trait's default and the block's values (tests/cases/local_trait_default_*): the JVM backend refuses the whole build's getter of a local trait's default in a second clause that
-efoverloaded	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
-efoverridelocalclass	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
-efpanon	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
-efparentonly	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
+efoverloaded	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efoverridelocalclass	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efpanon	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efparentonly	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
 efpbind	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class holds the getter as a method of its ow
 efpblock	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class holds the getter as a method of its ow
 efpbyname	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class holds the getter as a method of its ow
-efpclassown	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
+efpclassown	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
 efpcontextual	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class holds the getter as a method of its ow
 efpcopy	fail	-	known js-run: a local case class's copy: the products withhold the body, the getter's path through the local class's companion one the writer cannot state (`elided: unstated the path of C`)
 efpctor	fail	-	known js-run: a local class's constructor defaults: the products withhold the body, the getter's path through the local class's companion one the writer cannot state (`elided: unstated the path of C`)
 efpctorprior	fail	-	known js-run: a local class's constructor defaults: the products withhold the body, the getter's path through the local class's companion one the writer cannot state (`elided: unstated the path of C`)
 efpextension	fail	-	known bundle: an extension's default: the products' class keeps the extension's getter `m$default$2` as a method of its own and its parameter without a default, where the whole build writes `y = 7` in
-efpextoverride	fail	-	known js-run: an extension's default: the overriding extension's default is not read back from the products, and JavaScript passes nothing for it (0 for 10)
+efpextoverride	fail	-	known bundle: the same as js-run: the products' class writes the extension without its parameter's default
 efpinherited	pass	-	
 efpinline	fail	-	known classes: the escape family's method defaults, one source of the getter: the copy c's expansion of the inline body makes of its local class writes `m$default$2` before `m`, the converted members
 efpnarrow	fail	-	known js-run: a source local class's default getters in the converted class's one form (the source side of the local trait default family's), the getter's own result type: teq's pickle types the gette
-efpnone	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
+efpnone	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the whole build writes the interface's getter (`a + 7`), w
 efpobj	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class holds the getter as a method of its ow
 efpouter	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class holds the getter as a method of its ow
 efpoverloaded	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class holds the getter as a method of its ow
-efpoverloadescape	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
-efpown	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
+efpoverloadescape	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efpown	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
 efppoly	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes the method after its getter, th
 efppriorbyname	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes the method after its getter, th
 efpsameclause	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class holds the getter as a method of its ow
 efpself	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class holds the getter as a method of its ow
-efpthreads	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
-efpure	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
-efsecondtrait	fail	-	known js-run: the escape family's method defaults: the downstream reads the module's local class from its pickle, its own default getter a member that the omitted argument does not reach, and the call
+efpthreads	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efpure	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efsecondtrait	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
+efspelledgetter	fail	-	known bundle: a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its me
 elidedinit	pass	-	
 elidedmethod	pass	-	
 elidedparent	pass	-	

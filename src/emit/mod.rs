@@ -1721,6 +1721,14 @@ impl<'a> Emitter<'a> {
             }
         }
         let name = match info.owner {
+            // The getter member of a class that declares its getters as members (`Symbols::declares_getter_members`: a
+            // class converted from a pickled body, a getter by its name's kind) is named as its method's getter, the name
+            // every call that leaves the argument out gives it (`getter_name`): the method's emitted name, an overload's
+            // included. Another class's getter member is named as before, its method's default written from its record.
+            Owner::Class(c) if self.syms.getter_method(self.interner, c, s).is_some() => {
+                let (m, i) = self.syms.getter_method(self.interner, c, s).expect("a getter's method");
+                self.getter_name(m, i)
+            }
             Owner::Class(_) => {
                 let dev = self.member_name(s);
                 match self.renames {

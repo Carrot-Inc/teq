@@ -1011,9 +1011,12 @@ impl<'a> Worker<'a> {
         let list = self.prog.list(&args);
         let call = self.prog.add(TExpr::CallMethod(recv, m, list));
         self.prog.set_type(call, msig.ret);
+        // A forwarder of a getter member bears its mark, under which its name is the getter's (`Symbols::getter_method`).
+        let getter = self.syms.sym(m).default_getter;
         {
             let mut info = self.syms.sym_mut(s);
             info.sig = Some(Arc::new(sig));
+            info.default_getter = getter;
             info.state().set(Completion::Done);
         }
         self.add_forwarder_member(k, s);

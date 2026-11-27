@@ -2620,6 +2620,7 @@ impl<'a> Worker<'a> {
         // A default getter is a member by its name's kind, not its spelling.
         let default_getter = e.tag == tags::DEFDEF && matches!(tasty.names.get(tasty.source_name(e.name) as usize), Some(crate::tasty::TName::DefaultGetter(..)));
         if default_getter {
+            self.syms.sym_mut(sym).default_getter = true;
             self.loaded_mut().default_getters.insert(sym, ());
         }
         if f.has(tags::SYNTHETIC) {

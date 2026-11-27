@@ -334,6 +334,9 @@ pub struct ClassInfo {
     /// path it calls its member through (`typer::value_exports`), kept off the symbols: few
     /// classes have any.
     pub forwarders: Vec<(SymId, Arc<Forward>)>,
+    /// The class declares its methods' default getters as members and holds no record of the defaults
+    /// (`Symbols::declares_getter_members`).
+    pub getter_members: bool,
 }
 
 impl ClassInfo {
@@ -470,6 +473,10 @@ pub struct SymInfo {
     /// `Desugar.makePatDef`'s `patMods`), or a definition a pickle marks `SYNTHETIC`; a copy
     /// keeps it, reflection reports it and the pickle writes it.
     pub synthetic: bool,
+    /// A method whose name is of the DefaultGetter kind (dotty's `DefaultGetterName(m, i)`, `m$default$N`): the getter
+    /// member of the default of method `m`'s parameter `i`, as a loaded class's pickle or a converted class's records
+    /// it. Set by the kind alone, never by a spelling (`Symbols::getter_mark`).
+    pub default_getter: bool,
     /// Whether the method has a name of its own in the output, and that name: an alternative of an
     /// overloaded name.
     pub dispatch: Dispatch,
@@ -1530,6 +1537,7 @@ impl Symbols {
             meets_in_bases: false,
             tparams_made: false,
             made_companion: false,
+            getter_members: false,
             forwarders: Vec::new(),
         }))
     }
@@ -1582,6 +1590,7 @@ impl Symbols {
             unchecked_override: false,
             initialising: false,
             synthetic: false,
+            default_getter: false,
             dispatch: Dispatch::UNKNOWN,
             completion_noted: false,
         }))
@@ -1676,6 +1685,69 @@ impl Symbols {
         let g = self.sym(given);
         let parameterless = g.sig.as_ref().map_or(false, |s| s.tparams.is_empty() && s.clauses.is_empty());
         (g.kind == SymKind::Given && g.impl_class == Some(c) && parameterless).then_some(given)
+    }
+
+    /// Whether the class `c` declares its methods' default getters as members, of the DefaultGetter name kind
+    /// (`SymInfo::default_getter`), and holds no record of their defaults: a class converted from a pickled body (a
+    /// local class, and a class, trait or object within one, however deep). The converter's members of such a class
+    /// (`conv_def`'s `member`) keep the pickle's HASDEFAULT and carry the getter's kind; the namer records the class
+    /// here as it enters such a getter, and the interpreter's adapter, JavaScript's reach and naming and the TASTy
+    /// writer ask it. A class the source defines, or a loaded top-level class, keeps its defaults' records.
+    pub fn declares_getter_members(&self, c: ClassId) -> bool {
+        self.class(c).getter_members
+    }
+
+    /// The method and parameter index (counted across the clauses from 0) whose default the member `s` is the getter
+    /// of, where its name is of the DefaultGetter kind (`SymInfo::default_getter`): that kind's name is written
+    /// `{m}$default${i + 1}` (`TName::DefaultGetter`), which gives the two back. A member without the mark, one a
+    /// program spells so, is none.
+    pub fn getter_mark(&self, interner: &crate::intern::Interner, s: SymId) -> Option<(Name, u32)> {
+        let info = self.sym(s);
+        if !info.default_getter {
+            return None;
+        }
+        let (method, n) = interner.get(info.name).rsplit_once("$default$")?;
+        let index = n.parse::<u32>().ok()?.checked_sub(1)?;
+        Some((interner.lookup(method)?, index))
+    }
+
+    /// The getter member of class `c` of the default of its method `method`'s parameter `index` (counted across the
+    /// clauses from 0), where `c` declares its getters as members: the member marked the getter of that method and
+    /// index (`Symbols::getter_mark`), never one spelled so.
+    pub fn getter_member(&self, interner: &crate::intern::Interner, c: ClassId, method: Name, index: u32) -> Option<SymId> {
+        if !self.declares_getter_members(c) {
+            return None;
+        }
+        let info = self.class(c);
+        info.member_order.iter().copied().find(|&s| self.getter_mark(interner, s) == Some((method, index)))
+    }
+
+    /// The method whose default the getter member `g` of class `c` is, and the parameter's place: the alternative of
+    /// the method its name's kind names whose parameter there has the default, as only one may
+    /// (`Symbols::getter_member`'s inverse). A mixing class's forwarder of a local trait's getter, which bears the
+    /// getter's mark (`Worker::trait_forwarder`), answers with the method of the first of the class's bases that
+    /// declares that getter: every name of the getter, its definition's, the forwarder's and each call's, is that
+    /// method's (`getter_name` on JavaScript).
+    pub fn getter_method(&self, interner: &crate::intern::Interner, c: ClassId, g: SymId) -> Option<(SymId, usize)> {
+        let (method, i) = self.getter_mark(interner, g)?;
+        if self.getter_member(interner, c, method, i).is_some_and(|x| x != g) {
+            return None;
+        }
+        // The class itself first, then its bases in linearisation order.
+        for &(k, _) in &self.class(c).base_types {
+            if self.getter_member(interner, k, method, i).is_none() {
+                continue;
+            }
+            let Some(&m) = self.class(k).members.get(&method) else { continue };
+            let alternatives = self.alternatives(m).map_or_else(|| vec![m], |a| a.to_vec());
+            let declared = alternatives.into_iter().find(|&a| {
+                self.sym(a).owner == Owner::Class(k) && self.sym(a).sig.as_ref().and_then(|sig| sig.clauses.iter().flat_map(|cl| cl.params.iter()).nth(i as usize)).is_some_and(|p| p.has_default)
+            });
+            if let Some(a) = declared {
+                return Some((a, i as usize));
+            }
+        }
+        None
     }
 
     /// The alternatives `s` stands for when it is the entry of an overloaded name.

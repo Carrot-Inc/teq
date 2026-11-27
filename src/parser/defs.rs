@@ -647,7 +647,7 @@ impl<'a> Parser<'a> {
                 }
                 if name != names::EMPTY {
                     let full = param_start.to(self.prev_span());
-                    clause.params.push(Param { name, span, full, ty, default, mods: pm, annots });
+                    clause.params.push(Param { name, span, full, ty, default, mods: pm, annots, kept_default: false });
                 }
                 if !self.list_continues(Tok::RParen, &mut cut) {
                     break;
@@ -732,7 +732,7 @@ impl<'a> Parser<'a> {
         }
         let args = self.expr_list(mark);
         let body = Some(self.ast.add_expr(Expr::New(ty, args), span));
-        let fun = FunDef {
+        let fun = FunDef { default_getter: false,
             tparams,
             clauses,
             ret: Some(ty),
@@ -773,7 +773,7 @@ impl<'a> Parser<'a> {
         let m = if complete { m } else { m | mods::INCOMPLETE };
         let body = if self.eat(Tok::Eq) || bare_body { Some(self.parse_rhs(region)) } else { None };
         self.end_annotation_region(region);
-        let fun = FunDef {
+        let fun = FunDef { default_getter: false,
             tparams,
             clauses,
             ret,
@@ -802,7 +802,7 @@ impl<'a> Parser<'a> {
         if let Some(at) = self.first_statement_not_self_call(body) {
             self.error_at(self.ast.expr_span(at), "'this' expected, but another expression found");
         }
-        let fun = FunDef {
+        let fun = FunDef { default_getter: false,
             tparams: Vec::new(),
             clauses,
             ret: None,
@@ -1542,7 +1542,7 @@ impl<'a> Parser<'a> {
                 if m & mods::LAZY == 0 {
                     return define(p, body, name, at, m, ty, rhs);
                 }
-                let fun = FunDef { tparams: Vec::new(), clauses: Vec::new(), ret: ty, body: Some(rhs), ext_tparams: 0, ext_clauses: 0, is_extension: false, ext_group: 0 };
+                let fun = FunDef { default_getter: false, tparams: Vec::new(), clauses: Vec::new(), ret: ty, body: Some(rhs), ext_tparams: 0, ext_clauses: 0, is_extension: false, ext_group: 0 };
                 let d = p.ast.add_def(Def { name, span: at, mods: m & !mods::LAZY, annots: annots.clone(), kind: DefKind::Fun(Box::new(fun)) });
                 p.ast.def_ranges[d.idx()] = range;
                 body.push(Stmt::Def(d));
@@ -2010,7 +2010,7 @@ impl<'a> Parser<'a> {
                 );
             }
             let clauses = if no_term_params { Vec::new() } else { clauses };
-            let fun = FunDef { tparams, clauses, ret: Some(ty), body: None, ext_tparams: 0, ext_clauses: 0, is_extension: false, ext_group: 0 };
+            let fun = FunDef { default_getter: false, tparams, clauses, ret: Some(ty), body: None, ext_tparams: 0, ext_clauses: 0, is_extension: false, ext_group: 0 };
             return self.ast.add_def(Def { name, span, mods: m | mods::GIVEN, annots, kind: DefKind::Fun(Box::new(fun)) });
         } else if self.given_ends_here() {
             // A structural instance without a body.
@@ -2130,7 +2130,7 @@ impl<'a> Parser<'a> {
                 self.bump();
                 lead += 1;
                 let name = self.interner.intern(&format!("x${}", lead));
-                clauses.push(ParamClause { params: vec![Param { name, span, full: Span::default(), ty: parents[0].ty, default: None, mods: 0, annots: ListRef::EMPTY }], is_using: true, is_implicit: false, span: Span::default() });
+                clauses.push(ParamClause { params: vec![Param { name, span, full: Span::default(), ty: parents[0].ty, default: None, mods: 0, annots: ListRef::EMPTY, kept_default: false }], is_using: true, is_implicit: false, span: Span::default() });
                 continue;
             }
             return (clauses, parents, ty_span);

@@ -3467,6 +3467,8 @@ impl<'c> Copier<'c> {
             copy.value_class = info.value_class;
         }
         copy.parents = parents;
+        // Its getter members are the copies of the class's, marked as theirs are.
+        copy.getter_members = info.getter_members;
         let superclass = info.superclass.map(|k| self.classes.get(&k).copied().unwrap_or(k));
         copy.superclass = superclass;
         copy.nested = info.nested.iter().map(|(&n, &k)| (n, self.classes.get(&k).copied().unwrap_or(k))).collect();

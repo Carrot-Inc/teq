@@ -450,6 +450,9 @@ pub struct Param {
     pub mods: Mods,
     /// Annotations of a constructor parameter, in `Ast::param_annots`.
     pub annots: ListRef,
+    /// A parameter of a method read from a pickle that marks it HASDEFAULT: its default is the getter member the
+    /// method's class declares (`m$default$N`), which a call that leaves it out dispatches; `default` is None.
+    pub kept_default: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -520,6 +523,9 @@ pub struct FunDef {
     /// Numbers the `extension` clauses of a file from 1, so that the methods of one are told
     /// from those of another.
     pub ext_group: u32,
+    /// The method is a default getter by its name's kind (`DefaultGetterName`, a member of a class converted from a
+    /// pickled body), recorded on its symbol (`SymInfo::default_getter`).
+    pub default_getter: bool,
 }
 
 #[derive(Debug)]

@@ -695,6 +695,14 @@ impl<'a> Worker<'a> {
                 }
                 let sym =
                     self.syms.new_sym(def.name, SymKind::Def, def.mods, owner, file, Some(id), def.span);
+                // A converted member named of the DefaultGetter kind is a default's getter (`FunDef::default_getter`), and
+                // its class one that declares its getters as members (`Symbols::declares_getter_members`).
+                if f.default_getter {
+                    self.syms.sym_mut(sym).default_getter = true;
+                    if let Owner::Class(c) = owner {
+                        self.syms.class_mut(c).getter_members = true;
+                    }
+                }
                 self.note_scoped_private(file, sym);
                 let jvm = self.jvm;
                 // A std stand-in's markers are read of an annotated definition alone.

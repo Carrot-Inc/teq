@@ -875,6 +875,15 @@ impl<'w, 'a> P<'w, 'a> {
     /// the unique name it is (dotty's `ContextBoundParamName`, `WildcardParamName`: a context bound's evidence, a
     /// placeholder's parameter), at its definition and at every reference alike.
     pub(super) fn term_name(&mut self, s: SymId) -> u32 {
+        // The getter member of a class that declares its getters as members (`Symbols::declares_getter_members`: a
+        // class converted from a pickled body) is the DefaultGetter name it was read with, `DefaultGetterName(m, n)`,
+        // as scalac's pickle names it.
+        if let (Some((method, n)), Owner::Class(c)) = (self.w.syms.getter_mark(self.w.interner, s), self.w.syms.sym(s).owner) {
+            if self.w.syms.declares_getter_members(c) {
+                let method = self.w.interner.get(method).to_string();
+                return self.names.default_getter(&method, n);
+            }
+        }
         let n = self.w.syms.sym(s).name;
         // A context bound's evidence a library's symbol names by its text.
         if self.w.syms.context_bounds.contains_key(&s) {

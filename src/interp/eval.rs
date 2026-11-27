@@ -696,6 +696,17 @@ impl<'a, 't> Interp<'a, 't> {
             }
         };
         let own = self.prog().funs[f.idx()].sym;
+        // The default getters' adapter (the port's contract, section 4 (a)): where the declarer's class declares the
+        // getter as a member (a class read from a pickle keeps its `m$default$N`), the call dispatches that member by
+        // name on the receiver, as JavaScript does, the earlier parameters' values its arguments; else the
+        // declarer's record below. A call through `super` keeps the record's path. A mixing class's forwarder of a
+        // local trait's member has that member's default (`Worker::trait_forwarder`): its declarer is the member.
+        if !on_super && mixin.is_none() {
+            let declarer = self.forwarded_member(f).unwrap_or(own);
+            if let Some((m, name)) = self.declared_getter_member(declarer, from, &this) {
+                return self.invoke_member(this, m, name, vals);
+            }
+        }
         let Some(d) = self.prog().funs[f.idx()].defaults.get(from).copied().flatten().or_else(|| self.typer.default_tree(DefaultOf::Method(own), from)) else {
             let name = self.qualified_name(self.prog().funs[f.idx()].sym);
             return self.unsupported(format!("{} has no default for its parameter {}", name, from + 1));
@@ -705,6 +716,44 @@ impl<'a, 't> Interp<'a, 't> {
         let sym = self.prog().funs[f.idx()].sym;
         let by_name = self.syms().sym(sym).sig.as_ref().and_then(|sig| sig.clauses.iter().flat_map(|cl| cl.params.iter()).nth(from).map(|p| p.by_name)).unwrap_or(false);
         self.eval_default(d, by_name, bound, parent, this, class)
+    }
+
+    /// The member a mixing class's forwarder `f` of a local trait's member calls (`Worker::trait_forwarder`: a method of
+    /// the class with no definition of its own whose body is `super[T].m(..)` of the trait's member), whose parameters,
+    /// the proxies left out, are the forwarder's.
+    fn forwarded_member(&self, f: FunId) -> Option<SymId> {
+        let fun = &self.prog().funs[f.idx()];
+        let info = self.syms().sym(fun.sym);
+        let Owner::Class(k) = info.owner else { return None };
+        if info.def.is_some() {
+            return None;
+        }
+        match fun.body.map(|b| self.prog().expr(b)) {
+            Some(TExpr::CallMethod(r, m, _)) => match self.prog().expr(r) {
+                TExpr::Super(SuperTarget::Class(t)) if t != k && self.syms().sym(m).owner == Owner::Class(t) => Some(m),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// The getter member of the declarer `s`'s parameter `index` where `s`'s class declares its getters as members
+    /// (`Symbols::declares_getter_members`: a class converted from a pickled body, which holds no record of the
+    /// default), as the receiver dispatches it by its name, and the name. The member is the one its name's kind marks
+    /// the getter of `s`'s parameter there (`Symbols::getter_member`), never one spelled so; another class's method
+    /// holds the default's record, evaluated as the source's.
+    fn declared_getter_member(&mut self, s: SymId, index: usize, recv: &Value) -> Option<(Member, Name)> {
+        let Owner::Class(c) = self.syms().sym(s).owner else { return None };
+        let mark = (self.syms().sym(s).name, index as u32);
+        let g = self.syms().getter_member(&self.typer.interner, c, mark.0, mark.1)?;
+        // Its own name among an overloaded one's alternatives (a method of the class spelled as the getter is another),
+        // and the member that answers it on the receiver taken only where it bears the same mark: an override's getter,
+        // a mixing class's forwarder of a local trait's.
+        let name = self.syms().dispatch_name(g);
+        match self.member_by_name(recv, name) {
+            Member::Fun(f, k) if self.syms().getter_mark(&self.typer.interner, self.prog().funs[f.idx()].sym) == Some(mark) => Some((Member::Fun(f, k), name)),
+            _ => None,
+        }
     }
 
     /// The function whose default a getter's application of `s`'s parameter `index` runs, the

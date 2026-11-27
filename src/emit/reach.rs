@@ -1837,6 +1837,22 @@ impl Walker {
                     if matches!(cx.syms.sym(fun.sym).owner, Owner::Class(c) if self.is_jdk_class(c)) {
                         continue;
                     }
+                    // A method of a class that declares its getters as members (`Symbols::declares_getter_members`) has
+                    // a default without a record of it: its class's getter member is the default, which a call leaving
+                    // the argument out dispatches by name.
+                    if let (Owner::Class(c), Some(sig)) = (cx.syms.sym(fun.sym).owner, cx.syms.sym(fun.sym).sig.clone()) {
+                        if cx.syms.declares_getter_members(c) {
+                            let method = cx.syms.sym(fun.sym).name;
+                            let kept: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter()).enumerate()
+                                .filter(|&(i, p)| p.has_default && fun.defaults.get(i).copied().flatten().is_none())
+                                .filter_map(|(i, _)| cx.syms.getter_member(cx.interner, c, method, i as u32))
+                                .collect();
+                            for g in kept {
+                                self.reach_getter_member(cx, g);
+                            }
+                        }
+                    }
+                    let fun = &cx.prog.funs[f.idx()];
                     // A default of a parameter runs before the body, where a call from JavaScript
                     // may leave the file uninitialised.
                     self.region = None;
@@ -2027,6 +2043,30 @@ impl Walker {
             return;
         }
         self.reach.getter_names.insert((cx.syms.sym(s).name, i), ());
+        // A class that declares its getters as members (`Symbols::declares_getter_members`) holds no record of the
+        // default: its getter member, by its name's kind, is the getter a call dispatches by name. Another class's
+        // method holds the default's record, whose getter is written as the source side writes it.
+        if let Owner::Class(c) = cx.syms.sym(s).owner {
+            if !cx.syms.declares_getter_members(c) {
+                return self.reach_getter_record(cx, s, i);
+            }
+            if let Some(g) = cx.syms.getter_member(cx.interner, c, cx.syms.sym(s).name, i) {
+                self.reach_getter_member(cx, g);
+            }
+        }
+        self.reach_getter_record(cx, s, i);
+    }
+
+    /// The getter member `g` a call leaving its argument out calls by its name on the receiver: its definition, and the
+    /// definition that answers the name on each instance, a mixing class's forwarder of a local trait's getter that
+    /// takes the trait's proxies included (`Worker::add_trait_forwarders`), as a call of the member reaches them.
+    fn reach_getter_member(&mut self, cx: Cx, g: SymId) {
+        self.reach_fun_of(cx, g);
+        self.call_member(cx, g);
+    }
+
+    /// The record's part of `reach_getter`: the declarer's typed default walked, a library's method typed for it.
+    fn reach_getter_record(&mut self, cx: Cx, s: SymId, i: u32) {
         if let Some(f) = index(self.fun_of[s.idx()]) {
             self.work.push(Work::Getter(FunId(f as u32), i));
             return;
