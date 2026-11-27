@@ -192,7 +192,13 @@ struct Graph {
     /// last (the first that transfers control).
     blocks: Vec<(Local, usize, usize)>,
     reachable: Vec<bool>,
+    /// The blocks that come to each block other than by unwinding: what the null guards' rule
+    /// reads (`Lowering::enter`).
     preds: Vec<Vec<usize>>,
+    /// The blocks an unwinding enters. A handler is entered from anywhere in the block that
+    /// throws, before a guard that block makes or at the guard itself, so nothing counts as
+    /// guarded on entering it, whatever the blocks that jump to it guarded.
+    unwound: Vec<bool>,
 }
 
 fn is_cf(inst: &Inst) -> bool {
@@ -222,6 +228,7 @@ impl Graph {
         let index: FxMap<Local, usize> = blocks.iter().enumerate().map(|(n, b)| (b.0, n)).collect();
         let mut reachable = vec![false; blocks.len()];
         let mut preds = vec![Vec::new(); blocks.len()];
+        let mut unwound = vec![false; blocks.len()];
         let mut todo = vec![0usize];
         while let Some(b) = todo.pop() {
             if std::mem::replace(&mut reachable[b], true) {
@@ -229,9 +236,10 @@ impl Graph {
             }
             let (_, start, end) = blocks[b];
             let mut successors: Vec<Local> = Vec::new();
+            let mut handlers: Vec<Local> = Vec::new();
             for inst in &insts[start..end] {
                 match &inst.kind {
-                    InstKind::Let { unwind, .. } | InstKind::Throw { unwind, .. } | InstKind::Unreachable { unwind } => successors.extend(next_label(unwind)),
+                    InstKind::Let { unwind, .. } | InstKind::Throw { unwind, .. } | InstKind::Unreachable { unwind } => handlers.extend(next_label(unwind)),
                     InstKind::Jump(next) => successors.extend(next_label(next)),
                     InstKind::If { then, otherwise, .. } | InstKind::LinktimeIf { then, otherwise, .. } => {
                         successors.extend(next_label(then));
@@ -249,8 +257,13 @@ impl Graph {
                 preds[to].push(b);
                 todo.push(to);
             }
+            for h in handlers {
+                let &to = index.get(&h).ok_or("a handler the method has not")?;
+                unwound[to] = true;
+                todo.push(to);
+            }
         }
-        Ok(Graph { blocks, reachable, preds })
+        Ok(Graph { blocks, reachable, preds, unwound })
     }
 }
 
@@ -462,7 +475,10 @@ pub struct Lowering<'a> {
     unwind_handler: Option<Local>,
     current_block: Local,
     guarded: FxMap<Local, Vec<Val>>,
+    /// The values guarded on every way into each block entered so far (`Lower::enter`).
+    entered: FxMap<Local, Vec<Val>>,
     preds: FxMap<Local, Vec<Local>>,
+    unwound: FxSet<Local>,
     slow_paths: [Vec<(Option<Local>, Local)>; 6],
     intrinsic_methods: FxMap<Local, Intrinsic>,
 }
@@ -512,7 +528,9 @@ impl<'a> Lowering<'a> {
             unwind_handler: None,
             current_block: 0,
             guarded: FxMap::default(),
+            entered: FxMap::default(),
             preds: FxMap::default(),
+            unwound: FxSet::default(),
             slow_paths: Default::default(),
             intrinsic_methods: FxMap::default(),
         };
@@ -884,7 +902,9 @@ impl<'a> Lowering<'a> {
         self.fresh = insts.iter().map(max_local).max().unwrap_or(0);
         let graph = Graph::new(insts)?;
         self.preds = graph.blocks.iter().enumerate().filter(|&(b, _)| graph.reachable[b]).map(|(b, &(id, _, _))| (id, graph.preds[b].iter().map(|&p| graph.blocks[p].0).collect())).collect();
+        self.unwound = graph.blocks.iter().enumerate().filter(|&(b, _)| graph.reachable[b] && graph.unwound[b]).map(|(_, &(id, _, _))| id).collect();
         self.guarded.clear();
+        self.entered.clear();
         self.intrinsic_methods.clear();
         self.buf = Vec::with_capacity(insts.len() * 2);
         let sig = self.cx.sig_bytes(defn.name);
@@ -906,7 +926,7 @@ impl<'a> Lowering<'a> {
             }
         }
         let InstKind::Label { id: first_label, params } = &insts[0].kind else { return Err("a method that starts with no label".to_string()) };
-        self.current_block = *first_label;
+        self.enter(*first_label);
         let label_positions: FxMap<Local, usize> = insts.iter().filter_map(|i| if let InstKind::Label { id, .. } = &i.kind { Some(*id) } else { None }).enumerate().map(|(n, id)| (id, n)).collect();
         let mut block_position = 0usize;
         // A reflective proxy checks its receiver: it is the one kind of method whose first
@@ -988,7 +1008,7 @@ impl<'a> Lowering<'a> {
                 }
                 InstKind::Label { id, .. } => {
                     block_position = label_positions[id];
-                    self.current_block = *id;
+                    self.enter(*id);
                     self.buf.push(inst.clone());
                 }
                 _ => self.buf.push(inst.clone()),
@@ -1375,25 +1395,40 @@ impl<'a> Lowering<'a> {
     }
 
     fn is_null_guarded(&self, v: &Val) -> bool {
-        let has = |block: Local| self.guarded.get(&block).is_some_and(|vals| vals.contains(v));
-        if has(self.current_block) {
-            return true;
+        let has = |map: &FxMap<Local, Vec<Val>>| map.get(&self.current_block).is_some_and(|vals| vals.contains(v));
+        has(&self.guarded) || has(&self.entered)
+    }
+
+    /// The block `id` begins: what is guarded on entering it is what every block that comes to it
+    /// had guarded at its end, each of them lowered already (blocks are lowered in their order, so
+    /// a loop's back edge or a later block gives nothing), and nothing where an unwinding enters
+    /// it (`Graph::unwound`). This departs from Scala Native's lowering, whose rule is unsound:
+    /// `Lower.isNullGuarded` (tools 0.5.12, Lower.scala 62-82) takes a value as guarded where
+    /// each predecessor has SOME block before it that guarded it, on any path, and its graph
+    /// (ControlFlow.scala 97-101) counts an unwind edge as a predecessor; so a value guarded on
+    /// one branch is taken as guarded after the join, and one guarded in a `try` as guarded in
+    /// its handler and after it, though the guard itself may be what threw. A program reading a
+    /// null there gets no NullPointerException but reads through null.
+    fn enter(&mut self, id: Local) {
+        self.current_block = id;
+        if self.unwound.contains(&id) {
+            self.entered.insert(id, Vec::new());
+            return;
         }
-        let Some(preds) = self.preds.get(&self.current_block) else { return false };
-        !preds.is_empty()
-            && preds.iter().all(|&pred| {
-                let mut visited: FxSet<Local> = FxSet::default();
-                let mut todo = vec![pred];
-                while let Some(block) = todo.pop() {
-                    if has(block) {
-                        return true;
-                    }
-                    if visited.insert(block) {
-                        todo.extend(self.preds.get(&block).into_iter().flatten());
-                    }
-                }
-                false
-            })
+        let preds = self.preds.get(&id).cloned().unwrap_or_default();
+        let mut on_entry: Option<Vec<Val>> = None;
+        for p in &preds {
+            let Some(before) = self.entered.get(p) else {
+                on_entry = Some(Vec::new());
+                break;
+            };
+            let at_end: Vec<Val> = before.iter().chain(self.guarded.get(p).into_iter().flatten()).cloned().collect();
+            on_entry = Some(match on_entry {
+                None => at_end,
+                Some(so_far) => so_far.into_iter().filter(|v| at_end.contains(v)).collect(),
+            });
+        }
+        self.entered.insert(id, on_entry.unwrap_or_default());
     }
 
     fn guard_not_null(&mut self, obj: &Val) -> Res<()> {

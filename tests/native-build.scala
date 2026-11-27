@@ -1,9 +1,10 @@
 //> using file ../tools/script
 // Tests of the native build: `teq nir --link <main> <class path> --build=<executable>` over NIR that Scala Native's
-// compiler plugin wrote (tests/native-build/fixtures: hello world, the nine programs of tests/cases/bench_*.scala and
-// the renamed fixture; tests/native-build/README says how), linked against the jars of Scala Native 0.5.12 that
-// tests/nir/digests.txt names, built by zig into a static x86_64-linux-musl executable and run: its output has to be
-// what scalac's JVM build prints (tests/native-build/hello.expected, tests/cases/bench_<name>.expected). The commands
+// compiler plugin wrote (tests/native-build/fixtures: hello world, the nine programs of tests/cases/bench_*.scala, a
+// program reading a null receiver where a path into the read checked it and another did not, and the renamed fixture;
+// tests/native-build/README says how), linked against the jars of Scala Native 0.5.12 that tests/nir/digests.txt
+// names, built by zig into a static x86_64-linux-musl executable and run: its output has to be what scalac's JVM
+// build prints (tests/native-build/hello.expected, nullguard.expected, tests/cases/bench_<name>.expected). The commands
 // hello world's build gives zig have to be Scala Native's own build's (tests/native-build/commands.txt). A build
 // compiles every C, C++ and assembly source again and takes the program's LLVM IR modules from zig's cache: a second
 // build has to compile every source again and no module, and a zig of another build that prints the same version is
@@ -55,7 +56,8 @@ val programs = Vector(
   ("dispatch", "DispatchBench", "tests/cases/bench_dispatch.expected"),
   ("numeric", "NumericBench", "tests/cases/bench_numeric.expected"),
   ("strings", "StringsBench", "tests/cases/bench_strings.expected"),
-  ("toplevel", "TopLevelBench", "tests/cases/bench_toplevel.expected"))
+  ("toplevel", "TopLevelBench", "tests/cases/bench_toplevel.expected"),
+  ("nullguard", "nullguard", "tests/native-build/nullguard.expected"))
 
 def version(zig: Path): Option[String] =
   val said = Sh(zig.toString, "version").timeout(30).check(false).run()
