@@ -3100,6 +3100,16 @@ impl<'a> Gen<'a> {
         self.code.push(VT::Float);
     }
 
+    /// The zero of the primitive type `t`.
+    pub(super) fn zero(&mut self, t: &ErasedType) {
+        match t {
+            ErasedType::J => self.lconst(0),
+            ErasedType::F => self.fconst(0.0),
+            ErasedType::D => self.dconst(0.0),
+            _ => self.iconst(0),
+        }
+    }
+
     pub fn sconst(&mut self, s: &str) {
         let i = self.cw.cp.string(s);
         self.ldc(i);
@@ -3420,12 +3430,7 @@ impl<'a> Gen<'a> {
                 let vt = self.vt(to);
                 self.code.retype_top(vt);
             }
-            Adaptation::Zero => match to {
-                ErasedType::J => self.lconst(0),
-                ErasedType::F => self.fconst(0.0),
-                ErasedType::D => self.dconst(0.0),
-                _ => self.iconst(0),
-            },
+            Adaptation::Zero => self.zero(to),
             Adaptation::Widen => {
                 let vt = self.vt(to);
                 self.code.retype_top(vt);
@@ -3930,7 +3935,7 @@ impl<'a> Gen<'a> {
                 self.code.op(op::ACONST_NULL);
                 self.code.push(VT::Null);
             }
-            _ => self.adapt(&ErasedType::V, &ret),
+            _ => self.zero(&ret),
         }
         self.m.early_return = Some(self.store_new(&ret));
         true
@@ -3962,7 +3967,7 @@ impl<'a> Gen<'a> {
                 Some(self.store_new(&t))
             }
             _ => {
-                self.adapt(&ErasedType::V, &t);
+                self.zero(&t);
                 Some(self.store_new(&t))
             }
         };
