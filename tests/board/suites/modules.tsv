@@ -296,6 +296,7 @@ mirrorproducttyped	pass	-
 mirrorshapes	pass	-	
 misuse	pass	-	
 mixedparent	pass	-	
+mixinlosertrait	pass	-	
 namedtuplesize	pass	-	
 nestedbounds	pass	-	
 nestedcallee	pass	-	

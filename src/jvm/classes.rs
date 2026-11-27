@@ -1549,24 +1549,7 @@ impl<'a> Gen<'a> {
         let Some(c) = self.this_class else { return };
         let syms = cx.input.syms;
         let info = syms.sym(sym);
-        let bases: Vec<ClassId> = syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
-        for b in bases {
-            let base = syms.class(b);
-            let inherited: Vec<SymId> = if info.is_extension {
-                base.extensions.iter().copied().filter(|&e| syms.sym(e).name == name).collect()
-            } else {
-                match base.members.get(&name) {
-                    Some(&e) => match syms.alternatives(e) {
-                        Some(alts) => alts.iter().copied().filter(|&a| syms.sym(a).owner == Owner::Class(b)).collect(),
-                        None => vec![e],
-                    },
-                    None => Vec::new(),
-                }
-            };
-            for inherited in inherited {
-            if matches!(syms.sym(inherited).kind, SymKind::Object(_)) {
-                continue;
-            }
+        for (inherited, decision) in self.bridge_decisions(c, sym, name, m) {
             // Under the pairs' dump each decision is written (tests/pairs-twin.sh holds them to the record).
             // A var's setter is walked by the var under the setter's name: the dump names the setter, the member the
             // record pairs.
@@ -1581,30 +1564,94 @@ impl<'a> Gen<'a> {
                     crate::tir::pairs_dump_write(&format!("@{}\tjvm-walk\t{}\t{}\t{decision}\t{differs}\t{held}\n", c.0, walked.0, inherited.0));
                 }
             };
-            // An alternative of an overloaded name is bridged when it takes the parameters
-            // of the inherited one as the class sees them: the types agree after erasure of
-            // the class's type arguments, which the bridge's own parameters show.
-            if syms.sym(inherited).alternative || syms.sym(sym).alternative {
-                let overrides = cx.input.prog.overrides.get(&sym).map_or(false, |ps| ps.contains(&inherited));
-                if !overrides {
-                    dump(self, "not-overriding");
+            let (bm, may_override) = match decision {
+                BridgeDecision::Not(why) => {
+                    dump(self, why);
                     continue;
                 }
-            }
-            let bm = self.mref(inherited);
-            if bm.name != m.name || bm.desc == m.desc || bm.params.len() != m.params.len() || self.plan.has_method(&bm.name, &bm.desc) {
-                let decision = if bm.name != m.name { "other-name" } else if bm.desc == m.desc { "same" } else if bm.params.len() != m.params.len() { "arity" } else { "declared" };
-                dump(self, decision);
+                BridgeDecision::Owed(bm, may_override) => (bm, may_override),
+            };
+            if self.plan.has_method(&bm.name, &bm.desc) {
+                dump(self, "declared");
                 continue;
             }
-            if !self.params_may_override(inherited, &bm.params, &m.params) {
+            if !may_override {
                 dump(self, "declined");
                 continue;
             }
             dump(self, "bridge");
             self.bridge(sym, &bm, m);
+        }
+    }
+
+    /// `emit_bridges`' rule in the class `c`, which `trait_holds` reads too: for each declaration of the member name
+    /// `name` its bases hold, whether `sym`'s method `m` owes it a bridge of its erased signature, and whether the
+    /// bridge's parameters may override it (`params_may_override`). The class's own methods of that signature, which
+    /// stand for a bridge, are the writer's to see.
+    fn bridge_decisions(&mut self, c: ClassId, sym: SymId, name: Name, m: &MethodRef) -> Vec<(SymId, BridgeDecision)> {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let info = syms.sym(sym);
+        let bases: Vec<ClassId> = syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+        let mut out = Vec::new();
+        for b in bases {
+            let base = syms.class(b);
+            let inherited: Vec<SymId> = if info.is_extension {
+                base.extensions.iter().copied().filter(|&e| syms.sym(e).name == name).collect()
+            } else {
+                match base.members.get(&name) {
+                    Some(&e) => match syms.alternatives(e) {
+                        Some(alts) => alts.iter().copied().filter(|&a| syms.sym(a).owner == Owner::Class(b)).collect(),
+                        None => vec![e],
+                    },
+                    None => Vec::new(),
+                }
+            };
+            for inherited in inherited {
+                if matches!(syms.sym(inherited).kind, SymKind::Object(_)) {
+                    continue;
+                }
+                // An alternative of an overloaded name is bridged when it takes the parameters
+                // of the inherited one as the class sees them: the types agree after erasure of
+                // the class's type arguments, which the bridge's own parameters show.
+                if syms.sym(inherited).alternative || syms.sym(sym).alternative {
+                    let overrides = cx.input.prog.overrides.get(&sym).map_or(false, |ps| ps.contains(&inherited));
+                    if !overrides {
+                        out.push((inherited, BridgeDecision::Not("not-overriding")));
+                        continue;
+                    }
+                }
+                let bm = self.mref(inherited);
+                let decision = if bm.name != m.name {
+                    BridgeDecision::Not("other-name")
+                } else if bm.desc == m.desc {
+                    BridgeDecision::Not("same")
+                } else if bm.params.len() != m.params.len() {
+                    BridgeDecision::Not("arity")
+                } else {
+                    let may_override = self.params_may_override(inherited, &bm.params, &m.params);
+                    BridgeDecision::Owed(bm, may_override)
+                };
+                out.push((inherited, decision));
             }
         }
+        out
+    }
+
+    /// Whether the trait `b`'s class file holds, beside the concrete member `s`'s method, a method of its name and of
+    /// the erased signature `desc` with a body: a bridge `emit_bridges` writes there for `s` (`bridge_decisions`), or
+    /// for a trait read from class files one its class file declares.
+    fn trait_holds(&mut self, b: ClassId, s: SymId, desc: &str) -> bool {
+        let cx = self.cx;
+        if !implemented(cx, s) {
+            return false;
+        }
+        let m = self.mref(s);
+        if let Some(cf) = cx.class_files.get(&b) {
+            return cf.methods.iter().any(|x| x.name == m.name && x.descriptor == desc && x.access & (ACC_ABSTRACT | ACC_STATIC) == 0);
+        }
+        let name = cx.input.syms.sym(s).name;
+        self.bridge_decisions(b, s, name, &m).iter().any(|(_, d)| matches!(d, BridgeDecision::Owed(bm, true) if bm.desc == desc))
     }
 
     /// The bridge `bm` forwarding to `m`, the member `sym`'s method: each argument and the
@@ -3967,7 +4014,7 @@ impl<'a> Gen<'a> {
                 }
                 // The losing trait's bridge defines the winner's erased signature as a default
                 // too, which the class has to decide.
-                if m.desc != im.desc && has_body(s) {
+                if m.desc != im.desc && self.trait_holds(b, s, &im.desc) {
                     self.mixin_forwarder(&im, &im);
                 }
                 if m.desc == im.desc && !has_body(s) {
@@ -5036,6 +5083,14 @@ fn implemented(cx: &super::Cx, s: SymId) -> bool {
     let Owner::Class(o) = info.owner else { return false };
     cx.input.reach.product_classes.get(o.idx()).copied().unwrap_or(false)
         && (info.mods & mods::ABSTRACT == 0 || cx.input.stackable.map_or(false, |st| st.contains_key(&s)))
+}
+
+/// What `emit_bridges`' rule decides of one inherited declaration (`Gen::bridge_decisions`).
+enum BridgeDecision {
+    /// No bridge, why as the pairs' dump says it: `not-overriding`, `other-name`, `same`, `arity`.
+    Not(&'static str),
+    /// A bridge of the inherited declaration's reference, and whether its parameters may override it.
+    Owed(Rc<MethodRef>, bool),
 }
 
 /// Whether a member has a body, as the member choice reads it: an `abstract override` of
