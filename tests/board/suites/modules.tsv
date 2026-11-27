@@ -167,6 +167,7 @@ filemoduleidentity	pass	-
 forwardersingleton	pass	-	
 functionxxl	fail	-	functionxxl build
 genericdefaults	fail	-	known bundle: the bundle over the lean products types `Defs.e`'s `x.size` from the pickle as a library body, through scala-library's `Option.option2Iterable` (the lean std's `Option.size` is no member
+getterbridgeclient	pass	-	
 given	pass	-	
 givenabstract	pass	-	
 givenbridge	fail	-	known js-run: JavaScript reads a superclass's val, var or given that a generic trait declares as a def through a property where the call is to a method (`c.g is not a function` whole, `c.x is not a fu

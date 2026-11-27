@@ -4828,7 +4828,7 @@ impl<'a> Gen<'a> {
         let on_companion = || {
             let k = companion?;
             let cf = cx.class_files.get(&k)?;
-            cf.methods.iter().find(|m| m.name == name && m.access & ACC_STATIC == 0).map(|m| (Rc::from(cf.name.as_str()), m.descriptor.clone()))
+            declared_method(cf, name).map(|m| (Rc::from(cf.name.as_str()), m.descriptor.clone()))
         };
         let (kind, owner, desc) = match (on_companion(), forwarder) {
             (Some((module, desc)), _) => (Invoke::Virtual, module, desc),
@@ -5132,7 +5132,7 @@ impl<'a> Gen<'a> {
         let m = self.mref(s);
         let shape = self.default_getter_shape(s, i);
         let name = format!("{}$default${}", self.source_method_name(s), shape.index);
-        let jar = self.linked_owner(s).and_then(|cf| cf.methods.iter().find(|g| g.name == name && g.access & ACC_STATIC == 0)).map(|g| g.descriptor.clone());
+        let jar = self.linked_owner(s).and_then(|cf| declared_method(cf, &name)).map(|g| g.descriptor.clone());
         let desc = match jar {
             Some(desc) => desc,
             // A jar member without its getter: teq's erasure of it, as before.
@@ -6428,6 +6428,12 @@ fn scala_class<'c>(cx: &'c Cx, c: ClassId) -> Option<&'c str> {
         return None;
     }
     Some(cx.input.interner.get(info.name))
+}
+
+/// The instance method `name` a class file declares: a bridge is no declaration, as dotty's class-file reader enters
+/// none (`ClassfileParser.parseMember` skips an artifact, which ACC_SYNTHETIC makes it).
+fn declared_method<'c>(cf: &'c crate::classfile::ClassFile, name: &str) -> Option<&'c crate::classfile::Method> {
+    cf.methods.iter().find(|m| m.name == name && m.access & (ACC_STATIC | ACC_BRIDGE) == 0)
 }
 
 fn pick_method<'c>(cf: &'c crate::classfile::ClassFile, name: &str, arity: usize, own: &str) -> Option<&'c crate::classfile::Method> {
