@@ -1016,20 +1016,49 @@ pub fn repeated_role(params: &[MethodParam]) -> Option<&ParamRole> {
 
 /// A method a class defines, where `MethodRef` is one that code names: its encoded name and
 /// its erased signature, the types its callers pass and are answered with.
+/// Its fields are its maker's alone (`MethodDef::new`): a method once made is what it was made.
 #[derive(Debug, Clone)]
 pub struct MethodDef {
-    pub name: Rc<str>,
-    pub params: Vec<MethodParam>,
-    pub ret: ErasedType,
+    name: Rc<str>,
+    params: Vec<MethodParam>,
+    ret: ErasedType,
     /// The signature as a class file spells it, kept with the definition as `MethodRef::desc`
     /// is with a reference: a class is asked by it whether it holds a method.
-    pub desc: String,
-    pub flags: MethodFlags,
+    desc: String,
+    flags: MethodFlags,
     /// A lifted method's place among the class's lifted methods (`ClassDef::methods`), none for any other.
-    pub place: Option<u32>,
+    place: Option<u32>,
 }
 
 impl MethodDef {
+    pub fn new(name: Rc<str>, params: Vec<MethodParam>, ret: ErasedType, desc: String, flags: MethodFlags, place: Option<u32>) -> MethodDef {
+        MethodDef { name, params, ret, desc, flags, place }
+    }
+
+    pub fn name(&self) -> &Rc<str> {
+        &self.name
+    }
+
+    pub fn params(&self) -> &[MethodParam] {
+        &self.params
+    }
+
+    pub fn ret(&self) -> &ErasedType {
+        &self.ret
+    }
+
+    pub fn desc(&self) -> &str {
+        &self.desc
+    }
+
+    pub fn flags(&self) -> MethodFlags {
+        self.flags
+    }
+
+    pub fn place(&self) -> Option<u32> {
+        self.place
+    }
+
     /// The types its callers pass.
     pub fn param_types(&self) -> Vec<ErasedType> {
         self.params.iter().map(|p| p.ty.clone()).collect()

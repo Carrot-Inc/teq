@@ -4208,7 +4208,7 @@ impl<'a> Gen<'a> {
     /// The value class whose underlying value stands for `this` in the planned method being lowered (its extension
     /// method, `ParamRole::Underlying`), and the type the code holds that value at.
     pub(super) fn underlying(&self) -> Option<(ClassId, ErasedType)> {
-        let params = &self.planned.as_ref()?.params;
+        let params = self.planned.as_ref()?.params();
         params.iter().zip(&self.m.params).find_map(|(p, (_, held))| match p.role {
             ParamRole::Underlying(c) => Some((c, held.clone())),
             _ => None,

@@ -514,7 +514,7 @@ impl<'a> Gen<'a> {
         let class = self.finish_writer();
         if keep {
             let pair_bridged = std::mem::take(&mut self.pair_bridged);
-            self.module_table = std::mem::take(&mut self.plan.methods).into_iter().filter(|m| !pair_bridged.iter().any(|(pn, pd)| **pn == *m.name && *pd == m.desc)).collect();
+            self.module_table = std::mem::take(&mut self.plan.methods).into_iter().filter(|m| !pair_bridged.iter().any(|(pn, pd)| **pn == **m.name() && *pd == m.desc())).collect();
         }
         (name.to_string(), class)
     }
@@ -543,7 +543,7 @@ impl<'a> Gen<'a> {
 
     fn static_forwarders_of(&mut self, module: &str, table: &[MethodDef]) {
         let cx = self.cx;
-        let mut table: Vec<(MethodFlags, String, String)> = table.iter().map(|m| (m.flags, m.name.to_string(), m.desc.clone())).collect();
+        let mut table: Vec<(MethodFlags, String, String)> = table.iter().map(|m| (m.flags(), m.name().to_string(), m.desc().to_string())).collect();
         if let Some(&o) = cx.class_by_name.get(module) {
             for (n, d) in self.inherited_methods(o, true) {
                 if !table.iter().any(|(_, tn, td)| *tn == n && *td == d) {
@@ -1333,7 +1333,7 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let syms = cx.input.syms;
         let tc = &cx.input.prog.classes[cx.tclass_of[c.idx()] as usize];
-        let own: Vec<(Rc<str>, String)> = self.plan.methods.iter().map(|m| (m.name.clone(), m.desc.clone())).collect();
+        let own: Vec<(Rc<str>, String)> = self.plan.methods.iter().map(|m| (m.name().clone(), m.desc().to_string())).collect();
         let written = |name: &str, params: &[ErasedType]| {
             let prefix = method_desc(params, &ErasedType::V);
             let prefix = &prefix[..prefix.len() - 1];
@@ -1816,13 +1816,13 @@ impl<'a> Gen<'a> {
         // A value case class's `copy` answers the underlying value, as scalac's erasure has it.
         if cx.input.syms.class(c).value_class && types.len() == 1 {
             let u = types[0].clone();
-            if !self.plan.methods.iter().any(|m| &*m.name == "copy" && m.desc.starts_with(prefix)) {
+            if !self.plan.methods.iter().any(|m| &**m.name() == "copy" && m.desc().starts_with(prefix)) {
                 self.hold_member(MethodFlags::PUBLIC, "copy", &method_desc(&types, &u), &params, u.clone(), &[], super::classes::MethodSite::default(), "case class's copy", |g| {
                     let given = g.param(0);
                     g.lir.ret(given)
                 });
             }
-        } else if !self.plan.methods.iter().any(|m| &*m.name == "copy" && m.desc.starts_with(prefix)) {
+        } else if !self.plan.methods.iter().any(|m| &**m.name() == "copy" && m.desc().starts_with(prefix)) {
             // dotty's `copy` (Desugar.scala's case class members): the constructor's parameters, the class's own type.
             let declared: Vec<SymId> = params.iter().filter_map(|p| p.0).collect();
             let site = super::classes::MethodSite { at: self.class_definition_start(c), dotty: self.dotty_constructor(c, &declared), ..Default::default() };

@@ -339,10 +339,10 @@ impl<'a> Gen<'a> {
     /// (`Gen::lower_lifted`), and so passes the class file's gate here.
     fn method_cx(&mut self, method: &MethodDef, site: MethodSite, params: &[MethodParam], ret: ErasedType, roots: &[TExprId]) -> MethodCx {
         self.check_method(method, &site);
-        debug_assert!(crate::lir::repeated_role(params).is_none(), "two parameters of {}{} take one role", method.name, method.desc);
+        debug_assert!(crate::lir::repeated_role(params).is_none(), "two parameters of {}{} take one role", method.name(), method.desc());
         let mut m = MethodCx { at: site.at, attributes: site.attributes, ..MethodCx::default() };
         let mut slot = 0;
-        if !method.flags.is_static {
+        if !method.flags().is_static {
             m.this_slot = Some(0);
             slot = 1;
         }
@@ -373,8 +373,8 @@ impl<'a> Gen<'a> {
     /// parameters. The types the code holds its parameters at are not always the signature's: a method that implements a
     /// class file's holds a value class's underlying value as the erasure marks it (`Gen::linked_mref`).
     fn open_method(&mut self, method: &MethodDef, m: MethodCx) {
-        let is_static = method.flags.is_static;
-        let constructor = &*method.name == "<init>";
+        let is_static = method.flags().is_static;
+        let constructor = &**method.name() == "<init>";
         let mut locals: Vec<VT> = Vec::new();
         if !is_static {
             let this = self.this_name.clone();
@@ -403,7 +403,7 @@ impl<'a> Gen<'a> {
     pub(super) fn check_method(&mut self, method: &MethodDef, site: &MethodSite) {
         let mut refused = false;
         if let Dotty::Writes { counted, name, no_generic_signature } = &site.dotty {
-            if *no_generic_signature && !self.names_own_class(&method.desc) && !super::classfile::constant_text_fits(name.as_deref().unwrap_or(&method.name), &method.desc) {
+            if *no_generic_signature && !self.names_own_class(method.desc()) && !super::classfile::constant_text_fits(name.as_deref().unwrap_or(method.name()), method.desc()) {
                 if self.writing_mirror {
                     *self.long_name_refused = true;
                 } else {
@@ -411,7 +411,7 @@ impl<'a> Gen<'a> {
                     refused = true;
                 }
             }
-            let (slots, count) = counted.unwrap_or_else(|| parameter_slots(&method.desc));
+            let (slots, count) = counted.unwrap_or_else(|| parameter_slots(method.desc()));
             if slots > MAX_PARAMETER_SLOTS {
                 let counted = if slots == count { "" } else { " (Long and Double count as 2)" };
                 self.refuse_written(&format!("Platform restriction: a parameter list's length cannot exceed {}{}.", MAX_PARAMETER_SLOTS, counted), site.at);
@@ -423,7 +423,7 @@ impl<'a> Gen<'a> {
         // refusal a method, dotty's where it gave one. A forwarder teq adds beside a class's methods (a mixin's, a
         // mirror's) takes its member's parameters, whose own check answers it, as `Wider::Answered` says of the rest.
         if !refused && !self.writing_mirror && !self.writing_forwarders && !matches!(site.wider, Wider::Answered) {
-            let mut written = parameter_slots(&method.desc).0 + usize::from(!method.flags.is_static);
+            let mut written = parameter_slots(method.desc()).0 + usize::from(!method.flags().is_static);
             let mut limit = MAX_ARGUMENT_SLOTS;
             match site.wider {
                 // The lambda's method is called through a method handle, which takes one slot fewer (a static
@@ -442,13 +442,13 @@ impl<'a> Gen<'a> {
                     }
                     Wider::Lambda(n, 0) => format!("not supported on the JVM yet: a function of {} parameters would take {} argument slots, because teq does not pass its parameters as one array yet, and the JVM allows {}", n, written, limit),
                     Wider::Lambda(n, captured) => format!("not supported on the JVM yet: a function of {} parameters that captures {} values would take {} argument slots, because teq does not pass its parameters as one array yet, and the JVM allows {}", n, captured, written, limit),
-                    Wider::LambdaBody => format!("not supported on the JVM yet: the method {} would take {} argument slots, and a method handle allows {}", method.name, written, limit),
-                    Wider::No | Wider::Answered => format!("not supported on the JVM yet: the method {} would take {} argument slots, and a class file holds {}", method.name, written, MAX_ARGUMENT_SLOTS),
+                    Wider::LambdaBody => format!("not supported on the JVM yet: the method {} would take {} argument slots, and a method handle allows {}", method.name(), written, limit),
+                    Wider::No | Wider::Answered => format!("not supported on the JVM yet: the method {} would take {} argument slots, and a class file holds {}", method.name(), written, MAX_ARGUMENT_SLOTS),
                 };
                 self.refuse_written(&message, site.at);
             }
         }
-        self.checked_methods.insert((method.name.clone(), method.desc.clone()), ());
+        self.checked_methods.insert((method.name().clone(), method.desc().to_string()), ());
     }
 
     /// Ends the method begun, `m`: its code goes to the class file under its header where it `entered` the plan. A method
@@ -466,20 +466,20 @@ impl<'a> Gen<'a> {
         if code.underflow || code.misreserved {
             let line = code.last_line().map_or(String::new(), |l| format!(" at line {}", l));
             let fault = if code.underflow { "the operand stack model underflowed" } else { "internal error: a value stored in slots reserved for another width" };
-            self.unsupported(&format!("{} while writing {}{}{}", fault, m.name, m.desc, line));
+            self.unsupported(&format!("{} while writing {}{}{}", fault, m.name(), m.desc(), line));
             return false;
         }
         if !entered {
             return true;
         }
         let reached = !self.cw.overflow;
-        self.cw.method(method_access(m.flags), &m.name, &m.desc, Some(code));
+        self.cw.method(method_access(m.flags()), m.name(), m.desc(), Some(code));
         if let Some((class, index)) = attributes {
             let jar = &self.cx.class_files[&class].methods[index];
-            self.cw.method_metadata(&m.name, &m.desc, jar);
+            self.cw.method_metadata(m.name(), m.desc(), jar);
         }
         if reached && self.cw.overflow {
-            self.too_large_methods.push((self.plan.name.clone(), m.name.to_string(), m.desc.clone(), at));
+            self.too_large_methods.push((self.plan.name.clone(), m.name().to_string(), m.desc().to_string(), at));
         }
         self.overflow |= self.cw.overflow;
         true
@@ -504,7 +504,7 @@ impl<'a> Gen<'a> {
             if held.is_empty() {
                 return;
             }
-            held.sort_by_key(|(h, _)| h.method.place.map_or((1, 0), |place| (0, place)));
+            held.sort_by_key(|(h, _)| h.method.place().map_or((1, 0), |place| (0, place)));
             let held = self.refuse_second_methods(held);
             for (mut h, span) in held {
                 h.under.lifted_body = Some(span);
@@ -519,9 +519,9 @@ impl<'a> Gen<'a> {
     fn refuse_second_methods(&mut self, held: Vec<(Box<HeldMethod>, (u32, u32))>) -> Vec<(Box<HeldMethod>, (u32, u32))> {
         let mut kept: Vec<(Box<HeldMethod>, (u32, u32))> = Vec::with_capacity(held.len());
         for (h, span) in held {
-            let named = |m: &MethodDef| m.name == h.method.name && m.desc == h.method.desc;
-            if self.plan.has_method(&h.method.name, &h.method.desc) || kept.iter().any(|(k, _)| named(&k.method)) {
-                self.unsupported(&format!("internal error: a second {} {}{} in the class", h.what, h.method.name, h.method.desc));
+            let named = |m: &MethodDef| m.name() == h.method.name() && m.desc() == h.method.desc();
+            if self.plan.has_method(h.method.name(), h.method.desc()) || kept.iter().any(|(k, _)| named(&k.method)) {
+                self.unsupported(&format!("internal error: a second {} {}{} in the class", h.what, h.method.name(), h.method.desc()));
                 continue;
             }
             kept.push((h, span));
@@ -649,8 +649,7 @@ impl<'a> Gen<'a> {
             let sym = if is_lambda { None } else { lazy_val.or_else(|| param_syms.get(i).copied()) };
             params.push(MethodParam::declared(sym, t.clone()));
         }
-        let mut method = begun_method_def(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, &params, &l.ret);
-        method.place = l.place;
+        let method = begun_method_def(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, &params, &l.ret, l.place);
         self.m = self.method_cx(&method, site, &params, l.ret.clone(), &roots);
         self.planned = Some(method);
         self.lir.clear();
@@ -742,7 +741,7 @@ impl<'a> Gen<'a> {
     /// (`Gen::end_method`).
     fn enter_plan(&mut self, held: &mut HeldMethod) {
         let method = &held.method;
-        held.entered = !self.plan.has_method(&method.name, &method.desc);
+        held.entered = !self.plan.has_method(method.name(), method.desc());
         if held.entered {
             self.plan.methods.push(method.clone());
         }
@@ -775,7 +774,7 @@ impl<'a> Gen<'a> {
     /// its context made at the class file's gate, set as the generator's, the lowering's state cleared.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn held_context(&mut self, flags: MethodFlags, name: &str, desc: &str, params: &[MethodParam], ret: ErasedType, roots: &[TExprId], site: MethodSite) {
-        let method = begun_method_def(flags, name, desc, params, &ret);
+        let method = begun_method_def(flags, name, desc, params, &ret, None);
         self.m = self.method_cx(&method, site, params, ret, roots);
         self.planned = Some(method);
         self.lir.clear();
@@ -954,7 +953,7 @@ impl<'a> Gen<'a> {
                     let desc = self.desc_of(&f.ty);
                     self.cw.field_first(field_access(f.flags), &f.name, &desc);
                 }
-                Entry::Abstract(m) => self.cw.method(method_access(m.flags), &m.name, &m.desc, None),
+                Entry::Abstract(m) => self.cw.method(method_access(m.flags()), m.name(), m.desc(), None),
                 Entry::Held(held) => whole = self.write_held(held),
                 Entry::Interfaces(step) => self.write_interfaces(step),
             }

@@ -62,7 +62,7 @@ impl<'a> Gen<'a> {
 
     /// The position of the planned method's parameter of the role `role`, where it takes one.
     pub(super) fn param_of(&self, role: &ParamRole) -> Option<usize> {
-        self.planned.as_ref()?.params.iter().position(|p| p.role == *role)
+        self.planned.as_ref()?.params().iter().position(|p| p.role == *role)
     }
 
     /// Runs a lowering with the writers refusing. No lowering runs while a method's code is written: every tree is
@@ -1362,7 +1362,7 @@ impl<'a> Gen<'a> {
     /// NonLocalReturnControl`, a handler of its own) gives the value of one carrying this run's key and throws any
     /// other on.
     pub(super) fn lower_keyed_body(&mut self, body: TExprId) -> (LirId, LirId) {
-        debug_assert!(self.given_key().is_none(), "the method of a keyed body is given a key: {}", self.planned.as_ref().map_or("", |m| &*m.name));
+        debug_assert!(self.given_key().is_none(), "the method of a keyed body is given a key: {}", self.planned.as_ref().map_or("", |m| &**m.name()));
         let object = ErasedType::object();
         let control: Rc<str> = Rc::from(NON_LOCAL_RETURN);
         let control_type = ErasedType::L(control.clone());
@@ -2166,7 +2166,7 @@ impl<'a> Gen<'a> {
     pub(super) fn lower_lazy_key(&mut self, x: SymId) -> LirId {
         let object = ErasedType::object();
         let given = self.planned.as_ref().and_then(|m| {
-            m.params.iter().position(|p| match p.role {
+            m.params().iter().position(|p| match p.role {
                 ParamRole::Key { holder } => holder == Some(x),
                 ParamRole::CapturedKey(k) => k == x,
                 _ => false,
@@ -2211,7 +2211,7 @@ impl<'a> Gen<'a> {
     /// The planned method's parameter of the role `Key`: the key a closure, or a local lazy val's accessor or
     /// initialiser, is given.
     fn given_key(&self) -> Option<usize> {
-        self.planned.as_ref()?.params.iter().position(|p| matches!(p.role, ParamRole::Key { .. }))
+        self.planned.as_ref()?.params().iter().position(|p| matches!(p.role, ParamRole::Key { .. }))
     }
 
     /// A function value: its body `code` lifted to a method over what it captures, named where it is lowered
