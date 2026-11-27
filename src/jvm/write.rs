@@ -299,12 +299,12 @@ impl<'a> Gen<'a> {
                 self.invoke_mref(&method);
                 self.super_call_at = None;
             }
-            Kind::ArrayOf { elem, items } => {
-                debug_assert_eq!(Self::array_element(&ty).as_ref(), Some(&elem), "an array's items of its element type");
+            Kind::ArrayOf { items } => {
                 self.iconst(items.len as i32);
                 self.new_array(&ty);
                 for i in 0..items.len {
                     let item = self.lir.lists[(items.start + i) as usize];
+                    debug_assert_eq!(Self::array_element(&ty).as_ref(), Some(self.lir.ty(item)), "an array literal's item of the array's element type");
                     self.dup();
                     self.iconst(i as i32);
                     self.write(item);

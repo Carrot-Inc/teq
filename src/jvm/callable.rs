@@ -1602,7 +1602,7 @@ impl<'a> Gen<'a> {
                     items.push(g.lower_adapt(value, &t, &enum_type));
                 }
                 let items = g.lir.list(&items);
-                let made = g.lir.push(Kind::ArrayOf { elem: enum_type.clone(), items }, array.clone());
+                let made = g.lir.push(Kind::ArrayOf { items }, array.clone());
                 g.lir.ret(made)
             });
         }

@@ -369,10 +369,10 @@ pub enum Kind {
     Typed(LirId),
     /// A call of a method that takes no receiver: the arguments as `Call` has them.
     StaticCall { method: Rc<MethodRef>, args: List, order: Option<Rc<[usize]>> },
-    /// A new array, of the node's type, that holds the items in order, each evaluated at the
-    /// type `elem` of its elements. The class-file writer makes the array before it evaluates
-    /// the items, which nothing observes.
-    ArrayOf { elem: ErasedType, items: List },
+    /// A new array, of the node's type (an array class), that holds the items in order, each
+    /// evaluated at the type of its elements. The class-file writer makes the array before it
+    /// evaluates the items, which nothing observes.
+    ArrayOf { items: List },
     /// An element of an array read: the array, then the index, an `Int`. The node's type is the
     /// type of the array's elements.
     ArrayLoad { array: LirId, index: LirId },
@@ -700,7 +700,7 @@ impl Body {
                 out.extend(*otherwise);
             }
             Kind::Helper { args, .. } | Kind::New { args, .. } | Kind::InitCall { args, .. } | Kind::StaticCall { args, .. } => out.extend(self.items(*args)),
-            Kind::ArrayOf { items, .. } | Kind::Concat { parts: items, .. } => out.extend(self.items(*items)),
+            Kind::ArrayOf { items } | Kind::Concat { parts: items, .. } => out.extend(self.items(*items)),
             Kind::Call { receiver, args, .. } | Kind::SuperCall { receiver, args, .. } => {
                 out.push(*receiver);
                 out.extend(self.items(*args));

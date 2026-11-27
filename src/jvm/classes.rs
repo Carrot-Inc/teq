@@ -2486,7 +2486,7 @@ impl<'a> Gen<'a> {
                     items.push(g.lir.static_field(module, name, enum_type.clone()));
                 }
                 let items = g.lir.list(&items);
-                let made = g.lir.push(Kind::ArrayOf { elem: enum_type.clone(), items }, array.clone());
+                let made = g.lir.push(Kind::ArrayOf { items }, array.clone());
                 g.lir.store_static(module, "$values", made)
             });
         }

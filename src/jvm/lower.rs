@@ -1086,7 +1086,7 @@ impl<'a> Gen<'a> {
         let object = ErasedType::object();
         let boxed: Vec<LirId> = values.iter().map(|&value| self.lower_adapt(value, held, &object)).collect();
         let items = self.lir.list(&boxed);
-        let boxed = self.lir.push(Kind::ArrayOf { elem: object.clone(), items }, array.clone());
+        let boxed = self.lir.push(Kind::ArrayOf { items }, array.clone());
         let param = if self.cx.linked_class(seq) { array.clone() } else { object };
         let wrapped = self.lower_adapt(boxed, &array, &param);
         let args = self.lir.list(&[wrapped]);
@@ -1101,7 +1101,7 @@ impl<'a> Gen<'a> {
         let items: Vec<TExprId> = self.cx.input.prog.expr_list(items).to_vec();
         let lowered: Vec<LirId> = items.into_iter().map(|item| self.lower_expr(item, &elem)).collect();
         let items = self.lir.list(&lowered);
-        self.lir.push(Kind::ArrayOf { elem, items }, ErasedType::L(array.clone()))
+        self.lir.push(Kind::ArrayOf { items }, ErasedType::L(array.clone()))
     }
 
     /// An object's instance; no value for an object that has none (`Gen::module_name`).
