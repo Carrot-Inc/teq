@@ -665,15 +665,6 @@ impl<T> Phased<T> {
     }
 }
 
-impl<T> Phased<T> {
-    /// The field as `Gen::emit_class`'s tail takes it, after every write of the class: the super calls' targets the
-    /// writes recorded, which the class's interfaces take. Not checked: that tail is the class's end step, which reads
-    /// what every write of the class gave.
-    pub fn at_class_end(&mut self) -> &mut T {
-        &mut self.value
-    }
-}
-
 /// Whether a write of the class being written runs (`write_phase`), in checks builds; a release build answers false.
 /// Once the class's walk has started, no write makes a lifted method's first ask or queues a body: each is plan work
 /// made after the plan is whole.

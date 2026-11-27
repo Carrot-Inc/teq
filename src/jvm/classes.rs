@@ -175,6 +175,18 @@ struct HeldUnder {
     lifted_body: Option<(u32, u32)>,
 }
 
+/// What a class file's interfaces are made of beside the targets of the super calls its code writes
+/// (`Gen::write_interfaces`), decided when the class's maker ends: its direct traits in their order, each with whether
+/// another of them brings it; its parents' other interfaces; those a module class lists last; the Java interfaces its
+/// super accessors call, in their accessors' order; its bases, among which every target is.
+struct InterfaceStep {
+    direct: Vec<(String, bool)>,
+    parents: Vec<String>,
+    listed: Vec<String>,
+    accessors: Vec<String>,
+    bases: Vec<String>,
+}
+
 /// What a held method is written from.
 enum HeldCode {
     Tree(LirId),
@@ -2134,47 +2146,61 @@ impl<'a> Gen<'a> {
         // The methods of its code's local lazy vals, whichever class reads them.
         self.owned_lazy_methods(Some(c), info.file);
         self.drain_pending();
-        // The targets of the class's super calls are interfaces of it (`initJClass`): a direct
-        // trait another brings keeps its place among the direct ones, any other target comes
-        // after the parents' list, in the order scalac's back end writes the class's bodies and
-        // so fills its set (`super_call_place`). A call copied into a class that is no instance
-        // of the interface (a value class's method in its companion) names no interface of the
-        // class.
-        let mut recorded = std::mem::take(self.super_targets.at_class_end());
-        if !recorded.is_empty() {
-            // The super accessors' targets stand trait by trait, the first mixed in first
-            // (`ResolveSuper.transformTemplate` takes the class's mixins in that order), and
-            // in a trait's own order inside it; the accessors themselves are written in the
-            // linearisation's order.
-            let mut accessors: Vec<(usize, usize, &str)> = Vec::new();
-            for (i, a) in tc.super_accessors.iter().enumerate() {
-                let Some(Owner::Class(o)) = a.target.map(|t| cx.input.syms.sym(t).owner) else { continue };
-                if self.java_interface(o) {
-                    let mixed = info.base_types.iter().position(|&(b, _)| b == a.of_trait).unwrap_or(0);
-                    accessors.push((usize::MAX - mixed, i, &cx.class_names[o.idx()]));
-                }
+        // The super accessors' Java targets stand trait by trait, the first mixed in first
+        // (`ResolveSuper.transformTemplate` takes the class's mixins in that order), and in a
+        // trait's own order inside it; the accessors themselves are written in the linearisation's
+        // order.
+        let mut accessors: Vec<(usize, usize, &str)> = Vec::new();
+        for (i, a) in tc.super_accessors.iter().enumerate() {
+            let Some(Owner::Class(o)) = a.target.map(|t| cx.input.syms.sym(t).owner) else { continue };
+            if self.java_interface(o) {
+                let mixed = info.base_types.iter().position(|&(b, _)| b == a.of_trait).unwrap_or(0);
+                accessors.push((usize::MAX - mixed, i, &cx.class_names[o.idx()]));
             }
-            accessors.sort();
-            for (target, place) in recorded.iter_mut() {
-                if place.0 == 0 {
-                    if let Some(n) = accessors.iter().position(|&(_, _, t)| t == target.as_str()) {
-                        place.1 = n as u32 + 1;
-                    }
-                }
-            }
-            recorded.sort_by_key(|&(_, place)| place);
-            let targets: Vec<String> = recorded.into_iter().map(|(t, _)| t).filter(|t| info.base_types.iter().skip(1).any(|&(b, _)| cx.class_names[b.idx()] == *t)).collect();
-            let mut list: Vec<String> = direct.iter().filter(|(n, brought)| !brought || targets.contains(n)).map(|(n, _)| n.clone()).collect();
-            list.extend(interfaces[direct_listed..declared].iter().cloned());
-            for t in targets {
-                if !list.contains(&t) && !interfaces[declared..].contains(&t) {
-                    list.push(t);
-                }
-            }
-            list.extend(interfaces[declared..].iter().cloned());
-            self.cw.set_interfaces(&list);
         }
+        accessors.sort();
+        let step = InterfaceStep {
+            direct,
+            parents: interfaces[direct_listed..declared].to_vec(),
+            listed: interfaces[declared..].to_vec(),
+            accessors: accessors.into_iter().map(|(_, _, t)| t.to_string()).collect(),
+            bases: info.base_types.iter().skip(1).map(|&(b, _)| cx.class_names[b.idx()].to_string()).collect(),
+        };
+        self.plan_phase(false);
+        self.write_interfaces(step);
+        self.plan_phase(true);
         self.finish_class(&name)
+    }
+
+    /// The class file's interfaces, the last step of its writing: the targets of the super calls its code wrote
+    /// (`Gen::super_call_place`) are interfaces of it (`initJClass`): a direct trait another brings keeps its place among
+    /// the direct ones, any other target comes after the parents' list, in the order scalac's back end writes the
+    /// class's bodies and so fills its set, a super accessor's Java target at its accessor's place. A call copied into a
+    /// class that is no instance of the interface (a value class's method in its companion) names no interface of the
+    /// class.
+    fn write_interfaces(&mut self, step: InterfaceStep) {
+        let mut recorded = std::mem::take(&mut *self.super_targets);
+        if recorded.is_empty() {
+            return;
+        }
+        for (target, place) in recorded.iter_mut() {
+            if place.0 == 0 {
+                if let Some(n) = step.accessors.iter().position(|t| t == &*target) {
+                    place.1 = n as u32 + 1;
+                }
+            }
+        }
+        recorded.sort_by_key(|&(_, place)| place);
+        let targets: Vec<String> = recorded.into_iter().map(|(t, _)| t).filter(|t| step.bases.contains(t)).collect();
+        let mut list: Vec<String> = step.direct.iter().filter(|(n, brought)| !brought || targets.contains(n)).map(|(n, _)| n.clone()).collect();
+        list.extend(step.parents.iter().cloned());
+        for t in targets {
+            if !list.contains(&t) && !step.listed.contains(&t) {
+                list.push(t);
+            }
+        }
+        list.extend(step.listed);
+        self.cw.set_interfaces(&list);
     }
 
     /// The `<clinit>` of an enum's class: its lazy members' handles, then the values, made
