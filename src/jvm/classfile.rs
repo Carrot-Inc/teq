@@ -1155,6 +1155,13 @@ impl ClassWriter {
         self.interfaces = list;
     }
 
+    /// The methods in the order `order` names them by name and descriptor: the class plan's; a method it does not name
+    /// after those, in the order written.
+    pub fn order_methods<'n>(&mut self, order: impl Iterator<Item = (&'n str, &'n str)>) {
+        let at: FxMap<(u16, u16), usize> = order.enumerate().filter_map(|(i, (name, desc))| Some(((*self.cp.utf8.get(name)?, *self.cp.utf8.get(desc)?), i))).collect();
+        self.methods.sort_by_key(|m| at.get(&(m.name, m.desc)).copied().unwrap_or(usize::MAX));
+    }
+
     pub fn method(&mut self, access: u16, name: &str, desc: &str, code: Option<Code>) {
         let name = self.cp.utf8(name);
         let desc = self.cp.utf8(desc);

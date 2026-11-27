@@ -1145,7 +1145,10 @@ pub struct ClassDef {
 
 impl ClassDef {
     /// The lifted methods in the order of their places, in the slots lifted methods were written in; every other
-    /// method where it was written. Once the class's last method is written.
+    /// method where it was written. Once the class's last method is written. This is the order of the class file's
+    /// members alone: the bodies are written, and their constants entered, in the order the class holds them
+    /// (`Gen::drain_pending`), which decides the constants that take a one-byte `ldc`; writing them in this order moves
+    /// a method near its size limit past it (tests/cases/lifted_order_pool_near_limit.scala).
     pub fn order_lifted(&mut self) {
         let slots: Vec<usize> = (0..self.methods.len()).filter(|&i| self.methods[i].place.is_some()).collect();
         let mut lifted: Vec<MethodDef> = slots.iter().rev().map(|&i| self.methods.remove(i)).collect();

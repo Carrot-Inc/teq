@@ -1870,6 +1870,7 @@ cases/lifted_order_local_class_default	pass	-
 cases/lifted_order_local_default_in_lambda	pass	-	
 cases/lifted_order_local_default_in_local_def	pass	-	
 cases/lifted_order_nested_lambda_default	pass	-	
+cases/lifted_order_pool_near_limit	pass	-	
 cases/lifted_order_two_byname_defaults	pass	-	
 cases/lifted_pure_closure_return	pass	-	
 cases/lifted_pure_closure_var_box	pass	-	

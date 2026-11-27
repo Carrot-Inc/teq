@@ -151,7 +151,7 @@ impl<'a> Gen<'a> {
     }
 
     fn finish_writer_now(&mut self) -> Vec<u8> {
-        let cw = std::mem::replace(&mut self.cw, ClassWriter::new(0, "x", OBJECT, &[]));
+        let mut cw = std::mem::replace(&mut self.cw, ClassWriter::new(0, "x", OBJECT, &[]));
         // dotty checks the name as the class begins (BCodeSkelBuilder.scala 341-345, for a mirror
         // BCodeHelpers.scala 529-531) and writes nothing of the class.
         if !constant_text_fits(&self.plan.name, "") {
@@ -167,6 +167,7 @@ impl<'a> Gen<'a> {
         if let Some((m, desc)) = self.plan.methods.iter().zip(&descs).find(|(m, desc)| !self.checked_methods.contains_key(&(m.name().clone(), (*desc).clone()))) {
             panic!("the method {}{} of {} entered the plan past its gate (`Gen::check_method`)", m.name(), desc, self.plan.name);
         }
+        cw.order_methods(self.plan.methods.iter().zip(&descs).map(|(m, desc)| (&**m.name(), desc.as_str())));
         match cw.finish(self.cx.input.output_version) {
             Ok(bytes) => bytes,
             Err(limit) => self.class_too_large(limit),
