@@ -1129,6 +1129,9 @@ pub struct ClassDef {
     pub interfaces: Vec<Rc<str>>,
     /// The name of the source file it is written from, where it has one.
     pub source: Option<Rc<str>>,
+    /// Where its definition stands, the place of a refusal of the class that has no site of its own; none where
+    /// the class has no definition to point at.
+    pub place: Option<(crate::source::FileId, crate::source::Span)>,
     /// In the order they are declared, but a lazy member's handle before every field declared
     /// before it. The list is whole when the class's last method is: a handle is declared where
     /// its member's accessor is written, an enum's values where its companion's initialiser

@@ -482,7 +482,7 @@ impl<'a> Gen<'a> {
             self.cw.method_metadata(m.name(), desc, jar);
         }
         if reached && self.cw.overflow {
-            self.too_large_methods.push((self.plan.name.clone(), m.name().to_string(), desc.to_string(), at));
+            self.too_large_methods.push((self.plan.name.clone(), self.plan.place, m.name().to_string(), desc.to_string(), at));
         }
         self.overflow |= self.cw.overflow;
         true
@@ -1934,7 +1934,7 @@ impl<'a> Gen<'a> {
         }
         let flags = self.class_flags(c);
         let path = &cx.input.sources[info.file.0 as usize].path;
-        self.begin_class(&name, flags, &super_name, &interfaces[..declared], &interfaces[declared..], Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)));
+        self.begin_class(&name, flags, &super_name, &interfaces[..declared], &interfaces[declared..], Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)), Some((info.file, info.span)));
         self.super_targets.clear();
         self.lifted_body = None;
         self.ctor_code = false;
@@ -2784,14 +2784,18 @@ impl<'a> Gen<'a> {
     /// Where the class `c`'s definition starts, its modifiers first: the place of the members dotty synthesizes for a
     /// case class (`copy`, its companion's `apply`), whose symbols take the class's span.
     pub(super) fn class_definition_start(&self, c: ClassId) -> Option<(crate::source::FileId, crate::source::Span)> {
-        let cx = self.cx;
-        let info = cx.input.syms.class(c);
-        let def = info.def?;
-        if info.file.0 as usize >= cx.input.asts.len() {
+        let info = self.cx.input.syms.class(c);
+        self.definition_start(info.file, info.def?)
+    }
+
+    /// Where the definition `def` of the file `file` starts, its modifiers first.
+    pub(super) fn definition_start(&self, file: crate::source::FileId, def: crate::ast::DefId) -> Option<(crate::source::FileId, crate::source::Span)> {
+        let asts = &self.cx.input.asts;
+        if file.0 as usize >= asts.len() {
             return None;
         }
-        let start = cx.input.asts[info.file.0 as usize].def_range(def).start;
-        Some((info.file, crate::source::Span { start, end: start }))
+        let start = asts[file.0 as usize].def_range(def).start;
+        Some((file, crate::source::Span { start, end: start }))
     }
 
     fn primary_ctor_place(&self, c: ClassId) -> Option<(crate::source::FileId, crate::source::Span)> {
@@ -5167,7 +5171,7 @@ impl<'a> Gen<'a> {
         self.context = name.to_string();
         let listed = super::callable::module_interfaces(&[], false);
         let path = &cx.input.sources[file.0 as usize].path;
-        self.begin_class(&name, ClassFlags::FINAL, OBJECT, &[], &listed, Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)));
+        self.begin_class(&name, ClassFlags::FINAL, OBJECT, &[], &listed, Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)), Some((file, crate::source::Span::default())));
         self.this_name = name.clone();
         self.this_class = None;
         self.is_interface = false;
@@ -5263,7 +5267,7 @@ impl<'a> Gen<'a> {
     /// `TeqMain.main(String[])` calls the entry point: the command line reaches a
     /// `main(args: Array[String])` as an array and a `@main def f(args: String*)` as a sequence.
     pub fn emit_launcher(&mut self, main: SymId, object: Option<ClassId>) -> (String, Vec<u8>) {
-        self.begin_class(LAUNCHER, ClassFlags::FINAL, OBJECT, &[], &[], None);
+        self.begin_class(LAUNCHER, ClassFlags::FINAL, OBJECT, &[], &[], None, None);
         self.this_name = Rc::from(LAUNCHER);
         self.this_class = None;
         self.is_interface = false;

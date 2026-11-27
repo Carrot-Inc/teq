@@ -3,7 +3,6 @@
 //! declared, and what the emitters ask of the class's members.
 
 use crate::lir::{ClassDef, ClassFlags, ErasedType, FieldDef, FieldFlags, FieldRole, MethodDef, MethodFlags, MethodParam, Visibility};
-use crate::types::ClassId;
 use super::classfile::*;
 use super::gen::Gen;
 use super::names::*;
@@ -74,13 +73,14 @@ impl<'a> Gen<'a> {
     /// Starts a class: its plan with no member yet, and its writer from the plan. `listed` is what
     /// its class file names after the interfaces its parents give it: a module class's
     /// `java/io/Serializable` (`module_interfaces`).
-    pub fn begin_class(&mut self, name: &str, flags: ClassFlags, superclass: &str, interfaces: &[String], listed: &[String], source: Option<&str>) {
+    pub fn begin_class(&mut self, name: &str, flags: ClassFlags, superclass: &str, interfaces: &[String], listed: &[String], source: Option<&str>, place: Option<(crate::source::FileId, crate::source::Span)>) {
         let class = ClassDef {
             name: Rc::from(name),
             flags,
             superclass: Rc::from(superclass),
             interfaces: interfaces.iter().map(|i| Rc::from(i.as_str())).collect(),
             source: source.map(Rc::from),
+            place,
             fields: Vec::new(),
             methods: Vec::new(),
         };
@@ -203,7 +203,7 @@ impl<'a> Gen<'a> {
             PoolLimit::Entries => format!("Error while emitting {}\nClass too large: {}", name, name),
             PoolLimit::Text => format!("Error while emitting {}\nUTF8 string too large", name),
         };
-        match self.class_place(&name) {
+        match self.plan.place {
             Some((file, span)) => self.refused.push((file, span, message)),
             None => self.unsupported(&message),
         }
@@ -221,31 +221,10 @@ impl<'a> Gen<'a> {
     /// scalac's error `message` for what of the class being written a class file cannot hold, at `at` or
     /// else at the class's definition.
     pub(super) fn refuse_written(&mut self, message: &str, at: Option<(crate::source::FileId, crate::source::Span)>) {
-        let name = self.plan.name.clone();
-        match at.or_else(|| self.class_place(&name)) {
+        match at.or(self.plan.place) {
             Some((file, span)) => self.refused.push((file, span, message.to_string())),
             None => self.unsupported(message),
         }
-    }
-
-    /// Where the class of the binary name `name` is defined: the class being written's own place,
-    /// the class, the companion or the module that name stands for, or the file of a file's
-    /// module class.
-    pub(super) fn class_place(&self, name: &str) -> Option<(crate::source::FileId, crate::source::Span)> {
-        let cx = self.cx;
-        let of_class = |c: ClassId| {
-            let info = cx.input.syms.class(c);
-            (info.file, info.span)
-        };
-        if let Some(c) = self.this_class {
-            return Some(of_class(c));
-        }
-        let module = format!("{name}$");
-        if let Some(&c) = cx.class_by_name.get(name).or_else(|| cx.class_by_name.get(name.strip_suffix('$')?)).or_else(|| cx.class_by_name.get(&module)) {
-            return Some(of_class(c));
-        }
-        let f = cx.file_modules.iter().position(|m| m == name)?;
-        Some((crate::source::FileId(f as u32), crate::source::Span::default()))
     }
 }
 

@@ -473,7 +473,8 @@ impl<'a> Gen<'a> {
             let out = self.emit_class(i);
             if let Some(mirror) = cx.mirror_class(c) {
                 let table = std::mem::take(&mut self.module_table);
-                let class = self.mirror(&mirror, &out.0, &table);
+                let info = cx.input.syms.class(c);
+                let class = self.mirror(&mirror, &out.0, &table, Some((info.file, info.span)));
                 self.extra_classes.push(class);
             }
             if cx.has_instance_case_companion(c) {
@@ -498,7 +499,7 @@ impl<'a> Gen<'a> {
         let out = self.emit_file_module(f);
         if mirror {
             let table = std::mem::take(&mut self.module_table);
-            let class = self.mirror(&name, &out.0, &table);
+            let class = self.mirror(&name, &out.0, &table, None);
             self.extra_classes.push(class);
         }
         out
@@ -520,9 +521,9 @@ impl<'a> Gen<'a> {
     }
 
     /// A class of static forwarders only, as scalac writes for a top-level object.
-    fn mirror(&mut self, name: &str, module: &str, table: &[MethodDef]) -> (String, Vec<u8>) {
+    fn mirror(&mut self, name: &str, module: &str, table: &[MethodDef], place: Option<(crate::source::FileId, crate::source::Span)>) -> (String, Vec<u8>) {
         self.reset_class();
-        self.begin_class(name, ClassFlags::FINAL, OBJECT, &[], &[], None);
+        self.begin_class(name, ClassFlags::FINAL, OBJECT, &[], &[], None, place);
         self.writing_mirror = true;
         self.this_name = Rc::from(name);
         self.this_class = None;
@@ -703,7 +704,8 @@ impl<'a> Gen<'a> {
             return None;
         }
         self.reset_class();
-        self.begin_class(&name, ClassFlags::FINAL, OBJECT, &[], &[], None);
+        let place = info.def.and_then(|def| self.definition_start(info.file, def));
+        self.begin_class(&name, ClassFlags::FINAL, OBJECT, &[], &[], None, place);
         self.this_name = Rc::from(name.as_str());
         self.this_class = None;
         self.line_file = info.file;
@@ -744,7 +746,7 @@ impl<'a> Gen<'a> {
         self.context = name.to_string();
         let info = cx.input.syms.class(c);
         let path = &cx.input.sources[info.file.0 as usize].path;
-        self.begin_class(&name, ClassFlags::FINAL, OBJECT, &[], &[SERIALIZABLE.to_string()], Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)));
+        self.begin_class(&name, ClassFlags::FINAL, OBJECT, &[], &[SERIALIZABLE.to_string()], Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)), Some((info.file, info.span)));
         self.this_name = name.clone();
         self.this_class = None;
         self.is_interface = false;
@@ -1043,7 +1045,7 @@ impl<'a> Gen<'a> {
         self.context = name.to_string();
         let info = cx.input.syms.class(c);
         let path = &cx.input.sources[info.file.0 as usize].path;
-        self.begin_class(&name, ClassFlags::FINAL, OBJECT, &interfaces, &listed, Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)));
+        self.begin_class(&name, ClassFlags::FINAL, OBJECT, &interfaces, &listed, Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)), Some((info.file, info.span)));
         self.this_name = name.clone();
         self.this_class = None;
         self.is_interface = false;
@@ -1254,7 +1256,8 @@ impl<'a> Gen<'a> {
                 let shape = self.default_getter_shape(fun.sym, i);
                 let (before, ret) = (shape.before, shape.ret.clone());
                 let getter = format!("{}$default${}$extension", self.source_method_name(fun.sym), shape.index);
-                self.held_context(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &getter, &method_desc(&types[..before + 1], &ret), &params[..before + 1], ret.clone(), &[d], super::classes::MethodSite::default());
+                let site = super::classes::MethodSite { at: Some((info.file, info.span)), ..Default::default() };
+                self.held_context(MethodFlags { is_final: true, ..MethodFlags::PUBLIC }, &getter, &method_desc(&types[..before + 1], &ret), &params[..before + 1], ret.clone(), &[d], site);
                 self.hold_tree("value class extension's default getter", |g| {
                     let value = g.lower_default_value(d, shape.by_name, &ret);
                     g.lir.ret(value)
@@ -1298,7 +1301,7 @@ impl<'a> Gen<'a> {
         let listed = module_interfaces(interfaces, cx.input.syms.class(c).owner == Owner::Local);
         let info = cx.input.syms.class(c);
         let path = &cx.input.sources[info.file.0 as usize].path;
-        self.begin_class(&name, ClassFlags::FINAL, OBJECT, interfaces, &listed, Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)));
+        self.begin_class(&name, ClassFlags::FINAL, OBJECT, interfaces, &listed, Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)), Some((info.file, info.span)));
         self.this_name = name.clone();
         self.this_class = None;
         self.is_interface = false;

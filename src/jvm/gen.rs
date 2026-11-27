@@ -852,7 +852,7 @@ pub struct Gen<'a> {
     pub writing_forwarders: bool,
     /// The first method of each class of the unit whose code passed what a jump of the pass reaches
     /// (`Code::finish`): its class, its name, its descriptor and its definition where the writer knows it.
-    pub too_large_methods: Vec<(Rc<str>, String, String, Option<(crate::source::FileId, crate::source::Span)>)>,
+    pub too_large_methods: Vec<(Rc<str>, Option<(crate::source::FileId, crate::source::Span)>, String, String, Option<(crate::source::FileId, crate::source::Span)>)>,
     /// The `Object` a value class over a type parameter erases to in link mode, told apart by
     /// identity from the `Object` of a generic slot, where the value is boxed.
     vc_object: Rc<str>,
@@ -985,9 +985,9 @@ impl<'a> Gen<'a> {
         let out = self.emit_unit_once(unit);
         // With wide jumps a method still past the bound has more than 65,535 bytes of code: scalac's error
         // (dotty's PostProcessor.sendToDisk reporting ASM's MethodTooLargeException), at the method.
-        for (class, name, desc, at) in std::mem::take(&mut self.too_large_methods) {
+        for (class, place, name, desc, at) in std::mem::take(&mut self.too_large_methods) {
             let message = format!("Error while emitting {}\nMethod too large: {}.{} {}", class, class, name, desc);
-            match at.or_else(|| self.class_place(&class)) {
+            match at.or(place) {
                 Some((file, span)) => self.refused.push((file, span, message)),
                 None => self.unsupported(&message),
             }
