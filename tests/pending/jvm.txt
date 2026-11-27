@@ -120,6 +120,7 @@ java_varargs_spread_unimported	compile
 jdk_enum_stable_values	compile
 jdk_member_missing_class	compile
 jdk_static_values_stable	compile
+js_val_before_init_nothing	output
 jvm_varargs_backing_arrays	output
 lambda_spread_bounded_formal_anyref	compile
 lambda_spread_bounded_formal_case_class	compile

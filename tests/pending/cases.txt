@@ -115,6 +115,17 @@ js_call_unit_argument	< undefined
 js_calling_conventions	< 5
 js_closure_null_param	< 42
 js_computed_name	< 1
+js_val_before_init_edges	< 1
+js_val_before_init_generic_vc	< null
+js_val_before_init_names	< 0
+js_val_before_init_nothing	< early-npe
+js_val_before_init_opaque	< 1
+js_val_before_init_override	< 0
+js_val_before_init_owners	< 0
+js_val_before_init_split	< 0
+js_val_before_init_vc_cycle	< 0
+js_val_before_init_vc_identity	< false
+js_val_before_init_vc_late	< 0
 lambda_spread_bounded_formal_anyref	< false
 lambda_spread_bounded_formal_case_class	< false
 lambda_spread_bounded_formal_constructor_variable	< false

@@ -1722,6 +1722,17 @@ js_promise_executor	cannot run	-	its expectation is Scala.js's
 js_this_function	cannot run	-	its expectation is Scala.js's
 js_this_function_null_receiver	cannot run	-	its expectation is Scala.js's
 js_typed_array_iterables	cannot run	-	its expectation is Scala.js's
+js_val_before_init_edges	fail	-	output
+js_val_before_init_generic_vc	fail	-	exception
+js_val_before_init_names	pass	-	
+js_val_before_init_nothing	fail	-	output
+js_val_before_init_opaque	fail	-	unsupported
+js_val_before_init_override	fail	-	output
+js_val_before_init_owners	fail	-	output
+js_val_before_init_split	fail	-	exception
+js_val_before_init_vc_cycle	fail	-	exception
+js_val_before_init_vc_identity	fail	-	output
+js_val_before_init_vc_late	fail	-	exception
 js_wrapped_dictionary	cannot run	-	its expectation is Scala.js's
 junit_comparison_failure	fail	-	unsupported
 jvm_direct_interfaces	fail	-	compile

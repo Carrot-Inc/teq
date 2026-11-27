@@ -37,6 +37,7 @@ js_native_secondary_ctor	fail	-	< tests/interop/js_native_secondary_ctor.scala:1
 js_trait_bracket_access_non_native	fail	-	< tests/interop/js_trait_bracket_access_non_native.scala:7:3: error: @JSBracketAccess is not allowed in non-native JS classes
 js_trait_setter_call	fail	-	< 7
 js_trait_setter_on_class	pass	-	
+js_val_before_init_freeze	pass	-	
 jsobjects	pass	-	
 jsvalues	pass	-	
 jsvalues with the default output path	pass	-	

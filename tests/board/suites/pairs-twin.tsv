@@ -1698,6 +1698,17 @@ cases/js_promise_executor	pass	-
 cases/js_this_function	pass	-	
 cases/js_this_function_null_receiver	pass	-	
 cases/js_typed_array_iterables	pass	-	
+cases/js_val_before_init_edges	pass	-	
+cases/js_val_before_init_generic_vc	pass	-	
+cases/js_val_before_init_names	pass	-	
+cases/js_val_before_init_nothing	pass	-	
+cases/js_val_before_init_opaque	pass	-	
+cases/js_val_before_init_override	pass	-	
+cases/js_val_before_init_owners	pass	-	
+cases/js_val_before_init_split	pass	-	
+cases/js_val_before_init_vc_cycle	pass	-	
+cases/js_val_before_init_vc_identity	pass	-	
+cases/js_val_before_init_vc_late	pass	-	
 cases/js_wrapped_dictionary	pass	-	
 cases/junit_comparison_failure	pass	-	
 cases/jvm_direct_interfaces	pass	-	

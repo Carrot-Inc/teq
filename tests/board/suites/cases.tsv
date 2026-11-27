@@ -1722,6 +1722,17 @@ js_promise_executor	pass	-
 js_this_function	pass	-	
 js_this_function_null_receiver	pass	-	
 js_typed_array_iterables	pass	-	
+js_val_before_init_edges	fail	-	< 1
+js_val_before_init_generic_vc	fail	-	< null
+js_val_before_init_names	fail	-	< 0
+js_val_before_init_nothing	fail	-	< early-npe
+js_val_before_init_opaque	fail	-	< 1
+js_val_before_init_override	fail	-	< 0
+js_val_before_init_owners	fail	-	< 0
+js_val_before_init_split	fail	-	< 0
+js_val_before_init_vc_cycle	fail	-	< 0
+js_val_before_init_vc_identity	fail	-	< false
+js_val_before_init_vc_late	fail	-	< 0
 js_wrapped_dictionary	pass	-	
 junit_comparison_failure	pass	-	
 jvm_direct_interfaces	cannot run	-	the JVM's platform

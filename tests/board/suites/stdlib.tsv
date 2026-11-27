@@ -1685,6 +1685,17 @@ jdk_static_values_stable	fail	-	error: a singleton type needs a val, a parameter
 jdk_statics_import	fail	-	error: Not found: getType
 join_null_first_branch	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 js_default_before_super	pass	-	
+js_val_before_init_edges	fail	-	TypeError: Cannot mix BigInt and other types, use explicit conversions
+js_val_before_init_generic_vc	fail	-	TypeError: Cannot read properties of undefined (reading 'x')
+js_val_before_init_names	fail	-	output differs
+js_val_before_init_nothing	fail	-	output differs
+js_val_before_init_opaque	fail	-	TypeError: Cannot mix BigInt and other types, use explicit conversions
+js_val_before_init_override	fail	-	output differs
+js_val_before_init_owners	fail	-	output differs
+js_val_before_init_split	fail	-	TypeError: Cannot read properties of undefined (reading 'x')
+js_val_before_init_vc_cycle	fail	-	TypeError: Cannot read properties of undefined (reading 'x')
+js_val_before_init_vc_identity	fail	-	output differs
+js_val_before_init_vc_late	fail	-	TypeError: Cannot read properties of undefined (reading 'x')
 junit_comparison_failure	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
 jvm_direct_interfaces	fail	-	error: method andThen overrides nothing
 jvm_lazy_local_closure	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
