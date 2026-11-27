@@ -662,6 +662,8 @@ pub struct Gen<'a> {
     pub plan: crate::lir::ClassDef,
     /// The class's plan in the order its maker made it, written by the class's walk (`Gen::write_entries`).
     pub(super) entries: Vec<super::classes::Entry>,
+    /// The class's held methods, one for each `Entry::Held` of `entries`, in that order (`Gen::enter_plan`).
+    pub(super) held_methods: Vec<super::classes::HeldMethod>,
     /// Whether the class's walk has started: its plan is whole, so a lifted method asked or a body queued after it is
     /// an internal error that refuses the class (`Gen::lifted_entry`, `Gen::defer`).
     pub(super) walking: bool,
@@ -817,6 +819,7 @@ impl<'a> Gen<'a> {
             cw: ClassWriter::new(0, "x", OBJECT, &[]),
             plan: Default::default(),
             entries: Vec::new(),
+            held_methods: Vec::new(),
             walking: false,
             lifted_table: Default::default(),
             super_targets: Vec::new(),
@@ -932,6 +935,7 @@ impl<'a> Gen<'a> {
         self.pending.clear();
         self.pending_next.clear();
         self.entries.clear();
+        self.held_methods.clear();
         self.walking = false;
         self.draining = false;
         self.local_defs.clear();

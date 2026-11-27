@@ -148,9 +148,8 @@ pub(super) struct ModuleTree {
 }
 
 /// A method of the class lowered before it is written (`Gen::hold_method`, `Gen::write_held`): its plan entry and its
-/// context, checked at the class file's gate where it was made (`Gen::method_cx`), its tree's place in the class's
-/// store (`lir::Body`) and the locals its lowering declared; `what` names it in a refusal. A lifted body is held so
-/// (`Gen::lower_lifted`).
+/// context, checked at the class file's gate where it was made (`Gen::method_cx`), and its tree's place in the class's
+/// store (`lir::Body`); `what` names it in a refusal. A lifted body is held so (`Gen::lower_lifted`).
 pub(super) struct HeldMethod {
     method: MethodDef,
     /// Its signature as a class file spells it, made once at its hold.
@@ -165,7 +164,6 @@ pub(super) struct HeldMethod {
     under: HeldUnder,
     m: MethodCx,
     lir: crate::lir::MethodStart,
-    declared: FxMap<SymId, (ErasedType, bool)>,
     code: HeldCode,
 }
 
@@ -188,8 +186,9 @@ pub(super) enum Entry {
     FieldFirst(crate::lir::FieldDef),
     /// A method without a body (`Gen::abstract_method_site`).
     Abstract(MethodDef, String),
-    /// A method with the code its maker lowered (`Gen::hold_method`).
-    Held(Box<HeldMethod>),
+    /// A method with the code its maker lowered (`Gen::hold_method`): the next of the class's held methods
+    /// (`Gen::held_methods`), which stand in their entries' order.
+    Held,
     /// The class file's interfaces, after every method of the class's code (`Gen::write_interfaces`).
     Interfaces(InterfaceStep),
 }
@@ -513,8 +512,7 @@ impl<'a> Gen<'a> {
             let held = self.refuse_second_methods(held);
             for (mut h, span) in held {
                 h.under.lifted_body = Some(span);
-                self.enter_plan(&mut h);
-                self.entries.push(Entry::Held(h));
+                self.enter_plan(*h);
             }
         }
     }
@@ -738,29 +736,31 @@ impl<'a> Gen<'a> {
         for r in self.held_roots(&code) {
             self.ask_lifted(r);
         }
-        self.hold_method(if lazy { "local lazy val's method" } else { "lifted method" }, code)
+        Box::new(self.hold_method(if lazy { "local lazy val's method" } else { "lifted method" }, code))
     }
 
     /// The held method entering the class's plan, unless the class holds one of its name and signature already: the
     /// first one held is the class's. A later one's code is written all the same and left out at its end
     /// (`Gen::end_method`).
-    fn enter_plan(&mut self, held: &mut HeldMethod) {
+    fn enter_plan(&mut self, mut held: HeldMethod) {
         held.entered = !self.plan.has_method(held.method.name(), &held.desc);
         if held.entered {
             self.plan.methods.push(held.method.clone());
         }
+        self.held_methods.push(held);
+        self.entries.push(Entry::Held);
     }
 
-    /// The planned method held with the code its maker has just lowered: the method, its context, its tree's place in
-    /// the class's store and the locals the lowering declared, to be written later by `Gen::write_held`.
-    fn hold_method(&mut self, what: &'static str, code: HeldCode) -> Box<HeldMethod> {
+    /// The planned method held with the code its maker has just lowered: the method, its context and its tree's
+    /// place in the class's store, to be written later by `Gen::write_held`. The locals its lowering declared end
+    /// with the lowering: the writer stores its own.
+    fn hold_method(&mut self, what: &'static str, code: HeldCode) -> HeldMethod {
         let method = self.planned.take().expect("a planned method is held");
         let desc = method_desc(&method.param_types(), method.ret());
-        let room = self.lower_declared.len();
-        let declared = std::mem::replace(&mut self.lower_declared, std::collections::HashMap::with_capacity_and_hasher(room, Default::default()));
         let (m, lir) = (std::mem::take(&mut self.m), self.lir.start);
+        self.lower_declared.clear();
         let under = HeldUnder { context: self.context.clone(), ctor_code: self.ctor_code, lifted_body: self.lifted_body };
-        Box::new(HeldMethod { method, desc, entered: false, what, first_line: None, under, m, lir, declared, code })
+        HeldMethod { method, desc, entered: false, what, first_line: None, under, m, lir, code }
     }
 
     /// A member of the class whose body is the tree `compose` lowers, held where a writer would have begun it: its
@@ -809,8 +809,7 @@ impl<'a> Gen<'a> {
         }
         let mut held = self.hold_method(what, code);
         held.first_line = Some(first_line);
-        self.enter_plan(&mut held);
-        self.entries.push(Entry::Held(held));
+        self.enter_plan(held);
     }
 
     /// `hold_member`'s second half, in the context `held_context` made: the tree lowered, asked and held, for the
@@ -818,9 +817,8 @@ impl<'a> Gen<'a> {
     pub(super) fn hold_tree(&mut self, what: &'static str, compose: impl FnOnce(&mut Self) -> LirId) {
         let tree = self.lowering(compose);
         self.ask_lifted(tree);
-        let mut held = self.hold_method(what, HeldCode::Tree(tree));
-        self.enter_plan(&mut held);
-        self.entries.push(Entry::Held(held));
+        let held = self.hold_method(what, HeldCode::Tree(tree));
+        self.enter_plan(held);
     }
 
     /// The lifted method a call names (`method`, lowered against the shape `lowered`), its body found by its name in
@@ -892,20 +890,15 @@ impl<'a> Gen<'a> {
     /// Writes a held method from its tree, a step of the class's walk (`Gen::write_entries`): opened
     /// (`Gen::open_method`), its body, ended (`Gen::end_method`). False where its code could not be written: the class
     /// is refused there.
-    fn write_held(&mut self, held: Box<HeldMethod>) -> bool {
-        let HeldMethod { method, desc, entered, first_line, under, m, lir, declared, code, .. } = *held;
+    fn write_held(&mut self, held: HeldMethod) -> bool {
+        let HeldMethod { method, desc, entered, first_line, under, m, lir, code, .. } = held;
         let maker = self.enter_held_under(under);
         // An object's two methods are written from its one constructor tree, which the class's plan keeps.
         let mut tree = matches!(code, HeldCode::ModulePart(_)).then(|| self.module_tree.take().expect("an object's constructor tree in its class's plan"));
-        match tree.as_mut() {
-            Some(tree) => {
-                std::mem::swap(&mut self.lir, &mut tree.lir);
-                self.lower_declared = std::mem::take(&mut tree.declared);
-            }
-            None => {
-                self.lir.start = lir;
-                self.lower_declared = declared;
-            }
+        if let Some(tree) = tree.as_mut() {
+            std::mem::swap(&mut self.lir, &mut tree.lir);
+        } else {
+            self.lir.start = lir;
         }
         self.open_method(&method, m);
         if let Some(line) = first_line {
@@ -928,7 +921,6 @@ impl<'a> Gen<'a> {
         let written = self.end_method(method, &desc, entered);
         if let Some(mut tree) = tree {
             std::mem::swap(&mut self.lir, &mut tree.lir);
-            tree.declared = std::mem::take(&mut self.lower_declared);
             self.module_tree = Some(tree);
         }
         self.enter_held_under(maker);
@@ -948,6 +940,7 @@ impl<'a> Gen<'a> {
         }
         self.plan_phase(false);
         let mut whole = true;
+        let mut held = std::mem::take(&mut self.held_methods).into_iter();
         for entry in std::mem::take(&mut self.entries) {
             match entry {
                 Entry::Field(f) => {
@@ -959,7 +952,7 @@ impl<'a> Gen<'a> {
                     self.cw.field_first(field_access(f.flags), &f.name, &desc);
                 }
                 Entry::Abstract(m, desc) => self.cw.method(method_access(m.flags()), m.name(), &desc, None),
-                Entry::Held(held) => whole = self.write_held(held),
+                Entry::Held => whole = self.write_held(held.next().expect("a held method for each method entry")),
                 Entry::Interfaces(step) => self.write_interfaces(step),
             }
             if !whole {
@@ -2913,9 +2906,8 @@ impl<'a> Gen<'a> {
         let (lir, declared) = (std::mem::replace(&mut self.lir, class_lir), std::mem::take(&mut self.lower_declared));
         self.module_tree = Some(ModuleTree { lir, declared, root, fields });
         let what = if init { "object's constructor" } else { "object's static initialiser" };
-        let mut held = self.hold_method(what, code);
-        self.enter_plan(&mut held);
-        self.entries.push(Entry::Held(held));
+        let held = self.hold_method(what, code);
+        self.enter_plan(held);
     }
 
     /// How a primary constructor passes the arguments of its superclass's constructor
