@@ -44,7 +44,7 @@ pub fn method_access(f: MethodFlags) -> u16 {
 /// symbol stands for.
 pub fn method_def(flags: MethodFlags, name: &str, desc: &str) -> MethodDef {
     let (params, ret) = parse_method_desc(desc);
-    MethodDef::new(Rc::from(name), params.into_iter().map(|t| MethodParam::declared(None, t)).collect(), ret, desc.to_string(), flags, None)
+    MethodDef::new(Rc::from(name), params.into_iter().map(|t| MethodParam::declared(None, t)).collect(), ret, flags, None)
 }
 
 /// A method of the class with the parameters of the frame its code is begun with, at the frame's types where they
@@ -57,9 +57,17 @@ pub fn begun_method_def(flags: MethodFlags, name: &str, desc: &str, frame: &[Met
         for (p, framed) in params.iter_mut().zip(frame) {
             p.role = framed.role.clone();
         }
-        return MethodDef::new(Rc::from(name), params, ret, desc.to_string(), flags, place);
+        return MethodDef::new(Rc::from(name), params, ret, flags, place);
     }
-    MethodDef::new(Rc::from(name), frame.to_vec(), ret.clone(), desc.to_string(), flags, place)
+    MethodDef::new(Rc::from(name), frame.to_vec(), ret.clone(), flags, place)
+}
+
+impl ClassDef {
+    /// Whether the class holds a method of this name whose types `desc` spells (`spells_method_desc`): compared by the
+    /// types, with no descriptor made.
+    pub fn has_method(&self, name: &str, desc: &str) -> bool {
+        self.methods.iter().any(|m| &**m.name() == name && spells_method_desc(desc, m.params().iter().map(|p| &p.ty), m.ret()))
+    }
 }
 
 impl<'a> Gen<'a> {
@@ -128,7 +136,7 @@ impl<'a> Gen<'a> {
         let m = method_def(flags, name, desc);
         self.check_method(&m, &site);
         self.plan.methods.push(m.clone());
-        self.entries.push(super::classes::Entry::Abstract(m));
+        self.entries.push(super::classes::Entry::Abstract(m, desc.to_string()));
     }
 
     /// The class file of the class being written, which is the plan's class: its name, its flags
@@ -158,11 +166,12 @@ impl<'a> Gen<'a> {
         if let Some(limit) = cw.cp.unwritable() {
             return self.class_too_large(limit);
         }
-        if let Some(m) = self.plan.methods.iter().find(|m| !self.checked_methods.contains_key(&(m.name().clone(), m.desc().to_string()))) {
-            panic!("the method {}{} of {} entered the plan past its gate (`Gen::check_method`)", m.name(), m.desc(), self.plan.name);
-        }
         self.plan.order_lifted();
-        cw.order_methods(self.plan.methods.iter().map(|m| (&**m.name(), m.desc())));
+        let descs: Vec<String> = self.plan.methods.iter().map(|m| method_desc(&m.param_types(), m.ret())).collect();
+        if let Some((m, desc)) = self.plan.methods.iter().zip(&descs).find(|(m, desc)| !self.checked_methods.contains_key(&(m.name().clone(), (*desc).clone()))) {
+            panic!("the method {}{} of {} entered the plan past its gate (`Gen::check_method`)", m.name(), desc, self.plan.name);
+        }
+        cw.order_methods(self.plan.methods.iter().zip(&descs).map(|(m, desc)| (&**m.name(), desc.as_str())));
         let class = &self.plan;
         if !cw.is_class(class_access(class.flags), &class.name, &class.superclass) || !cw.holds_interfaces(class.interfaces.iter().map(|i| &**i)) {
             panic!("the plan of {} is not its class file's: {:?} {} {:?}", class.name, class.flags, class.superclass, class.interfaces);
@@ -171,7 +180,7 @@ impl<'a> Gen<'a> {
         if let Some(at) = cw.fields_differ(&fields) {
             panic!("the plan of {} is not its class file's from field {} on: {:?}", class.name, at, fields.get(at));
         }
-        let methods: Vec<(u16, &str, String)> = class.methods.iter().map(|m| (method_access(m.flags()), &**m.name(), method_desc(&m.param_types(), m.ret()))).collect();
+        let methods: Vec<(u16, &str, String)> = class.methods.iter().zip(descs).map(|(m, desc)| (method_access(m.flags()), &**m.name(), desc)).collect();
         if let Some(at) = cw.methods_differ(&methods) {
             panic!("the plan of {} is not its class file's from method {} on: {:?}", class.name, at, methods.get(at));
         }
@@ -245,7 +254,7 @@ pub fn write_declarations(class: &ClassDef, output_version: u32) -> Vec<u8> {
     let interfaces: Vec<String> = class.interfaces.iter().map(|i| i.to_string()).collect();
     let mut cw = ClassWriter::new(class_access(class.flags), &class.name, &class.superclass, &interfaces);
     for m in &class.methods {
-        cw.method(method_access(m.flags()), m.name(), m.desc(), None);
+        cw.method(method_access(m.flags()), m.name(), &method_desc(&m.param_types(), m.ret()), None);
     }
     cw.finish(output_version).expect("a class of declarations alone, within a class file's bounds")
 }
@@ -272,7 +281,7 @@ mod tests {
         let m = begun_method_def(MethodFlags::PUBLIC, "m", "(Ljava/lang/Object;IJ)V", &[param(object(), ParamRole::Instance)], &ErasedType::V, None);
         assert_eq!(parts(&m), vec![(object(), ParamRole::Instance), (ErasedType::I, ParamRole::Declared(None)), (ErasedType::J, ParamRole::Declared(None))]);
         assert_eq!(*m.ret(), ErasedType::V);
-        assert_eq!(m.desc(), "(Ljava/lang/Object;IJ)V");
+        assert_eq!(method_desc(&m.param_types(), m.ret()), "(Ljava/lang/Object;IJ)V");
     }
 
     #[test]
@@ -282,7 +291,7 @@ mod tests {
         let boxed = ErasedType::L(Rc::from("p/Box"));
         assert_eq!(parts(&m), vec![(boxed.clone(), ParamRole::Key { holder: None }), (ErasedType::I, ParamRole::Instance)]);
         assert_eq!(*m.ret(), boxed);
-        assert_eq!(m.desc(), "(Lp/Box;I)Lp/Box;");
+        assert_eq!(method_desc(&m.param_types(), m.ret()), "(Lp/Box;I)Lp/Box;");
     }
 
     #[test]
@@ -291,6 +300,6 @@ mod tests {
         let m = begun_method_def(MethodFlags::PUBLIC, "m", "(IJ)D", &frame, &ErasedType::D, None);
         assert_eq!(parts(&m), vec![(ErasedType::I, ParamRole::Instance), (ErasedType::J, ParamRole::Key { holder: None })]);
         assert_eq!(*m.ret(), ErasedType::D);
-        assert_eq!(m.desc(), "(IJ)D");
+        assert_eq!(method_desc(&m.param_types(), m.ret()), "(IJ)D");
     }
 }

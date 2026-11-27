@@ -152,6 +152,8 @@ pub(super) struct ModuleTree {
 /// lowering declared; `what` names it in a refusal. A lifted body is held so (`Gen::lower_lifted`).
 pub(super) struct HeldMethod {
     method: MethodDef,
+    /// Its signature as a class file spells it, made once at its hold.
+    desc: String,
     /// Whether the method entered its class's plan (`Gen::enter_plan`): not where the class holds one of its name and
     /// signature already, and its code is written all the same and dropped.
     entered: bool,
@@ -184,7 +186,7 @@ pub(super) enum Entry {
     /// A field, before those declared so far (`Gen::field_first`).
     FieldFirst(crate::lir::FieldDef),
     /// A method without a body (`Gen::abstract_method_site`).
-    Abstract(MethodDef),
+    Abstract(MethodDef, String),
     /// A method with the code its maker lowered (`Gen::hold_method`).
     Held(Box<HeldMethod>),
     /// The class file's interfaces, after every method of the class's code (`Gen::write_interfaces`).
@@ -339,7 +341,7 @@ impl<'a> Gen<'a> {
     /// (`Gen::lower_lifted`), and so passes the class file's gate here.
     fn method_cx(&mut self, method: &MethodDef, site: MethodSite, params: &[MethodParam], ret: ErasedType, roots: &[TExprId]) -> MethodCx {
         self.check_method(method, &site);
-        debug_assert!(crate::lir::repeated_role(params).is_none(), "two parameters of {}{} take one role", method.name(), method.desc());
+        debug_assert!(crate::lir::repeated_role(params).is_none(), "two parameters of {}{} take one role", method.name(), method_desc(&method.param_types(), method.ret()));
         let mut m = MethodCx { at: site.at, attributes: site.attributes, ..MethodCx::default() };
         let mut slot = 0;
         if !method.flags().is_static {
@@ -401,9 +403,10 @@ impl<'a> Gen<'a> {
     /// asks whether the method is abstract). At every site: the class file's own bound on what teq writes.
     /// `Gen::finish_writer` writes no class with a method that did not pass here.
     pub(super) fn check_method(&mut self, method: &MethodDef, site: &MethodSite) {
+        let desc = method_desc(&method.param_types(), method.ret());
         let mut refused = false;
         if let Dotty::Writes { counted, name, no_generic_signature } = &site.dotty {
-            if *no_generic_signature && !self.names_own_class(method.desc()) && !super::classfile::constant_text_fits(name.as_deref().unwrap_or(method.name()), method.desc()) {
+            if *no_generic_signature && !self.names_own_class(&desc) && !super::classfile::constant_text_fits(name.as_deref().unwrap_or(method.name()), &desc) {
                 if self.writing_mirror {
                     *self.long_name_refused = true;
                 } else {
@@ -411,7 +414,7 @@ impl<'a> Gen<'a> {
                     refused = true;
                 }
             }
-            let (slots, count) = counted.unwrap_or_else(|| parameter_slots(method.desc()));
+            let (slots, count) = counted.unwrap_or_else(|| parameter_slots(&desc));
             if slots > MAX_PARAMETER_SLOTS {
                 let counted = if slots == count { "" } else { " (Long and Double count as 2)" };
                 self.refuse_written(&format!("Platform restriction: a parameter list's length cannot exceed {}{}.", MAX_PARAMETER_SLOTS, counted), site.at);
@@ -423,7 +426,7 @@ impl<'a> Gen<'a> {
         // refusal a method, dotty's where it gave one. A forwarder teq adds beside a class's methods (a mixin's, a
         // mirror's) takes its member's parameters, whose own check answers it, as `Wider::Answered` says of the rest.
         if !refused && !self.writing_mirror && !self.writing_forwarders && !matches!(site.wider, Wider::Answered) {
-            let mut written = parameter_slots(method.desc()).0 + usize::from(!method.flags().is_static);
+            let mut written = parameter_slots(&desc).0 + usize::from(!method.flags().is_static);
             let mut limit = MAX_ARGUMENT_SLOTS;
             match site.wider {
                 // The lambda's method is called through a method handle, which takes one slot fewer (a static
@@ -448,7 +451,7 @@ impl<'a> Gen<'a> {
                 self.refuse_written(&message, site.at);
             }
         }
-        self.checked_methods.insert((method.name().clone(), method.desc().to_string()), ());
+        self.checked_methods.insert((method.name().clone(), desc), ());
     }
 
     /// Ends the method begun, `m`: its code goes to the class file under its header where it `entered` the plan. A method
@@ -458,7 +461,7 @@ impl<'a> Gen<'a> {
     /// instructions name, the interfaces its `super` calls go to
     /// (`super_targets`), the function arities it names and what it reports. It asks for no
     /// second writing of the class with wide jumps (`overflow`).
-    fn end_method(&mut self, m: MethodDef, entered: bool) -> bool {
+    fn end_method(&mut self, m: MethodDef, desc: &str, entered: bool) -> bool {
         self.method_open = false;
         let at = self.m.at;
         let code = std::mem::replace(&mut self.code, Code::new(Vec::new()));
@@ -466,20 +469,20 @@ impl<'a> Gen<'a> {
         if code.underflow || code.misreserved {
             let line = code.last_line().map_or(String::new(), |l| format!(" at line {}", l));
             let fault = if code.underflow { "the operand stack model underflowed" } else { "internal error: a value stored in slots reserved for another width" };
-            self.unsupported(&format!("{} while writing {}{}{}", fault, m.name(), m.desc(), line));
+            self.unsupported(&format!("{} while writing {}{}{}", fault, m.name(), desc, line));
             return false;
         }
         if !entered {
             return true;
         }
         let reached = !self.cw.overflow;
-        self.cw.method(method_access(m.flags()), m.name(), m.desc(), Some(code));
+        self.cw.method(method_access(m.flags()), m.name(), desc, Some(code));
         if let Some((class, index)) = attributes {
             let jar = &self.cx.class_files[&class].methods[index];
-            self.cw.method_metadata(m.name(), m.desc(), jar);
+            self.cw.method_metadata(m.name(), desc, jar);
         }
         if reached && self.cw.overflow {
-            self.too_large_methods.push((self.plan.name.clone(), m.name().to_string(), m.desc().to_string(), at));
+            self.too_large_methods.push((self.plan.name.clone(), m.name().to_string(), desc.to_string(), at));
         }
         self.overflow |= self.cw.overflow;
         true
@@ -519,9 +522,9 @@ impl<'a> Gen<'a> {
     fn refuse_second_methods(&mut self, held: Vec<(Box<HeldMethod>, (u32, u32))>) -> Vec<(Box<HeldMethod>, (u32, u32))> {
         let mut kept: Vec<(Box<HeldMethod>, (u32, u32))> = Vec::with_capacity(held.len());
         for (h, span) in held {
-            let named = |m: &MethodDef| m.name() == h.method.name() && m.desc() == h.method.desc();
-            if self.plan.has_method(h.method.name(), h.method.desc()) || kept.iter().any(|(k, _)| named(&k.method)) {
-                self.unsupported(&format!("internal error: a second {} {}{} in the class", h.what, h.method.name(), h.method.desc()));
+            let named = |k: &HeldMethod| k.method.name() == h.method.name() && k.desc == h.desc;
+            if self.plan.has_method(h.method.name(), &h.desc) || kept.iter().any(|(k, _)| named(k)) {
+                self.unsupported(&format!("internal error: a second {} {}{} in the class", h.what, h.method.name(), h.desc));
                 continue;
             }
             kept.push((h, span));
@@ -740,10 +743,9 @@ impl<'a> Gen<'a> {
     /// first one held is the class's. A later one's code is written all the same and left out at its end
     /// (`Gen::end_method`).
     fn enter_plan(&mut self, held: &mut HeldMethod) {
-        let method = &held.method;
-        held.entered = !self.plan.has_method(method.name(), method.desc());
+        held.entered = !self.plan.has_method(held.method.name(), &held.desc);
         if held.entered {
-            self.plan.methods.push(method.clone());
+            self.plan.methods.push(held.method.clone());
         }
     }
 
@@ -751,11 +753,12 @@ impl<'a> Gen<'a> {
     /// locals the lowering declared, taken from the generator, to be written later by `Gen::write_held`.
     fn hold_method(&mut self, what: &'static str, code: HeldCode) -> Box<HeldMethod> {
         let method = self.planned.take().expect("a planned method is held");
+        let desc = method_desc(&method.param_types(), method.ret());
         let room = self.lower_declared.len();
         let declared = std::mem::replace(&mut self.lower_declared, std::collections::HashMap::with_capacity_and_hasher(room, Default::default()));
         let (m, lir) = (std::mem::take(&mut self.m), self.lir.take_keeping_capacity());
         let under = HeldUnder { context: self.context.clone(), ctor_code: self.ctor_code, lifted_body: self.lifted_body };
-        Box::new(HeldMethod { method, entered: false, what, first_line: None, under, m, lir, declared, code })
+        Box::new(HeldMethod { method, desc, entered: false, what, first_line: None, under, m, lir, declared, code })
     }
 
     /// A member of the class whose body is the tree `compose` lowers, held where a writer would have begun it: its
@@ -888,7 +891,7 @@ impl<'a> Gen<'a> {
     /// (`Gen::open_method`), its body, ended (`Gen::end_method`). False where its code could not be written: the class
     /// is refused there.
     fn write_held(&mut self, held: Box<HeldMethod>) -> bool {
-        let HeldMethod { method, entered, first_line, under, m, lir, declared, code, .. } = *held;
+        let HeldMethod { method, desc, entered, first_line, under, m, lir, declared, code, .. } = *held;
         let maker = self.enter_held_under(under);
         // An object's two methods are written from its one constructor tree, which the class's plan keeps.
         let mut tree = matches!(code, HeldCode::ModulePart(_)).then(|| self.module_tree.take().expect("an object's constructor tree in its class's plan"));
@@ -920,7 +923,7 @@ impl<'a> Gen<'a> {
                 self.write_module_part(part.root, part.init, &part.fields);
             }
         }
-        let written = self.end_method(method, entered);
+        let written = self.end_method(method, &desc, entered);
         if let Some(mut tree) = tree {
             tree.lir = std::mem::take(&mut self.lir);
             tree.declared = std::mem::take(&mut self.lower_declared);
@@ -953,7 +956,7 @@ impl<'a> Gen<'a> {
                     let desc = self.desc_of(&f.ty);
                     self.cw.field_first(field_access(f.flags), &f.name, &desc);
                 }
-                Entry::Abstract(m) => self.cw.method(method_access(m.flags()), m.name(), m.desc(), None),
+                Entry::Abstract(m, desc) => self.cw.method(method_access(m.flags()), m.name(), &desc, None),
                 Entry::Held(held) => whole = self.write_held(held),
                 Entry::Interfaces(step) => self.write_interfaces(step),
             }

@@ -796,3 +796,31 @@ pub fn parse_method_desc(desc: &str) -> (Vec<ErasedType>, ErasedType) {
     let (ret, _) = parse_type(rest.strip_prefix(')').unwrap_or("V"));
     (params, ret)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Over every primitive, arrays of arrays, classes named with `$` and a long beside a double, as the fallback maker
+    /// of `begun_method_def` relies on.
+    #[test]
+    fn a_parsed_method_descriptor_spells_itself() {
+        let fields = ["Z", "B", "S", "C", "I", "J", "F", "D", "Ljava/lang/Object;", "Lp/Outer$Inner$;", "[I", "[[J", "[[[Ljava/lang/String;", "[Lp/Outer$;"];
+        let extend = |lists: &[String]| -> Vec<String> { lists.iter().flat_map(|l| fields.iter().map(move |f| format!("{}{}", l, f))).collect() };
+        let one = extend(&[String::new()]);
+        let two = extend(&one);
+        let three = extend(&two);
+        let lists: Vec<String> = std::iter::once(String::new()).chain(one).chain(two).chain(three).collect();
+        let mut checked = 0;
+        for params in &lists {
+            for ret in fields.iter().chain(&["V"]) {
+                let desc = format!("({}){}", params, ret);
+                let (types, parsed) = parse_method_desc(&desc);
+                assert_eq!(method_desc(&types, &parsed), desc);
+                assert!(spells_method_desc(&desc, &types, &parsed), "{}", desc);
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, (1 + 14 + 14 * 14 + 14 * 14 * 14) * 15);
+    }
+}

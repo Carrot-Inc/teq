@@ -1022,17 +1022,14 @@ pub struct MethodDef {
     name: Rc<str>,
     params: Vec<MethodParam>,
     ret: ErasedType,
-    /// The signature as a class file spells it, kept with the definition as `MethodRef::desc`
-    /// is with a reference: a class is asked by it whether it holds a method.
-    desc: String,
     flags: MethodFlags,
     /// A lifted method's place among the class's lifted methods (`ClassDef::methods`), none for any other.
     place: Option<u32>,
 }
 
 impl MethodDef {
-    pub fn new(name: Rc<str>, params: Vec<MethodParam>, ret: ErasedType, desc: String, flags: MethodFlags, place: Option<u32>) -> MethodDef {
-        MethodDef { name, params, ret, desc, flags, place }
+    pub fn new(name: Rc<str>, params: Vec<MethodParam>, ret: ErasedType, flags: MethodFlags, place: Option<u32>) -> MethodDef {
+        MethodDef { name, params, ret, flags, place }
     }
 
     pub fn name(&self) -> &Rc<str> {
@@ -1045,10 +1042,6 @@ impl MethodDef {
 
     pub fn ret(&self) -> &ErasedType {
         &self.ret
-    }
-
-    pub fn desc(&self) -> &str {
-        &self.desc
     }
 
     pub fn flags(&self) -> MethodFlags {
@@ -1157,11 +1150,6 @@ impl ClassDef {
         for (&slot, m) in slots.iter().zip(lifted) {
             self.methods.insert(slot, m);
         }
-    }
-
-    /// Whether the class holds a method of this name and signature (`MethodDef::desc`).
-    pub fn has_method(&self, name: &str, desc: &str) -> bool {
-        self.methods.iter().any(|m| &*m.name == name && m.desc == desc)
     }
 
     pub fn has_method_named(&self, name: &str) -> bool {
