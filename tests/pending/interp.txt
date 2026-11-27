@@ -263,6 +263,8 @@ unit_printed	output
 url_encoder	output
 value_class_field_constant_if	output
 value_class_intersection_upcast	output
+value_class_local_class_capture_field_types	compile
+value_class_local_class_capture_serializable	compile
 value_class_right_assoc_companion_load_order	output; queued: the row "an infix right-associative call's left operand left unlifted": the companion's load against the operands, turned by the clause swap
 value_class_right_assoc_infix_object_path	output; queued: the row "an infix right-associative call's left operand left unlifted": the companion's load against an operand that reads an object, turned by the clause swap
 value_companion_strings	compile

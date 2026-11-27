@@ -46,6 +46,7 @@ thread_scheduled_cancel	abstractness-changed
 typer_state_bound_call_alternative	kept-call-not-put-back
 typer_state_held_promoted	kept-call-not-put-back
 typer_state_tuple_index_order	kept-call-not-put-back
+value_class_local_class_capture_serializable	abstractness-changed
 zip_default_zone	abstractness-changed
 zip_digest	abstractness-changed
 zip_entry_times	abstractness-changed

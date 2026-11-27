@@ -1006,6 +1006,8 @@ cases/gadt_fresh_abstract_bounds	pass	-
 cases/generic_alternative_bounds	pass	-	
 cases/generic_enum_values	pass	-	
 cases/generic_local_trait_calls	pass	-	
+cases/generic_value_class_null_this_in_local_class	pass	-	
+cases/generic_value_class_this_through_branch_lambda_array_cast	pass	-	
 cases/genericwidening	pass	-	
 cases/get_class	pass	-	
 cases/getclass_primitive	pass	-	
@@ -3419,6 +3421,7 @@ cases/unions	pass	-
 cases/unit_member_value_discarded	pass	-	
 cases/unit_printed	pass	-	
 cases/unit_wanted_function_not_written	pass	-	
+cases/universal_trait_thunk_captures_boxed_receiver	pass	-	
 cases/unreachable_deep_split	pass	-	
 cases/unread_argument_of_a_library_member	pass	-	
 cases/unreducible_application_in_pattern	pass	-	
@@ -3453,6 +3456,10 @@ cases/value_class_field_constant_if	pass	-
 cases/value_class_inherited_equality	pass	-	
 cases/value_class_intersection_box	pass	-	
 cases/value_class_intersection_upcast	pass	-	
+cases/value_class_local_class_capture_field_types	pass	-	
+cases/value_class_local_class_capture_serializable	pass	-	
+cases/value_class_local_default_read_in_super_argument	pass	-	
+cases/value_class_null_string_this_in_local_class	pass	-	
 cases/value_class_renamed_equality	pass	-	
 cases/value_class_right_assoc_companion_load_order	pass	-	
 cases/value_class_right_assoc_companion_shapes	pass	-	

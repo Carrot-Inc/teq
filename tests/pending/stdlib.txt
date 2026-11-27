@@ -539,6 +539,8 @@ value_class_field_constant_if	output differs
 value_class_intersection_upcast	output differs
 value_class_library_equality	error: cannot resolve import: unieq not found
 value_class_library_equality_called	error: cannot resolve import: unieq not found
+value_class_local_class_capture_field_types	TypeError: $getClass(...).getDeclaredFields is not a function
+value_class_local_class_capture_serializable	error: not supported on JavaScript: class ObjectOutputStream java.io.ObjectOutputStream (a Java definition without an implementation in the
 value_class_right_assoc_companion_load_order	the companion's load against the operands; queued: the row "an infix right-associative call's left operand left unlifted", turned by the clause swap
 value_class_right_assoc_infix_object_path	the companion's load against an operand that reads an object; queued: the row "an infix right-associative call's left operand left unlifted", turned by the clause swap
 view_import_renamed_prefixes	error: type mismatch: found 1, required Box[Int]
