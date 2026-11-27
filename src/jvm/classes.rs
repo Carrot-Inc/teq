@@ -148,8 +148,9 @@ pub(super) struct ModuleTree {
 }
 
 /// A method of the class lowered before it is written (`Gen::hold_method`, `Gen::write_held`): its plan entry and its
-/// context, checked at the class file's gate where it was made (`Gen::method_cx`), and the tree with the locals its
-/// lowering declared; `what` names it in a refusal. A lifted body is held so (`Gen::lower_lifted`).
+/// context, checked at the class file's gate where it was made (`Gen::method_cx`), its tree's place in the class's
+/// store (`lir::Body`) and the locals its lowering declared; `what` names it in a refusal. A lifted body is held so
+/// (`Gen::lower_lifted`).
 pub(super) struct HeldMethod {
     method: MethodDef,
     /// Its signature as a class file spells it, made once at its hold.
@@ -163,7 +164,7 @@ pub(super) struct HeldMethod {
     /// Where in its class the method was held: what its write reads of the class being made (`Gen::write_held`).
     under: HeldUnder,
     m: MethodCx,
-    lir: crate::lir::Body,
+    lir: crate::lir::MethodStart,
     declared: FxMap<SymId, (ErasedType, bool)>,
     code: HeldCode,
 }
@@ -656,7 +657,7 @@ impl<'a> Gen<'a> {
         let method = begun_method_def(MethodFlags { is_static: true, synthetic: true, ..MethodFlags::PUBLIC }, &l.name, &l.desc, &params, &l.ret, l.place);
         self.m = self.method_cx(&method, site, &params, l.ret.clone(), &roots);
         self.planned = Some(method);
-        self.lir.clear();
+        self.lir.begin_method();
         self.lower_declared.clear();
         self.m.lambda = is_lambda;
         self.m.closure = is_lambda || matches!(p.body, PendingBody::LazyInit(..));
@@ -750,14 +751,14 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The planned method held with the code its maker has just lowered: the method, its context, the tree and the
-    /// locals the lowering declared, taken from the generator, to be written later by `Gen::write_held`.
+    /// The planned method held with the code its maker has just lowered: the method, its context, its tree's place in
+    /// the class's store and the locals the lowering declared, to be written later by `Gen::write_held`.
     fn hold_method(&mut self, what: &'static str, code: HeldCode) -> Box<HeldMethod> {
         let method = self.planned.take().expect("a planned method is held");
         let desc = method_desc(&method.param_types(), method.ret());
         let room = self.lower_declared.len();
         let declared = std::mem::replace(&mut self.lower_declared, std::collections::HashMap::with_capacity_and_hasher(room, Default::default()));
-        let (m, lir) = (std::mem::take(&mut self.m), self.lir.take_keeping_capacity());
+        let (m, lir) = (std::mem::take(&mut self.m), self.lir.start);
         let under = HeldUnder { context: self.context.clone(), ctor_code: self.ctor_code, lifted_body: self.lifted_body };
         Box::new(HeldMethod { method, desc, entered: false, what, first_line: None, under, m, lir, declared, code })
     }
@@ -781,7 +782,7 @@ impl<'a> Gen<'a> {
         let method = begun_method_def(flags, name, desc, params, &ret, None);
         self.m = self.method_cx(&method, site, params, ret, roots);
         self.planned = Some(method);
-        self.lir.clear();
+        self.lir.begin_method();
         self.lower_declared.clear();
     }
 
@@ -898,11 +899,11 @@ impl<'a> Gen<'a> {
         let mut tree = matches!(code, HeldCode::ModulePart(_)).then(|| self.module_tree.take().expect("an object's constructor tree in its class's plan"));
         match tree.as_mut() {
             Some(tree) => {
-                self.lir = std::mem::take(&mut tree.lir);
+                std::mem::swap(&mut self.lir, &mut tree.lir);
                 self.lower_declared = std::mem::take(&mut tree.declared);
             }
             None => {
-                self.lir = lir;
+                self.lir.start = lir;
                 self.lower_declared = declared;
             }
         }
@@ -926,7 +927,7 @@ impl<'a> Gen<'a> {
         }
         let written = self.end_method(method, &desc, entered);
         if let Some(mut tree) = tree {
-            tree.lir = std::mem::take(&mut self.lir);
+            std::mem::swap(&mut self.lir, &mut tree.lir);
             tree.declared = std::mem::take(&mut self.lower_declared);
             self.module_tree = Some(tree);
         }
@@ -2884,6 +2885,7 @@ impl<'a> Gen<'a> {
     /// lowered (`MethodCx::this_kept`). Each part asks for the lifted bodies of its own statements alone
     /// (`Gen::held_roots`), in the order they are written.
     pub(super) fn hold_module_part(&mut self, init: bool, make: impl FnOnce(&mut Self) -> (LirId, Vec<Declared>)) {
+        let class_lir = std::mem::take(&mut self.lir);
         let kept = self.module_tree.take().map(|kept| {
             self.lir = kept.lir;
             self.lower_declared = kept.declared;
@@ -2908,7 +2910,7 @@ impl<'a> Gen<'a> {
                 self.plan.fields.push(crate::lir::FieldDef { name: Rc::from(f.name.as_str()), ty: f.ty.clone(), flags: f.flags, role: None });
             }
         }
-        let (lir, declared) = (std::mem::take(&mut self.lir), std::mem::take(&mut self.lower_declared));
+        let (lir, declared) = (std::mem::replace(&mut self.lir, class_lir), std::mem::take(&mut self.lower_declared));
         self.module_tree = Some(ModuleTree { lir, declared, root, fields });
         let what = if init { "object's constructor" } else { "object's static initialiser" };
         let mut held = self.hold_method(what, code);
@@ -3114,7 +3116,7 @@ impl<'a> Gen<'a> {
             SuperCall::Own(types) => ((0..types.len()).map(|i| self.param(k.first_super_arg + i)).collect(), types.clone()),
             SuperCall::Declared(types, written) => {
                 let (list, _) = self.lower_arguments(None, *written, types);
-                (self.lir.lists[list.start as usize..(list.start + list.len) as usize].to_vec(), types.clone())
+                (self.lir.lists()[list.start as usize..(list.start + list.len) as usize].to_vec(), types.clone())
             }
             &SuperCall::Via(e, s, written) => {
                 let route = self.via_arguments_route(e, s, written);
@@ -3227,7 +3229,7 @@ impl<'a> Gen<'a> {
             SelfCall::Declared(c, args) => {
                 let types = self.ctor_param_types(c);
                 let (list, _) = self.lower_arguments(None, args, &types);
-                (self.lir.lists[list.start as usize..(list.start + list.len) as usize].to_vec(), types)
+                (self.lir.lists()[list.start as usize..(list.start + list.len) as usize].to_vec(), types)
             }
             SelfCall::Primary(c, args) => {
                 let route = self.ctor_arguments_route(c, args);

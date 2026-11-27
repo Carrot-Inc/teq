@@ -609,28 +609,40 @@ pub enum Caught {
     Temp(TempId),
 }
 
-/// The nodes of one method.
+/// Where a method's tree begins in its class's buffers (`Body`).
+#[derive(Clone, Copy, Default)]
+pub struct MethodStart {
+    nodes: usize,
+    lists: usize,
+}
+
+/// The trees of a class's methods, one after another in two buffers: `start` is the method being lowered or written,
+/// and a node's or a list's number counts from it.
 #[derive(Default)]
 pub struct Body {
-    pub nodes: Vec<Node>,
-    pub lists: Vec<LirId>,
+    nodes: Vec<Node>,
+    lists: Vec<LirId>,
+    pub start: MethodStart,
     temps: u32,
     labels: u32,
 }
 
 impl Body {
-    /// The tree taken whole, an empty one of its sizes left in its place: a held method's tree leaves the lowering,
-    /// whose next method reuses the room.
-    pub fn take_keeping_capacity(&mut self) -> Body {
-        let room = Body { nodes: Vec::with_capacity(self.nodes.len()), lists: Vec::with_capacity(self.lists.len()), temps: 0, labels: 0 };
-        std::mem::replace(self, room)
+    /// The next method's tree begins where the buffers end.
+    pub fn begin_method(&mut self) {
+        self.start = MethodStart { nodes: self.nodes.len(), lists: self.lists.len() };
+        self.temps = 0;
+        self.labels = 0;
     }
 
     pub fn clear(&mut self) {
         self.nodes.clear();
         self.lists.clear();
-        self.temps = 0;
-        self.labels = 0;
+        self.begin_method();
+    }
+
+    pub fn lists(&self) -> &[LirId] {
+        &self.lists[self.start.lists..]
     }
 
     pub fn temp(&mut self) -> TempId {
@@ -644,26 +656,30 @@ impl Body {
     }
 
     pub fn list(&mut self, items: &[LirId]) -> List {
-        let start = self.lists.len() as u32;
+        let start = (self.lists.len() - self.start.lists) as u32;
         self.lists.extend_from_slice(items);
         List { start, len: items.len() as u32 }
     }
 
     pub fn push(&mut self, kind: Kind, ty: ErasedType) -> LirId {
         self.nodes.push(Node { kind, ty, of: None });
-        LirId(self.nodes.len() as u32 - 1)
+        LirId((self.nodes.len() - self.start.nodes - 1) as u32)
     }
 
     pub fn node(&self, id: LirId) -> &Node {
-        &self.nodes[id.0 as usize]
+        &self.nodes[self.start.nodes + id.0 as usize]
+    }
+
+    pub fn node_mut(&mut self, id: LirId) -> &mut Node {
+        &mut self.nodes[self.start.nodes + id.0 as usize]
     }
 
     pub fn ty(&self, id: LirId) -> &ErasedType {
-        &self.nodes[id.0 as usize].ty
+        &self.node(id).ty
     }
 
     fn items(&self, list: List) -> impl Iterator<Item = LirId> + '_ {
-        self.lists[list.start as usize..(list.start + list.len) as usize].iter().copied()
+        self.lists()[list.start as usize..(list.start + list.len) as usize].iter().copied()
     }
 
     /// The nodes the node evaluates, in the order it lists them: a closure's captures (its body is

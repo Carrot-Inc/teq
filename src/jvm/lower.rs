@@ -108,7 +108,7 @@ impl<'a> Gen<'a> {
             receiver.map_or(span.start, |recv| cx.point_after(file, span, prog.span_of(recv)))
         });
         let call = matches!(prog.expr(e), TExpr::CallMethod(..) | TExpr::CallStatic(..) | TExpr::CallClosure(..) | TExpr::New(..) | TExpr::NewVia(..));
-        self.lir.nodes[id.0 as usize].of = Some(Place { expr: e, point, call });
+        self.lir.node_mut(id).of = Some(Place { expr: e, point, call });
     }
 
     /// A form the target has no translation of, refused where it stands (`Kind::Refused`): no
@@ -584,9 +584,9 @@ impl<'a> Gen<'a> {
             return id;
         }
         let ty = node.ty.clone();
-        self.lir.nodes[id.0 as usize].of = None;
+        self.lir.node_mut(id).of = None;
         let typed = self.lir.push(Kind::Typed(id), ty);
-        self.lir.nodes[typed.0 as usize].of = Some(of);
+        self.lir.node_mut(typed).of = Some(of);
         typed
     }
 
@@ -1403,7 +1403,7 @@ impl<'a> Gen<'a> {
     pub(super) fn push_protected(&mut self, kind: Kind, ty: ErasedType) -> LirId {
         let id = self.lir.push(kind, ty);
         let through = self.lir.returns_through(id);
-        match &mut self.lir.nodes[id.0 as usize].kind {
+        match &mut self.lir.node_mut(id).kind {
             Kind::Try { returns, .. } | Kind::Synchronized { returns, .. } => *returns = through,
             _ => unreachable!("a `try` or a `synchronized` block"),
         }
@@ -1809,7 +1809,7 @@ impl<'a> Gen<'a> {
     /// Arguments as they are written, each at its parameter's type, as nodes in order.
     fn lower_declared_arguments(&mut self, args: ListRef, params: &[ErasedType]) -> Vec<LirId> {
         let (list, _) = self.lower_arguments(None, args, params);
-        self.lir.lists[list.start as usize..(list.start + list.len) as usize].to_vec()
+        self.lir.lists()[list.start as usize..(list.start + list.len) as usize].to_vec()
     }
 
     /// A default argument: its getter's call, or its expression where the class has no
@@ -2865,7 +2865,7 @@ impl<'a> Gen<'a> {
     fn lower_rest(&mut self, s: SymId, args: ListRef, k: usize, params: &[ErasedType], nodes: &mut Vec<LirId>) {
         let rest = ListRef { start: args.start + k as u32, len: args.len.saturating_sub(k as u32) };
         let (rest, _) = self.lower_arguments(Some(s), rest, params);
-        nodes.extend_from_slice(&self.lir.lists[rest.start as usize..(rest.start + rest.len) as usize]);
+        nodes.extend_from_slice(&self.lir.lists()[rest.start as usize..(rest.start + rest.len) as usize]);
     }
 
     /// `context.s(args)` of scala-library, which has no bytecode: the runtime's `helper`, which
@@ -2876,7 +2876,7 @@ impl<'a> Gen<'a> {
         let context = self.lower_expr(r, &params[0]);
         let (args, None) = self.lower_arguments(Some(s), args, &params[1..]) else { unreachable!("an interpolator takes its arguments as written") };
         let mut items = vec![context];
-        items.extend_from_slice(&self.lir.lists[args.start as usize..(args.start + args.len) as usize]);
+        items.extend_from_slice(&self.lir.lists()[args.start as usize..(args.start + args.len) as usize]);
         let args = self.lir.list(&items);
         let ret = method.ret.clone();
         self.lir.push(Kind::Helper { method, args }, ret)

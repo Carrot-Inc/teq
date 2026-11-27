@@ -81,7 +81,7 @@ impl<'a> Gen<'a> {
             Kind::Block { stmts, result } if self.kept_on_stack(stmts, result).is_some() => {
                 let (temp, init) = self.kept_on_stack(stmts, result).expect("by the guard");
                 self.write(init);
-                let reads: Vec<LirId> = (1..stmts.len).map(|i| self.lir.lists[(stmts.start + i) as usize]).chain([result]).collect();
+                let reads: Vec<LirId> = (1..stmts.len).map(|i| self.lir.lists()[(stmts.start + i) as usize]).chain([result]).collect();
                 for (i, &read) in reads.iter().enumerate() {
                     if i + 1 < reads.len() {
                         self.dup();
@@ -94,7 +94,7 @@ impl<'a> Gen<'a> {
             Kind::Block { stmts, result } => {
                 let mark = self.code.locals_mark();
                 for i in 0..stmts.len {
-                    let stmt = self.lir.lists[(stmts.start + i) as usize];
+                    let stmt = self.lir.lists()[(stmts.start + i) as usize];
                     let at = falls || !matches!(self.lir.node(stmt).kind, Kind::Labeled { .. });
                     self.write_at(stmt, at);
                 }
@@ -303,7 +303,7 @@ impl<'a> Gen<'a> {
                 self.iconst(items.len as i32);
                 self.new_array(&ty);
                 for i in 0..items.len {
-                    let item = self.lir.lists[(items.start + i) as usize];
+                    let item = self.lir.lists()[(items.start + i) as usize];
                     debug_assert_eq!(Self::array_element(&ty).as_ref(), Some(self.lir.ty(item)), "an array literal's item of the array's element type");
                     self.dup();
                     self.iconst(i as i32);
@@ -382,7 +382,7 @@ impl<'a> Gen<'a> {
             }
             Kind::Closure { captures, method, target } => {
                 self.write_arguments(captures, None);
-                let captured: Vec<ErasedType> = (0..captures.len).map(|i| self.lir.ty(self.lir.lists[(captures.start + i) as usize]).clone()).collect();
+                let captured: Vec<ErasedType> = (0..captures.len).map(|i| self.lir.ty(self.lir.lists()[(captures.start + i) as usize]).clone()).collect();
                 self.lambda_call_site(&target, &captured, &ty, &method);
             }
             Kind::LiftedCall { method, captures, args, order, .. } => {
@@ -507,7 +507,7 @@ impl<'a> Gen<'a> {
             Kind::Block { stmts, result } if self.kept_on_stack(stmts, result).is_none() && !matches!(self.lir.node(result).kind, Kind::Break { .. }) => {
                 let mark = self.code.locals_mark();
                 for i in 0..stmts.len {
-                    let stmt = self.lir.lists[(stmts.start + i) as usize];
+                    let stmt = self.lir.lists()[(stmts.start + i) as usize];
                     self.write(stmt);
                 }
                 self.write_to(result, dest);
@@ -535,7 +535,7 @@ impl<'a> Gen<'a> {
         match &self.lir.node(id).kind {
             Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::Break { .. } | Kind::While { cond: None, .. } => false,
             Kind::Typed(value) => self.falls_through(*value),
-            Kind::Block { stmts, result } => (0..stmts.len).all(|i| self.falls_through(self.lir.lists[(stmts.start + i) as usize])) && self.falls_through(*result),
+            Kind::Block { stmts, result } => (0..stmts.len).all(|i| self.falls_through(self.lir.lists()[(stmts.start + i) as usize])) && self.falls_through(*result),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.falls_through(*then) || self.falls_through(*otherwise),
             Kind::Switch { cases, default, .. } => cases.iter().any(|c| self.falls_through(c.body)) || self.falls_through(*default),
             _ => true,
@@ -675,7 +675,7 @@ impl<'a> Gen<'a> {
             Kind::If { then, otherwise: Some(otherwise), .. } => self.completes(*then) || self.completes(*otherwise),
             Kind::Switch { cases, default, .. } => cases.iter().any(|c| self.completes(c.body)) || self.completes(*default),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| {
-                let stmt = self.lir.lists[(stmts.start + i) as usize];
+                let stmt = self.lir.lists()[(stmts.start + i) as usize];
                 !matches!(self.lir.node(stmt).kind, Kind::Labeled { .. }) || self.completes(stmt)
             }) && self.completes(*result),
             Kind::Labeled { body, .. } => self.completes(*body),
@@ -689,7 +689,7 @@ impl<'a> Gen<'a> {
     pub(super) fn module_statements(&self, root: LirId) -> (Vec<LirId>, usize) {
         let Kind::Return(block) = self.lir.node(root).kind.clone() else { unreachable!("an object's constructor ends in its return") };
         let Kind::Block { stmts, .. } = self.lir.node(block).kind.clone() else { unreachable!("an object's constructor is a block") };
-        let all = self.lir.lists[stmts.start as usize..(stmts.start + stmts.len) as usize].to_vec();
+        let all = self.lir.lists()[stmts.start as usize..(stmts.start + stmts.len) as usize].to_vec();
         let made = all.iter().position(|&s| matches!(self.lir.node(s).kind, Kind::InitCall { .. })).map_or(0, |i| i + 1);
         (all, made)
     }
@@ -751,7 +751,7 @@ impl<'a> Gen<'a> {
         });
         let mut temps = Vec::new();
         for i in 0..args.len {
-            let a = self.lir.lists[(args.start + i) as usize];
+            let a = self.lir.lists()[(args.start + i) as usize];
             self.write(a);
             let t = self.lir.ty(a).clone();
             temps.push((self.store_new(&t), t));
@@ -783,8 +783,8 @@ impl<'a> Gen<'a> {
         if stmts.len < 2 {
             return None;
         }
-        let Kind::Let { temp, init } = self.lir.node(self.lir.lists[stmts.start as usize]).kind else { return None };
-        let reads = (1..stmts.len).map(|i| self.lir.lists[(stmts.start + i) as usize]).chain([result]);
+        let Kind::Let { temp, init } = self.lir.node(self.lir.lists()[stmts.start as usize]).kind else { return None };
+        let reads = (1..stmts.len).map(|i| self.lir.lists()[(stmts.start + i) as usize]).chain([result]);
         reads.into_iter().all(|id| self.first_read(id) == Some(temp)).then_some((temp, init))
     }
 
@@ -835,7 +835,7 @@ impl<'a> Gen<'a> {
                 }
                 let mark = self.code.locals_mark();
                 for i in 0..stmts.len {
-                    let stmt = self.lir.lists[(stmts.start + i) as usize];
+                    let stmt = self.lir.lists()[(stmts.start + i) as usize];
                     self.write(stmt);
                 }
                 self.write_cond(result, target, jump_if);
@@ -959,7 +959,7 @@ impl<'a> Gen<'a> {
             if next_call.next_if_eq(&i).is_some() {
                 self.concat_call(std::mem::take(&mut call));
             }
-            let part = self.lir.lists[(parts.start + i) as usize];
+            let part = self.lir.lists()[(parts.start + i) as usize];
             let node = self.lir.node(part);
             let (kind, ty) = (node.kind.clone(), node.ty.clone());
             match kind {
@@ -1018,12 +1018,12 @@ impl<'a> Gen<'a> {
     /// into locals and loaded in the method's.
     pub(super) fn write_arguments(&mut self, args: List, order: Option<&[usize]>) {
         for i in 0..args.len {
-            let arg = self.lir.lists[(args.start + i) as usize];
+            let arg = self.lir.lists()[(args.start + i) as usize];
             self.write(arg);
         }
         let Some(order) = order else { return };
         debug_assert_eq!(order.len(), args.len as usize);
-        let written: Vec<ErasedType> = (0..order.len()).map(|k| self.lir.ty(self.lir.lists[args.start as usize + k]).clone()).collect();
+        let written: Vec<ErasedType> = (0..order.len()).map(|k| self.lir.ty(self.lir.lists()[args.start as usize + k]).clone()).collect();
         let mut slots = vec![0u16; written.len()];
         for k in (0..written.len()).rev() {
             slots[k] = self.store_new(&written[k]);

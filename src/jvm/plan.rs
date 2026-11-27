@@ -143,7 +143,9 @@ impl<'a> Gen<'a> {
     /// own in their order, and the plan's fields and methods and no other, each one's flags and descriptor as its facts
     /// and its erased types give them, the methods in the plan's order (`ClassDef::order_lifted`).
     pub fn finish_writer(&mut self) -> Vec<u8> {
-        if !self.write_entries() {
+        let written = self.write_entries();
+        self.lir.clear();
+        if !written {
             return Vec::new();
         }
         self.cw.cp.plan_frozen = false;
