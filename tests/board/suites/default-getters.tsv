@@ -3962,8 +3962,8 @@ SPLIT-witness-products-local.desc	pass	-
 SPLIT-witness-products-local.interp	pass	-	
 SPLIT-witness-products-local.js	pass	-	
 SPLIT-witness-products-local.jvm	pass	-	
-SPLIT-witness-products-local.split-interp	fail	-	run 130 | 120 | 10 | 10
-SPLIT-witness-products-local.split-js	fail	-	run 130 | 120 | 10 | 10
+SPLIT-witness-products-local.split-interp	pass	-	
+SPLIT-witness-products-local.split-js	pass	-	
 SPLIT-witness-products-local.split-jvm	pass	-	
 SPLIT-witness-products-local.workers	pass	-	
 SPLIT-witness-products-member.check	pass	-	

@@ -756,8 +756,6 @@ SPLIT-superclass_trait-wvar-lnone-none-super.split-interp	refused 2:7: the body 
 SPLIT-superclass_trait-wvar-lnone-none-super.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
 SPLIT-superclass_trait-wvar-lval-none-direct.split-interp	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
 SPLIT-superclass_trait-wvar-lval-none-direct.split-js	refused 2:7: the body of Lib.value is withheld from the products of ap (elided: unstated default getter): the TASTy writer's queue of the shapes it withholds writes it (in the body of Lib.value)
-SPLIT-witness-products-local.split-interp	run 130 | 120 | 10 | 10
-SPLIT-witness-products-local.split-js	run 130 | 120 | 10 | 10
 SPLIT-witness-products-member.desc	desc lib.Base.m$default$1 ()I ; lib.Base.m$default$1$ (Llib/Base;)I ; lib.Lib$T.m$default$1 ()I ; lib.Lib$T.m$default$1$ (Llib/Lib$T;)I ; lib.Parent.m$default$1 ()I ; lib.Parent.m$default$1$ (Llib/Par
 WITNESS-callee-local.js	run Dd | Dd | D()
 WITNESS-callee-member.js	run Dd | Dd | D()
