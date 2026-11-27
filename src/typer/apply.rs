@@ -1275,6 +1275,13 @@ impl<'a> Worker<'a> {
         let mut lists = lists;
         let mut target = None;
         let mut deferred = None;
+        if self.loaded.is_some() && !self.bare_lookup && !crate::names::ANY_MEMBERS.contains(&self.interner.get(name)) {
+            for &(b, _) in &bases {
+                if self.own_alternative(b, name, 0).is_none() {
+                    self.java_member_miss(b);
+                }
+            }
+        }
         // Of an overloaded name `super` means the alternative the arguments choose; what follows
         // looks at the members with its parameters alone.
         let chosen = self.super_alternative(c, &bases, name, targs, &mut lists, expected);
