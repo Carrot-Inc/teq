@@ -103,7 +103,7 @@ neg/bad-selftype.scala	subset	1/3 lines
 neg/bad-unapplies.scala	same	
 neg/badAuxConstr.scala	same	
 neg/beanAccessorsLeaking	same	
-neg/binaryLiterals.scala	syntax	expected end of statement, found {}
+neg/binaryLiterals.scala	syntax	number too large
 neg/block-ending-in-def.scala	different	type mismatch
 neg/blockescapesNeg.scala	accepts	
 neg/bounds.scala	same	
@@ -332,7 +332,7 @@ neg/gadt-no-approx.scala	same
 neg/gadt-sngl-refined.scala	same	
 neg/gadt-uninjectivity.scala	same	
 neg/gadt-variant-hkt.scala	same	
-neg/genericNumbers.scala	syntax	number too large
+neg/genericNumbers.scala	syntax	expected {}, found {}
 neg/genericTupleMembers.scala	same	
 neg/given-ambiguous-1.scala	same	
 neg/given-ambiguous-2.scala	same	
@@ -449,7 +449,7 @@ neg/i12232.scala	same
 neg/i12245.scala	same	
 neg/i12284.scala	same	
 neg/i12299.scala	std	apply
-neg/i12348.scala	syntax	expected {}, found {}
+neg/i12348.scala	syntax	expected end of statement, found {}
 neg/i123577.scala	same	
 neg/i12361.scala	syntax	expected end of statement, found {}
 neg/i12384.scala	same	
@@ -545,7 +545,7 @@ neg/i1430.scala	same
 neg/i14303	oos	an older scalac's file
 neg/i14363.scala	same	
 neg/i14367.scala	same	
-neg/i14386.scala	different	The start of this line does not match any of the previous indentation widths.
+neg/i14386.scala	different	Incompatible combinations of tabs and spaces in indentation prefixes.
 neg/i14401.scala	subset	1/5 lines
 neg/i14401b.scala	same	
 neg/i14401c.scala	same	
@@ -1613,7 +1613,7 @@ neg/mt-scrutinee-widen.scala	same
 neg/mt-scrutinee-widen2.scala	accepts	
 neg/mt-subtyping-transitivity.scala	same	
 neg/multi-file-error	std	foo
-neg/multi-param-derives.scala	superset	+15 lines: {} cannot be derived
+neg/multi-param-derives.scala	superset	+14 lines: {} cannot be derived
 neg/multi-patterns.scala	syntax	expected {}, found {}
 neg/multiLineOps.scala	syntax	expected a definition, found {}
 neg/multiple-args-consume.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
@@ -1768,7 +1768,7 @@ neg/singleton-ops-int.scala	superset	+9 lines: Cannot prove that 4 =:= 3.
 neg/singleton-ops-long.scala	different	cannot resolve import
 neg/singleton-ops-match-type-scrutinee.scala	same	
 neg/singleton-ops-recursive-match-type.scala	same	
-neg/singleton-ops-string.scala	superset	+20 lines: type mismatch
+neg/singleton-ops-string.scala	superset	+16 lines: type mismatch
 neg/singleton-ops-type-alias.scala	same	
 neg/singletonInterval.scala	same		--source future
 neg/singletonOrs.scala	same	
@@ -2247,7 +2247,7 @@ pos/class-refinement.scala	accepts
 pos/classWithCompObj.scala	accepts	
 pos/classtag-typetest	accepts	
 pos/clear-retains-for-inferred-types	syntax	expected {}, found {}
-pos/closure-args.scala	syntax	expected a definition, found {}
+pos/closure-args.scala	syntax	expected end of statement, found {}
 pos/cls.scala	accepts	
 pos/cls1.scala	accepts	
 pos/clsrefine.scala	accepts	
@@ -2476,7 +2476,7 @@ pos/i10129.scala	accepts
 pos/i10161.scala	accepts	
 pos/i10174.scala	accepts	
 pos/i10217.scala	accepts	
-pos/i10242.scala	rejects	type argument x does not conform to upper bound String	--source 3.3
+pos/i10242.scala	rejects	Cannot prove that NumElements[HCons[1, HCons[2, HNil]]] =:= NumElements[HCons[2, HCons[1, HNil]]].	--source 3.3
 pos/i10247.scala	accepts	
 pos/i10253.scala	accepts	
 pos/i10256.scala	accepts		--source future
@@ -2945,7 +2945,7 @@ pos/i1570.scala	accepts
 pos/i15715.scala	accepts	
 pos/i15717.scala	std	Vector
 pos/i15738.scala	accepts	
-pos/i15743.gadt.scala	rejects	type argument T does not conform to upper bound Tuple
+pos/i15743.gadt.scala	rejects	value {} is not a member of {}
 pos/i15743.moregadt.scala	rejects	type argument T does not conform to upper bound Tuple
 pos/i15743.pass.scala	rejects	value {} is not a member of {}
 pos/i15743.scala	rejects	value {} is not a member of {}
@@ -3258,7 +3258,7 @@ pos/i19415.scala	accepts
 pos/i19417	accepts	
 pos/i19433.scala	accepts	
 pos/i19434.scala	rejects	type argument DropNames[xs] does not conform to upper bound Tuple
-pos/i19445.scala	rejects	type argument UnwrapTypes[xs] does not conform to upper bound Tuple
+pos/i19445.scala	rejects	type mismatch
 pos/i19460.scala	accepts	
 pos/i19479.scala	rejects	no given instance
 pos/i19493.scala	syntax	expected identifier, found {}
@@ -3422,7 +3422,7 @@ pos/i21742.2.scala	accepts
 pos/i21749.scala	accepts	
 pos/i21755.scala	accepts	
 pos/i21757.scala	accepts	
-pos/i21768.scala	syntax	expected end of statement, found {}
+pos/i21768.scala	syntax	expected identifier, found {}
 pos/i21769.scala	syntax	expected {}, found {}
 pos/i21779	rejects	type mismatch
 pos/i21790.scala	accepts	
@@ -4329,7 +4329,7 @@ pos/implicit_cache.scala	accepts
 pos/implicit_tparam.scala	rejects	no given instance
 pos/implicitonSelect.scala	accepts	
 pos/import-rewrite	rejects	cannot resolve import
-pos/imports-pos.scala	rejects	PrintStream is not a valid import prefix, since it is not an immutable path	--source 3.2
+pos/imports-pos.scala	rejects	(System.out : => PrintStream) is not a valid import prefix, since it is not an immutable path	--source 3.2
 pos/indent-colons.scala	std	ArrowAssoc
 pos/indent-in-parens.scala	syntax	expected {}, found {}
 pos/indent.scala	std	ArrowAssoc
@@ -4491,7 +4491,7 @@ pos/interleaving-ba.scala	syntax	expected {}, found {}
 pos/interleaving-chainedParams.scala	syntax	expected {}, found {}
 pos/interleaving-classless.scala	syntax	expected {}, found {}
 pos/interleaving-functor.scala	syntax	expected {}, found {}
-pos/interleaving-newline.scala	syntax	expected an expression, found {}
+pos/interleaving-newline.scala	syntax	expected {}, found {}
 pos/interleaving-overload.cleanup.scala	accepts	
 pos/interleaving-overload.scala	syntax	expected {}, found {}
 pos/interleaving-params.scala	syntax	expected {}, found {}
@@ -4610,7 +4610,7 @@ pos/named-tuple-unstable.scala	rejects	value {} is not a member of {}
 pos/named-tuple-widen.scala	accepts	
 pos/named-tuples-i22245.scala	accepts	
 pos/named-tuples-ops-mirror.scala	rejects	value {} is not a member of {}
-pos/named-tuples-strawman.scala	rejects	type argument DropNames[xs] does not conform to upper bound Tuple
+pos/named-tuples-strawman.scala	rejects	value {} is not a member of {}
 pos/named-tuples1.scala	accepts	
 pos/named-typeargs.scala	syntax	expected {}, found {}
 pos/namedTypeParams.scala	syntax	expected {}, found {}
