@@ -82,6 +82,7 @@ impl<'a> Gen<'a> {
         }
         super::gen::write_phase(None);
         self.cw.cp.plan_frozen = cfg!(debug_assertions);
+        debug_assert!(self.entries.is_empty(), "a class begun while the plan of {} is open", self.plan.name);
         self.plan = class;
         self.module_tree = None;
         self.writing_mirror = false;
@@ -92,12 +93,9 @@ impl<'a> Gen<'a> {
     /// Declares a field of the class, after those declared so far, holding what its `role` says where it holds a
     /// hidden value of the class's code.
     pub fn field(&mut self, flags: FieldFlags, name: &str, ty: &ErasedType, role: Option<FieldRole>) {
-        let mut desc = String::new();
-        ty.desc(&mut desc);
-        let planning = std::mem::replace(&mut self.cw.cp.plan_frozen, false);
-        self.cw.field(field_access(flags), name, &desc);
-        self.cw.cp.plan_frozen = planning;
-        self.plan.fields.push(FieldDef { name: Rc::from(name), ty: ty.clone(), flags, role });
+        let field = FieldDef { name: Rc::from(name), ty: ty.clone(), flags, role };
+        self.entries.push(super::classes::Entry::Field(field.clone()));
+        self.plan.fields.push(field);
     }
 
     /// The class's field of the role `role`.
@@ -108,12 +106,9 @@ impl<'a> Gen<'a> {
     /// Declares a field of the class before those declared so far, as dotty's
     /// `LazyVals.addInFront` puts a lazy member's `VarHandle` before the template's statements.
     pub fn field_first(&mut self, flags: FieldFlags, name: &str, ty: &ErasedType) {
-        let mut desc = String::new();
-        ty.desc(&mut desc);
-        let planning = std::mem::replace(&mut self.cw.cp.plan_frozen, false);
-        self.cw.field_first(field_access(flags), name, &desc);
-        self.cw.cp.plan_frozen = planning;
-        self.plan.fields.insert(0, FieldDef { name: Rc::from(name), ty: ty.clone(), flags, role: None });
+        let field = FieldDef { name: Rc::from(name), ty: ty.clone(), flags, role: None };
+        self.entries.push(super::classes::Entry::FieldFirst(field.clone()));
+        self.plan.fields.insert(0, field);
     }
 
     /// A method the class declares without a body.
@@ -130,10 +125,8 @@ impl<'a> Gen<'a> {
     pub fn abstract_method_site(&mut self, flags: MethodFlags, name: &str, desc: &str, site: super::classes::MethodSite) {
         let m = method_def(flags, name, desc);
         self.check_method(&m, &site);
-        let planning = std::mem::replace(&mut self.cw.cp.plan_frozen, false);
-        self.cw.method(method_access(m.flags), &m.name, &m.desc, None);
-        self.cw.cp.plan_frozen = planning;
-        self.plan.methods.push(m);
+        self.plan.methods.push(m.clone());
+        self.entries.push(super::classes::Entry::Abstract(m));
     }
 
     /// The class file of the class being written, which is the plan's class: its name, its flags
@@ -141,6 +134,9 @@ impl<'a> Gen<'a> {
     /// fields and methods and no other, each one's flags and descriptor as its facts and its
     /// erased types give them, the methods in the plan's order (`ClassDef::order_lifted`).
     pub fn finish_writer(&mut self) -> Vec<u8> {
+        if !self.write_entries() {
+            return Vec::new();
+        }
         self.cw.cp.plan_frozen = false;
         super::gen::write_phase(Some(true));
         let bytes = self.finish_writer_now();

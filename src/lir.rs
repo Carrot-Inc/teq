@@ -619,6 +619,13 @@ pub struct Body {
 }
 
 impl Body {
+    /// The tree taken whole, an empty one of its sizes left in its place: a held method's tree leaves the lowering,
+    /// whose next method reuses the room.
+    pub fn take_keeping_capacity(&mut self) -> Body {
+        let room = Body { nodes: Vec::with_capacity(self.nodes.len()), lists: Vec::with_capacity(self.lists.len()), temps: 0, labels: 0 };
+        std::mem::replace(self, room)
+    }
+
     pub fn clear(&mut self) {
         self.nodes.clear();
         self.lists.clear();
@@ -1060,7 +1067,7 @@ pub enum FieldRole {
 }
 
 /// A field a class defines.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FieldDef {
     pub name: Rc<str>,
     pub ty: ErasedType,

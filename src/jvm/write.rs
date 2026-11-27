@@ -692,6 +692,13 @@ impl<'a> Gen<'a> {
         (all, made)
     }
 
+    /// A field of the object the `<clinit>` declares where it meets it; the class's plan took it at the part's hold
+    /// (`Gen::hold_module_part`).
+    fn declare_field(&mut self, f: &Declared) {
+        let desc = self.desc_of(&f.ty);
+        self.cw.field(super::plan::field_access(f.flags), &f.name, &desc);
+    }
+
     /// The part of an object's constructor tree a method of the class file runs, as dotty's JVM back end places it
     /// (`BCodeSkelBuilder.genPlainClass`, 175-266, `splitAtSuper`): `<init>` the statements up to the superclass's
     /// constructor's call, `<clinit>` the rest, the object's body, once `MODULE$` holds the instance its `this` is read
@@ -709,14 +716,14 @@ impl<'a> Gen<'a> {
         for i in part {
             if !init {
                 for f in fields.iter().filter(|f| f.at == i) {
-                    self.field(f.flags, &f.name, &f.ty, None);
+                    self.declare_field(f);
                 }
             }
             self.write(all[i]);
         }
         if !init {
             for f in fields.iter().filter(|f| f.at >= all.len()) {
-                self.field(f.flags, &f.name, &f.ty, None);
+                self.declare_field(f);
             }
         }
         let ret = self.m.ret.clone();

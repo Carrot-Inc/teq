@@ -620,10 +620,11 @@ impl MethodCx {
 pub type SuperPlace = (u8, u32, u32, u32);
 
 /// A field of the class being written that its held members (the plan's phase) and its writes (`Gen::write_held` and
-/// `Gen::finish_writer`, the write phase) both touch. While the two phases alternate, a checks build refuses each pair
-/// writing the class from its whole plan (every hold first, then every write) would invert: a hold reading what an
-/// earlier write of the class wrote, and a hold writing what an earlier write of the class read. A release build reads
-/// and writes the field alone.
+/// `Gen::finish_writer`, the write phase) both touch. A checks build refuses each pair that writing the class from its
+/// whole plan (every hold first, then every write) would invert: a hold reading what an earlier write of the class
+/// wrote, and a hold writing what an earlier write of the class read. The class's walk (`Gen::write_entries`) writes
+/// the class after its every hold, so no hold follows a write of its class. A release build reads and writes the field
+/// alone.
 pub struct Phased<T> {
     value: T,
     field: PhasedField,
@@ -744,6 +745,8 @@ pub struct Gen<'a> {
     pub cw: ClassWriter,
     /// The class being written as its definitions (`plan.rs`).
     pub plan: crate::lir::ClassDef,
+    /// The class's plan in the order its maker made it, written by the class's walk (`Gen::write_entries`).
+    pub(super) entries: Vec<super::classes::Entry>,
     /// The class's lifted methods by their unit's names and places, beside `plan` (`lifted::LiftedTable`).
     pub(super) lifted_table: super::lifted::LiftedTable,
     /// The interfaces the class being written names in an `invokespecial`, each with the place
@@ -895,6 +898,7 @@ impl<'a> Gen<'a> {
             trait_fields: FxMap::default(),
             cw: ClassWriter::new(0, "x", OBJECT, &[]),
             plan: Default::default(),
+            entries: Vec::new(),
             lifted_table: Default::default(),
             super_targets: Phased::new(PhasedField::SuperTargets, Vec::new()),
             super_call_at: None,
@@ -1009,6 +1013,7 @@ impl<'a> Gen<'a> {
         write_phase(None);
         self.pending.clear();
         self.pending_next.clear();
+        self.entries.clear();
         self.draining = false;
         self.local_defs.clear();
         self.pair_bridged.clear();
