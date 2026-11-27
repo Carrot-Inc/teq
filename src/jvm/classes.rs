@@ -944,6 +944,7 @@ impl<'a> Gen<'a> {
             self.refuse_written("internal error: a lifted body queued after the class's last round", None);
             return false;
         }
+        self.order_held_entries();
         self.plan_phase(false);
         let mut whole = true;
         for entry in std::mem::take(&mut self.entries) {
@@ -966,6 +967,25 @@ impl<'a> Gen<'a> {
         }
         self.plan_phase(true);
         whole
+    }
+
+    /// The held lifted methods in the order of their places, in the slots of the entries lifted methods hold, as the
+    /// plan's methods take that order (`ClassDef::order_lifted`): the class is written in its final order. They are held
+    /// in batches, each the bodies the class has asked for so far in the order of their places (`Gen::drain_pending`),
+    /// and a default getter whose body one batch's lowering asks for (a call in a lifted body, a by-name default's
+    /// thunk) comes in the next; a place is `LambdaLift`'s, a nested definition's before the one that holds it, so such
+    /// a getter's place can precede those of methods held before it.
+    fn order_held_entries(&mut self) {
+        let lifted = |e: &Entry| matches!(e, Entry::Held(h) if h.method.place().is_some());
+        let slots: Vec<usize> = (0..self.entries.len()).filter(|&i| lifted(&self.entries[i])).collect();
+        let mut held: Vec<Entry> = slots.iter().rev().map(|&i| self.entries.remove(i)).collect();
+        held.sort_by_key(|e| match e {
+            Entry::Held(h) => h.method.place(),
+            _ => None,
+        });
+        for (&slot, e) in slots.iter().zip(held) {
+            self.entries.insert(slot, e);
+        }
     }
 
     /// The class's maker as it stood where a method was held, set for its write; the maker's own given back.

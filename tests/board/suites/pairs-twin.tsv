@@ -1865,6 +1865,12 @@ cases/lifted_dead_branch_var_capture	pass	-
 cases/lifted_encoded_name_overloads	pass	-	
 cases/lifted_local_class_dead_branch_capture	pass	-	
 cases/lifted_names_shared_thunk	pass	-	
+cases/lifted_order_byname_default_between_lambdas	pass	-	
+cases/lifted_order_local_class_default	pass	-	
+cases/lifted_order_local_default_in_lambda	pass	-	
+cases/lifted_order_local_default_in_local_def	pass	-	
+cases/lifted_order_nested_lambda_default	pass	-	
+cases/lifted_order_two_byname_defaults	pass	-	
 cases/lifted_pure_closure_return	pass	-	
 cases/lifted_pure_closure_var_box	pass	-	
 cases/lifted_receiver_default	pass	-	

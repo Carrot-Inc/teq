@@ -1900,6 +1900,12 @@ lifted_dead_branch_var_capture	pass	-
 lifted_encoded_name_overloads	pass	-	
 lifted_local_class_dead_branch_capture	pass	-	
 lifted_names_shared_thunk	cannot run	-	the JVM's platform
+lifted_order_byname_default_between_lambdas	pass	-	
+lifted_order_local_class_default	pass	-	
+lifted_order_local_default_in_lambda	pass	-	
+lifted_order_local_default_in_local_def	pass	-	
+lifted_order_nested_lambda_default	pass	-	
+lifted_order_two_byname_defaults	pass	-	
 lifted_pure_closure_return	pass	-	
 lifted_pure_closure_var_box	pass	-	
 lifted_receiver_default	pass	-	

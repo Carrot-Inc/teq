@@ -1187,18 +1187,6 @@ impl ClassWriter {
         common.or((members.len() != expected.len()).then_some(members.len().min(expected.len())))
     }
 
-    /// The methods in the order `order` names them by name and signature, each once: the class plan's.
-    pub fn order_methods<'n>(&mut self, order: impl Iterator<Item = (&'n str, &'n str)>) {
-        let mut methods: Vec<Option<Member>> = std::mem::take(&mut self.methods).into_iter().map(Some).collect();
-        for (name, desc) in order {
-            let (n, d) = (self.cp.utf8.get(name).copied(), self.cp.utf8.get(desc).copied());
-            if let Some(m) = methods.iter_mut().find(|m| m.as_ref().is_some_and(|m| Some(m.name) == n && Some(m.desc) == d)).and_then(Option::take) {
-                self.methods.push(m);
-            }
-        }
-        self.methods.extend(methods.into_iter().flatten());
-    }
-
     pub fn method(&mut self, access: u16, name: &str, desc: &str, code: Option<Code>) {
         let name = self.cp.utf8(name);
         let desc = self.cp.utf8(desc);

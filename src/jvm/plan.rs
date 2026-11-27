@@ -155,7 +155,7 @@ impl<'a> Gen<'a> {
     }
 
     fn finish_writer_now(&mut self) -> Vec<u8> {
-        let mut cw = std::mem::replace(&mut self.cw, ClassWriter::new(0, "x", OBJECT, &[]));
+        let cw = std::mem::replace(&mut self.cw, ClassWriter::new(0, "x", OBJECT, &[]));
         // dotty checks the name as the class begins (BCodeSkelBuilder.scala 341-345, for a mirror
         // BCodeHelpers.scala 529-531) and writes nothing of the class.
         if !constant_text_fits(&self.plan.name, "") {
@@ -171,7 +171,6 @@ impl<'a> Gen<'a> {
         if let Some((m, desc)) = self.plan.methods.iter().zip(&descs).find(|(m, desc)| !self.checked_methods.contains_key(&(m.name().clone(), (*desc).clone()))) {
             panic!("the method {}{} of {} entered the plan past its gate (`Gen::check_method`)", m.name(), desc, self.plan.name);
         }
-        cw.order_methods(self.plan.methods.iter().zip(&descs).map(|(m, desc)| (&**m.name(), desc.as_str())));
         let class = &self.plan;
         if !cw.is_class(class_access(class.flags), &class.name, &class.superclass) || !cw.holds_interfaces(class.interfaces.iter().map(|i| &**i)) {
             panic!("the plan of {} is not its class file's: {:?} {} {:?}", class.name, class.flags, class.superclass, class.interfaces);
