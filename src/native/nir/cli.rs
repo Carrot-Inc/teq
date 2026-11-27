@@ -27,7 +27,8 @@ fn usage() -> ! {
          a filter is a substring of the entry's name (java/lang/String.nir)\n\
          a class path is directories and jars joined by '{}', or @<file> for a file that holds them so\n\
          a link takes --triple=<target> ({}) and --threads=<true|false> (true where the program can start a thread)\n\
-         --lower takes --ll=<directory>: the program written there as LLVM IR in the listing's place, a module for each directory of sources\n\
+         --lower takes --ll=<directory>: the program written there as LLVM IR in the listing's place, a module for each directory of sources,\n\
+         \x20 and --null-guards=scala-native: null checks only where Scala Native places them, for comparing with its output (teq's default adds more)\n\
          --link takes --build=<executable> and --work=<directory>: the program built there by zig, a static x86_64-linux-musl executable,\n\
          \x20 with --zig=<path> (else TEQ_ZIG) naming zig {}, --zig-cache=<directory> for what zig builds of its own (teq's cache's zig/;\n\
          \x20 the program's objects stay in <work>/zig-cache) and --lib-dir=<directory>, each a directory of lib<name>.a archives with\n\
@@ -104,10 +105,12 @@ fn items(input: &str, filter: Option<&str>) -> Result<Vec<Item>, String> {
 fn link(args: &[String], lowers: bool) -> ! {
     let (mut triple, mut threads, mut ll_dir, mut plain) = (crate::native::DEFAULT_TRIPLE.to_string(), None, None, Vec::new());
     let (mut output, mut work, mut zig, mut zig_cache, mut lib_dirs) = (None, None, None, None, Vec::new());
+    let mut null_guards = lower::NullGuards::Sound;
     for arg in args {
         match arg.split_once('=') {
             Some(("--triple", target)) => triple = target.to_string(),
             Some(("--ll", dir)) if lowers => ll_dir = Some(dir.to_string()),
+            Some(("--null-guards", "scala-native")) if lowers => null_guards = lower::NullGuards::ScalaNative,
             Some(("--build", file)) if !lowers => output = Some(PathBuf::from(file)),
             Some(("--work", dir)) if !lowers => work = Some(PathBuf::from(dir)),
             Some(("--zig", file)) if !lowers => zig = Some(PathBuf::from(file)),
@@ -152,6 +155,7 @@ fn link(args: &[String], lowers: bool) -> ! {
         let generated = generate::generate(&mut cx, &rt, &linked, &meta, &proxies, main).unwrap_or_else(|e| fail(e));
         let mut out = Vec::new();
         let mut lowering = lower::Lowering::new(&mut cx, &rt, &linked, &meta).unwrap_or_else(|e| fail(e));
+        lowering.null_guards = null_guards;
         for (defns, this_is_used) in [(&linked.defns, false), (&proxies, true), (&generated, false)] {
             lowering.defns(defns, this_is_used, &mut out).unwrap_or_else(|e| fail(e));
         }
