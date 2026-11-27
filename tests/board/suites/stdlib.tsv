@@ -1697,7 +1697,7 @@ js_val_before_init_vc_cycle	fail	-	TypeError: Cannot read properties of undefine
 js_val_before_init_vc_identity	fail	-	output differs
 js_val_before_init_vc_late	fail	-	TypeError: Cannot read properties of undefined (reading 'x')
 junit_comparison_failure	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
-jvm_direct_interfaces	fail	-	error: method andThen overrides nothing
+jvm_direct_interfaces	fail	-	error: not supported on JavaScript: method andThen of java.util.function.IntConsumer (a Java definition without an implementation in the std
 jvm_lazy_local_closure	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
 jvm_lazy_trait	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
 jvm_lazy_val_race	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
