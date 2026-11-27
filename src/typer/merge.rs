@@ -3182,6 +3182,7 @@ impl<'a> Worker<'a> {
         // memos keyed by the types of the bodies go with the worker's chunk.
         self.prog_index = super::check::ProgIndex::default();
         self.roots_memo.clear();
+        self.inherited_defaults_memo.clear();
         self.subclasses = super::overload::SubclassIndex::default();
         self.given_fast.clear();
         self.op_memo.clear();

@@ -236,6 +236,8 @@ impl<'a> Worker<'a> {
                 restored.push(file);
             }
         }
+        #[cfg(debug_assertions)]
+        self.assert_inherited_defaults_kept();
         Ok(restored)
     }
 

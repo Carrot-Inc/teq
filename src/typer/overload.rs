@@ -1703,16 +1703,23 @@ impl<'a> Worker<'a> {
         self.diags.late_error_of(file, span, msg.to_string(), crate::source::PHASE_REFCHECKS);
     }
 
-    /// Default arguments are allowed on one of the alternatives that a scope defines.
+    /// Default arguments are allowed on one of the alternatives that a scope defines. dotty's
+    /// `checkNoDoubleDeclaration` (Checking.scala 1383) asks `hasDefaultParams` of each declaration: its own
+    /// default, or one of a member it overrides (SymDenotations.scala 1003-1012), so an override that drops the
+    /// overridden member's default still has defaults. The overridden members are read for a program's own
+    /// declarations alone (the std's and the loaded classes' were checked where they were compiled).
     fn check_single_default(&mut self, set: SymId, alts: &[SymId]) {
         let owner = self.syms.sym(set).owner;
+        let declared: Vec<SymId> = alts.iter().copied().filter(|&a| self.syms.sym(a).owner == owner).collect();
+        if declared.len() < 2 {
+            return;
+        }
         let mut with_defaults: Vec<SymId> = Vec::new();
-        for &a in alts {
-            if self.syms.sym(a).owner != owner {
-                continue;
-            }
+        for &a in &declared {
             let sig = self.parameters_of(a);
-            if sig.clauses.iter().any(|c| c.params.iter().any(|p| p.has_default)) {
+            let own = sig.clauses.iter().any(|c| c.params.iter().any(|p| p.has_default));
+            let count: usize = sig.clauses.iter().map(|c| c.params.len()).sum();
+            if own || (self.program_source(self.syms.sym(a).file) && (0..count).any(|i| self.default_declarer(a, i).is_some_and(|d| d != a))) {
                 with_defaults.push(a);
             }
         }
@@ -2299,7 +2306,85 @@ impl<'a> Worker<'a> {
                 alts.push(Alt { sym: set, sig, owner_subst: Vec::new(), ctor: Some(c), info: None, denoted: None, refined: None });
             }
         }
+        // A set none of whose alternatives inherits a default is passed by at once: an overloaded call asks its
+        // alternatives again at every call (an intersection's denotations are their own, asked one by one).
+        if ctor.is_none() && (from_meet || self.set_inherits_defaults(set)) {
+            for alt in alts.iter_mut() {
+                self.inherit_defaults(alt);
+            }
+        }
         alts
+    }
+
+    /// Whether some alternative of the set `set` (or the lone method `set`) has a parameter whose default only a
+    /// member it overrides declares. A set's alternatives are fixed when it is made (`Symbols::new_overloaded`; a
+    /// merge makes another set), so its answer is kept by its symbol, as each alternative's is.
+    fn set_inherits_defaults(&mut self, set: SymId) -> bool {
+        if let Some(r) = self.inherited_defaults_memo.get(&set) {
+            return r.is_some();
+        }
+        let Some(alts) = self.syms.alternatives(set).map(|a| a.to_vec()) else { return self.inherited_of(set).is_some() };
+        let mut any = false;
+        for a in alts {
+            any |= self.inherited_of(a).is_some();
+        }
+        self.inherited_defaults_memo.insert(set, any.then(|| Arc::from(Vec::<usize>::new())));
+        any
+    }
+
+    /// The indices of the parameters of the method `m` that have a default only through a member it overrides, by its
+    /// symbol: the class hierarchy settles them once, where default_declarer walks the owner's bases per parameter.
+    fn inherited_of(&mut self, m: SymId) -> Option<Arc<[usize]>> {
+        if let Some(r) = self.inherited_defaults_memo.get(&m) {
+            return r.clone();
+        }
+        let r = self.compute_inherited(m);
+        self.inherited_defaults_memo.insert(m, r.clone());
+        r
+    }
+
+    fn compute_inherited(&mut self, m: SymId) -> Option<Arc<[usize]>> {
+        let sig = self.sig_arc(m);
+        let own: Vec<bool> = sig.clauses.iter().flat_map(|c| c.params.iter()).map(|p| p.has_default).collect();
+        let found: Vec<usize> = (0..own.len()).filter(|&i| !own[i] && self.default_declarer(m, i).is_some_and(|d| d != m)).collect();
+        (!found.is_empty()).then(|| found.into())
+    }
+
+    /// The memo's invariant: its answers are functions of the class hierarchy's signatures (whether a parameter has a
+    /// default, the members and their modifiers, the parents), which src/shape.rs compares, so an edit that could
+    /// change one takes the full path (a fresh memo) and an incremental retype never meets a changed answer. No clear
+    /// is made there; builds with debug assertions check each kept answer against a recomputation at the retype's end.
+    #[cfg(debug_assertions)]
+    pub(super) fn assert_inherited_defaults_kept(&mut self) {
+        let kept: Vec<(SymId, Option<Arc<[usize]>>)> = self.inherited_defaults_memo.iter().map(|(&k, v)| (k, v.clone())).collect();
+        for (sym, answer) in kept {
+            let fresh = match self.syms.alternatives(sym).map(|a| a.to_vec()) {
+                Some(alts) => alts.into_iter().any(|a| self.compute_inherited(a).is_some()).then(|| Arc::from(Vec::<usize>::new())),
+                None => self.compute_inherited(sym),
+            };
+            assert_eq!(answer, fresh, "inherited_defaults_memo: a kept answer for {} differs from its recomputation after an incremental retype", self.name_str(self.syms.sym(sym).name));
+        }
+    }
+
+    /// dotty's `hasDefaultParams` over the overridden members (SymDenotations.scala 1003-1012) for an alternative's
+    /// applicability: a missing argument applies where `findDefaultGetter(fn, n, testOnly = true)` finds a getter
+    /// (Applications.scala 494, 2620-2622), which an override without a default of its own inherits from the member
+    /// it overrides. Each parameter of a member alternative with no default of its own has one where `default_declarer`
+    /// finds the overridden member declaring it, the declarer the call's getter is then taken from. A constructor's
+    /// alternative inherits none. The definition's check ("two or more overloaded variants have default
+    /// arguments", `check_single_default`) asks the same of each declaration.
+    fn inherit_defaults(&mut self, alt: &mut Alt) {
+        if alt.ctor.is_some() {
+            return;
+        }
+        let Some(inherited) = self.inherited_of(alt.sym) else { return };
+        let mut sig = (*alt.sig).clone();
+        for (k, p) in sig.clauses.iter_mut().flat_map(|c| c.params.iter_mut()).enumerate() {
+            if inherited.contains(&k) {
+                p.has_default = true;
+            }
+        }
+        alt.sig = Arc::new(sig);
     }
 
     /// Each alternative's signature as the receiver sees it, the receiver chain's outer
@@ -2694,10 +2779,13 @@ impl<'a> Worker<'a> {
         if distinct.len() < 2 {
             return None;
         }
-        let alts: Vec<Alt> = distinct
+        let mut alts: Vec<Alt> = distinct
             .iter()
             .map(|&(sym, bt)| Alt { sym, sig: self.sig_arc(sym), owner_subst: self.owner_subst(bt), ctor: None, info: None, denoted: None, refined: None })
             .collect();
+        for alt in alts.iter_mut() {
+            self.inherit_defaults(alt);
+        }
         let mut infos = Vec::new();
         let spans_mark = self.overload_arg_spans.len();
         let choice = self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false, None);

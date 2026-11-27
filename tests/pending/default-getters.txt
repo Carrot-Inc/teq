@@ -31,7 +31,6 @@ AXIS-B-wvar-lnone-zero-direct.jvm	run 2152
 AXIS-B_inherits-wlocaldef-l--arity-as_A.interp	crash 3
 AXIS-B_inherits-wlocaldef-l--arity-as_A.js	crash 1
 AXIS-B_inherits-wlocaldef-l--arity-as_A.jvm	crash 1
-AXIS-B_inherits-wlocaldef-l--arity-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wlocaldef-l--arity-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wlocaldef-l--arity-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wlocaldef-l--arity-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
@@ -50,25 +49,15 @@ AXIS-B_inherits-wlocaldef-l--none-super.jvm	crash 1
 AXIS-B_inherits-wlocaldef-l--string-as_A.interp	crash 3
 AXIS-B_inherits-wlocaldef-l--string-as_A.js	crash 1
 AXIS-B_inherits-wlocaldef-l--string-as_A.jvm	crash 1
-AXIS-B_inherits-wlocaldef-l--string-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wlocaldef-l--string-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wlocaldef-l--string-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wlocaldef-l--string-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wlocaldef-l--string-super.interp	crash 3
 AXIS-B_inherits-wlocaldef-l--string-super.js	crash 1
 AXIS-B_inherits-wlocaldef-l--string-super.jvm	crash 1
-AXIS-B_inherits-wnone-l--arity-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--arity-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--arity-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--arity-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--string-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--string-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--string-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--string-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wval-l--arity-as_A.interp	crash 3
 AXIS-B_inherits-wval-l--arity-as_A.js	crash 1
 AXIS-B_inherits-wval-l--arity-as_A.jvm	crash 1
-AXIS-B_inherits-wval-l--arity-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wval-l--arity-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wval-l--arity-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wval-l--arity-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
@@ -87,7 +76,6 @@ AXIS-B_inherits-wval-l--none-super.jvm	crash 1
 AXIS-B_inherits-wval-l--string-as_A.interp	crash 3
 AXIS-B_inherits-wval-l--string-as_A.js	crash 1
 AXIS-B_inherits-wval-l--string-as_A.jvm	crash 1
-AXIS-B_inherits-wval-l--string-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wval-l--string-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wval-l--string-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wval-l--string-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
@@ -97,7 +85,6 @@ AXIS-B_inherits-wval-l--string-super.jvm	crash 1
 AXIS-B_inherits-wvar-l--arity-as_A.interp	crash 3
 AXIS-B_inherits-wvar-l--arity-as_A.js	crash 1
 AXIS-B_inherits-wvar-l--arity-as_A.jvm	crash 1
-AXIS-B_inherits-wvar-l--arity-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wvar-l--arity-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wvar-l--arity-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wvar-l--arity-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
@@ -116,7 +103,6 @@ AXIS-B_inherits-wvar-l--none-super.jvm	crash 1
 AXIS-B_inherits-wvar-l--string-as_A.interp	crash 3
 AXIS-B_inherits-wvar-l--string-as_A.js	crash 1
 AXIS-B_inherits-wvar-l--string-as_A.jvm	crash 1
-AXIS-B_inherits-wvar-l--string-direct.check	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wvar-l--string-direct.interp	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wvar-l--string-direct.js	refused 9:13: None of the overloaded alternatives of method m in trait B with types
 AXIS-B_inherits-wvar-l--string-direct.jvm	refused 9:13: None of the overloaded alternatives of method m in trait B with types
@@ -588,18 +574,10 @@ REVIEW-local_trait_lifted_member_overridden.jvm	crash 1
 REVIEW-local_trait_private_default_capture.interp	crash 3
 REVIEW-local_trait_private_default_capture.js	crash 1
 REVIEW-local_trait_private_default_capture.jvm	crash 1
-REVIEW-over_drop_only.check	refused 2:177: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_drop_only.interp	refused 2:177: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_drop_only.js	refused 2:177: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_drop_only.jvm	refused 2:177: None of the overloaded alternatives of method m in class D with types
 REVIEW-over_dropped_local.check	refused 2:174: Found: "abc"
 REVIEW-over_dropped_local.interp	refused 2:174: Found: "abc"
 REVIEW-over_dropped_local.js	refused 2:174: Found: "abc"
 REVIEW-over_dropped_local.jvm	refused 2:174: Found: "abc"
-REVIEW-over_dropped_ordinary.check	refused 1:304: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_dropped_ordinary.interp	refused 1:304: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_dropped_ordinary.js	refused 1:304: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_dropped_ordinary.jvm	refused 1:304: None of the overloaded alternatives of method m in class D with types
 REVIEW-over_generic_local.check	refused 2:162: Found: "s"
 REVIEW-over_generic_local.interp	refused 2:162: Found: "s"
 REVIEW-over_generic_local.js	refused 2:162: Found: "s"
@@ -777,14 +755,6 @@ WITNESS-lift-local.jvm	run 3101
 WITNESS-named-local.interp	crash 3
 WITNESS-named-local.js	crash 1
 WITNESS-named-local.jvm	crash 3
-WITNESS-overload-local.check	refused 4:9: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-local.interp	refused 4:9: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-local.js	refused 4:9: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-local.jvm	refused 4:9: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-member.check	refused 3:29: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-member.interp	refused 3:29: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-member.js	refused 3:29: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-member.jvm	refused 3:29: None of the overloaded alternatives of method m in trait B with types
 WITNESS-prior-local.interp	crash 3
 WITNESS-prior-local.js	crash 1
 WITNESS-prior-local.jvm	crash 3

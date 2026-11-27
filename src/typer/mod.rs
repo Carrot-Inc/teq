@@ -2346,6 +2346,11 @@ pub struct Worker<'a> {
     pub suffixed_roots: crate::arena::Layered<SymId, ()>,
     pub prog_index: check::ProgIndex,
     pub roots_memo: FxMap<SymId, std::sync::Arc<[SymId]>>,
+    /// The parameters of a method that have a default only through a member it overrides (`Worker::inherited_of`),
+    /// by its symbol, and for an overloaded set's symbol whether any of its alternatives has one
+    /// (`Worker::set_inherits_defaults`): the class hierarchy settles both once. An edit that could change one
+    /// takes the full path; it is not cleared by an incremental retype (`Worker::assert_inherited_defaults_kept`).
+    pub inherited_defaults_memo: FxMap<SymId, Option<std::sync::Arc<[usize]>>>,
     /// The inherited type members and nested classes found by name, misses included
     /// (`members::InheritedNamed`).
     pub inherited_named: members::InheritedNamed,
@@ -3713,6 +3718,7 @@ impl<'a> Worker<'a> {
             suffixed_roots: Default::default(),
             prog_index: check::ProgIndex::default(),
             roots_memo: FxMap::default(),
+            inherited_defaults_memo: FxMap::default(),
             inherited_named: Default::default(),
             subclasses: overload::SubclassIndex::default(),
             alternatives_named: false,
@@ -4200,6 +4206,7 @@ impl<'a> Worker<'a> {
             suffixed_roots: self.suffixed_roots.attach(),
             prog_index: Default::default(),
             roots_memo: self.roots_memo.clone(),
+            inherited_defaults_memo: self.inherited_defaults_memo.clone(),
             inherited_named: Default::default(),
             subclasses: Default::default(),
             alternatives_named: self.alternatives_named,

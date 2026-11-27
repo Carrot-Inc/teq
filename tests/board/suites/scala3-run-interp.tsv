@@ -476,7 +476,7 @@ i15943	pass	-
 i15988a	pass	-	
 i15988b	pass	-	
 i15998	fail	-	compile-error: extension method isRotationOf is not applicable to String
-i16006	fail	-	compile-error: None of the overloaded alternatives of method toString in class Foo with types
+i16006	pass	-	
 i16065	pass	-	
 i16092	pass	-	
 i16108	pass	-	

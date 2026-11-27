@@ -2425,6 +2425,10 @@ overload_extensions	pass	-
 overload_function_input_arity	pass	-	
 overload_functions	pass	-	
 overload_inheritance	pass	-	
+overload_inherited_default	pass	-	
+overload_inherited_default_generic_curried	fail	-	verify
+overload_inherited_default_order	pass	-	
+overload_inherited_default_preference	pass	-	
 overload_inherited_value	pass	-	
 overload_jdk_using	fail	-	compile
 overload_lambda_explicit_targs	pass	-	

@@ -428,6 +428,7 @@ macro_rules! inventory_maps {
             $f!(w, reflect_ctor_params),
             $f!(w, reflect_param_of),
             $f!(w, roots_memo),
+            $f!(w, inherited_defaults_memo),
             $f!(w, outer_prefixes),
             $f!(w, sam_arity),
             $f!(w, macro_files),
@@ -481,7 +482,7 @@ impl<'a> Worker<'a> {
         timed!("the Layered tables' attach (19)", (self.anon_envs.attach(), self.class_imports.attach(), self.fun_of_sym.attach(), self.val_init.attach(), self.class_done.attach(), self.retained_bodies.attach(), self.inline_definitions.attach(), self.derived_opaques.attach(), self.derived_aliases.attach(), self.suffixed_roots.attach(), self.poisoned_withheld.attach(), self.arity_classes.attach(), self.inferred_parent_args.attach(), self.inferred_trait_args.attach(), self.any_members.attach(), self.outer_this.attach(), self.outer_accessors.attach(), self.unchecked_variance.attach(), self.merged_overloads.attach()), none);
         timed!("class_exports (ExportTables::attach)", self.class_exports.attach(), map);
         timed!("pkg_exports (ExportTables::attach)", self.pkg_exports.attach(), map);
-        cloned!(interpolations, conversion_indexes, inferred_outcomes, inferred_val_outcomes, poisoned, given_indexes, value_sigs, lit_types, temp_names, file_chains, class_given_indexes, given_preferences, given_orders, implicit_scopes, implicit_scope_givens, given_fast, given_fits, sam_classes, expr_marks, eta_expansions, folded_paths, captured_locals, irrefutable_pats, tag_pats, local_news, anon_captures, anon_parent_args, mixin_supers, super_problems_told, anon_sites, reflect_ctor_params, reflect_param_of, roots_memo, outer_prefixes, sam_arity, macro_files, cacheable_state, cacheable_state_classes, head_sigs, package_levels);
+        cloned!(interpolations, conversion_indexes, inferred_outcomes, inferred_val_outcomes, poisoned, given_indexes, value_sigs, lit_types, temp_names, file_chains, class_given_indexes, given_preferences, given_orders, implicit_scopes, implicit_scope_givens, given_fast, given_fits, sam_classes, expr_marks, eta_expansions, folded_paths, captured_locals, irrefutable_pats, tag_pats, local_news, anon_captures, anon_parent_args, mixin_supers, super_problems_told, anon_sites, reflect_ctor_params, reflect_param_of, roots_memo, inherited_defaults_memo, outer_prefixes, sam_arity, macro_files, cacheable_state, cacheable_state_classes, head_sigs, package_levels);
         timed!("the Arc handles (types, import_hidden, import_values, js_registry, loaded, std, lock, serial, shared_mixin_supers)", (self.types.clone(), self.import_hidden.clone(), self.import_values.clone(), self.js_registry.clone(), self.loaded.clone(), self.std.clone(), self.lock.clone(), self.serial.clone(), self.shared_mixin_supers.clone()), none);
         let t = std::time::Instant::now();
         let w = std::hint::black_box(self.attach(1));

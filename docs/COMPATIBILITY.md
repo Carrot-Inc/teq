@@ -263,6 +263,12 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   using clause, or a right-associative method's own first clause is a using clause, it takes a using parameter or
   the method's own for the receiver: it refuses the program above ("value tag is not a member of B"), and in a
   right-associative method of such a group it eta-expands `tag` into a function where the value is written.
+- An overload's alternative that overrides a member declaring a default without restating it has that default in
+  a curried call resolved by its later clause, in either declaration order: with `A`'s `m(a: X)(b: Int = 1)` and
+  `class B extends A { override def m(a: X)(b: Int) = ..; def m(a: Y)(b: Int) = .. }`, `new B().m(z)()` takes `A`'s
+  default, where scalac 3.8.4 refuses the call (and takes the default once the two declarations are swapped). scalac
+  resolves that clause on copies of the alternatives (`resolveMapped`), which see no member they override and keep
+  the flag the definition's check (`checkNoDoubleDeclaration`, short-circuiting) happened to cache on the originals.
 - A name the compiler makes is numbered by its place in what makes it, the same at any worker count and in any
   split of a build: a placeholder's parameter by its place in its lambda (`_ + _` is `(_$0, _$1) => _$0 + _$1`), a
   context bound's evidence by its place in its definition, where scalac numbers a placeholder's per file; no program

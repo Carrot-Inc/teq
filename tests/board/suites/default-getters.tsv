@@ -652,10 +652,10 @@ AXIS-B_inherits-wlocaldef-l--arity-as_A.interp	fail	-	crash 3
 AXIS-B_inherits-wlocaldef-l--arity-as_A.js	fail	-	crash 1
 AXIS-B_inherits-wlocaldef-l--arity-as_A.jvm	fail	-	crash 1
 AXIS-B_inherits-wlocaldef-l--arity-as_A.workers	pass	-	
-AXIS-B_inherits-wlocaldef-l--arity-direct.check	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wlocaldef-l--arity-direct.interp	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wlocaldef-l--arity-direct.js	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wlocaldef-l--arity-direct.jvm	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wlocaldef-l--arity-direct.check	pass	-	
+AXIS-B_inherits-wlocaldef-l--arity-direct.interp	fail	-	crash 3
+AXIS-B_inherits-wlocaldef-l--arity-direct.js	fail	-	crash 1
+AXIS-B_inherits-wlocaldef-l--arity-direct.jvm	fail	-	crash 1
 AXIS-B_inherits-wlocaldef-l--arity-direct.workers	pass	-	
 AXIS-B_inherits-wlocaldef-l--arity-super.check	pass	-	
 AXIS-B_inherits-wlocaldef-l--arity-super.interp	fail	-	crash 3
@@ -682,10 +682,10 @@ AXIS-B_inherits-wlocaldef-l--string-as_A.interp	fail	-	crash 3
 AXIS-B_inherits-wlocaldef-l--string-as_A.js	fail	-	crash 1
 AXIS-B_inherits-wlocaldef-l--string-as_A.jvm	fail	-	crash 1
 AXIS-B_inherits-wlocaldef-l--string-as_A.workers	pass	-	
-AXIS-B_inherits-wlocaldef-l--string-direct.check	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wlocaldef-l--string-direct.interp	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wlocaldef-l--string-direct.js	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wlocaldef-l--string-direct.jvm	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wlocaldef-l--string-direct.check	pass	-	
+AXIS-B_inherits-wlocaldef-l--string-direct.interp	fail	-	crash 3
+AXIS-B_inherits-wlocaldef-l--string-direct.js	fail	-	crash 1
+AXIS-B_inherits-wlocaldef-l--string-direct.jvm	fail	-	crash 1
 AXIS-B_inherits-wlocaldef-l--string-direct.workers	pass	-	
 AXIS-B_inherits-wlocaldef-l--string-super.check	pass	-	
 AXIS-B_inherits-wlocaldef-l--string-super.interp	fail	-	crash 3
@@ -712,10 +712,10 @@ AXIS-B_inherits-wnone-l--arity-as_A.interp	pass	-
 AXIS-B_inherits-wnone-l--arity-as_A.js	pass	-	
 AXIS-B_inherits-wnone-l--arity-as_A.jvm	pass	-	
 AXIS-B_inherits-wnone-l--arity-as_A.workers	pass	-	
-AXIS-B_inherits-wnone-l--arity-direct.check	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--arity-direct.interp	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--arity-direct.js	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--arity-direct.jvm	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wnone-l--arity-direct.check	pass	-	
+AXIS-B_inherits-wnone-l--arity-direct.interp	pass	-	
+AXIS-B_inherits-wnone-l--arity-direct.js	pass	-	
+AXIS-B_inherits-wnone-l--arity-direct.jvm	pass	-	
 AXIS-B_inherits-wnone-l--arity-direct.workers	pass	-	
 AXIS-B_inherits-wnone-l--arity-super.check	pass	-	
 AXIS-B_inherits-wnone-l--arity-super.interp	pass	-	
@@ -742,10 +742,10 @@ AXIS-B_inherits-wnone-l--string-as_A.interp	pass	-
 AXIS-B_inherits-wnone-l--string-as_A.js	pass	-	
 AXIS-B_inherits-wnone-l--string-as_A.jvm	pass	-	
 AXIS-B_inherits-wnone-l--string-as_A.workers	pass	-	
-AXIS-B_inherits-wnone-l--string-direct.check	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--string-direct.interp	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--string-direct.js	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wnone-l--string-direct.jvm	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wnone-l--string-direct.check	pass	-	
+AXIS-B_inherits-wnone-l--string-direct.interp	pass	-	
+AXIS-B_inherits-wnone-l--string-direct.js	pass	-	
+AXIS-B_inherits-wnone-l--string-direct.jvm	pass	-	
 AXIS-B_inherits-wnone-l--string-direct.workers	pass	-	
 AXIS-B_inherits-wnone-l--string-super.check	pass	-	
 AXIS-B_inherits-wnone-l--string-super.interp	pass	-	
@@ -772,10 +772,10 @@ AXIS-B_inherits-wval-l--arity-as_A.interp	fail	-	crash 3
 AXIS-B_inherits-wval-l--arity-as_A.js	fail	-	crash 1
 AXIS-B_inherits-wval-l--arity-as_A.jvm	fail	-	crash 1
 AXIS-B_inherits-wval-l--arity-as_A.workers	pass	-	
-AXIS-B_inherits-wval-l--arity-direct.check	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wval-l--arity-direct.interp	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wval-l--arity-direct.js	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wval-l--arity-direct.jvm	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--arity-direct.check	pass	-	
+AXIS-B_inherits-wval-l--arity-direct.interp	fail	-	crash 3
+AXIS-B_inherits-wval-l--arity-direct.js	fail	-	crash 1
+AXIS-B_inherits-wval-l--arity-direct.jvm	fail	-	crash 1
 AXIS-B_inherits-wval-l--arity-direct.workers	pass	-	
 AXIS-B_inherits-wval-l--arity-super.check	pass	-	
 AXIS-B_inherits-wval-l--arity-super.interp	fail	-	crash 3
@@ -802,10 +802,10 @@ AXIS-B_inherits-wval-l--string-as_A.interp	fail	-	crash 3
 AXIS-B_inherits-wval-l--string-as_A.js	fail	-	crash 1
 AXIS-B_inherits-wval-l--string-as_A.jvm	fail	-	crash 1
 AXIS-B_inherits-wval-l--string-as_A.workers	pass	-	
-AXIS-B_inherits-wval-l--string-direct.check	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wval-l--string-direct.interp	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wval-l--string-direct.js	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wval-l--string-direct.jvm	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wval-l--string-direct.check	pass	-	
+AXIS-B_inherits-wval-l--string-direct.interp	fail	-	crash 3
+AXIS-B_inherits-wval-l--string-direct.js	fail	-	crash 1
+AXIS-B_inherits-wval-l--string-direct.jvm	fail	-	crash 1
 AXIS-B_inherits-wval-l--string-direct.workers	pass	-	
 AXIS-B_inherits-wval-l--string-super.check	pass	-	
 AXIS-B_inherits-wval-l--string-super.interp	fail	-	crash 3
@@ -832,10 +832,10 @@ AXIS-B_inherits-wvar-l--arity-as_A.interp	fail	-	crash 3
 AXIS-B_inherits-wvar-l--arity-as_A.js	fail	-	crash 1
 AXIS-B_inherits-wvar-l--arity-as_A.jvm	fail	-	crash 1
 AXIS-B_inherits-wvar-l--arity-as_A.workers	pass	-	
-AXIS-B_inherits-wvar-l--arity-direct.check	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wvar-l--arity-direct.interp	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wvar-l--arity-direct.js	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wvar-l--arity-direct.jvm	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wvar-l--arity-direct.check	pass	-	
+AXIS-B_inherits-wvar-l--arity-direct.interp	fail	-	crash 3
+AXIS-B_inherits-wvar-l--arity-direct.js	fail	-	crash 1
+AXIS-B_inherits-wvar-l--arity-direct.jvm	fail	-	crash 1
 AXIS-B_inherits-wvar-l--arity-direct.workers	pass	-	
 AXIS-B_inherits-wvar-l--arity-super.check	pass	-	
 AXIS-B_inherits-wvar-l--arity-super.interp	fail	-	crash 3
@@ -862,10 +862,10 @@ AXIS-B_inherits-wvar-l--string-as_A.interp	fail	-	crash 3
 AXIS-B_inherits-wvar-l--string-as_A.js	fail	-	crash 1
 AXIS-B_inherits-wvar-l--string-as_A.jvm	fail	-	crash 1
 AXIS-B_inherits-wvar-l--string-as_A.workers	pass	-	
-AXIS-B_inherits-wvar-l--string-direct.check	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wvar-l--string-direct.interp	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wvar-l--string-direct.js	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
-AXIS-B_inherits-wvar-l--string-direct.jvm	fail	-	refused 9:13: None of the overloaded alternatives of method m in trait B with types
+AXIS-B_inherits-wvar-l--string-direct.check	pass	-	
+AXIS-B_inherits-wvar-l--string-direct.interp	fail	-	crash 3
+AXIS-B_inherits-wvar-l--string-direct.js	fail	-	crash 1
+AXIS-B_inherits-wvar-l--string-direct.jvm	fail	-	crash 1
 AXIS-B_inherits-wvar-l--string-direct.workers	pass	-	
 AXIS-B_inherits-wvar-l--string-super.check	pass	-	
 AXIS-B_inherits-wvar-l--string-super.interp	fail	-	crash 3
@@ -3042,20 +3042,20 @@ REVIEW-over_ambiguous.interp	pass	-
 REVIEW-over_ambiguous.js	pass	-	
 REVIEW-over_ambiguous.jvm	pass	-	
 REVIEW-over_ambiguous.workers	pass	-	
-REVIEW-over_drop_only.check	fail	-	refused 2:177: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_drop_only.interp	fail	-	refused 2:177: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_drop_only.js	fail	-	refused 2:177: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_drop_only.jvm	fail	-	refused 2:177: None of the overloaded alternatives of method m in class D with types
+REVIEW-over_drop_only.check	pass	-	
+REVIEW-over_drop_only.interp	pass	-	
+REVIEW-over_drop_only.js	pass	-	
+REVIEW-over_drop_only.jvm	pass	-	
 REVIEW-over_drop_only.workers	pass	-	
 REVIEW-over_dropped_local.check	fail	-	refused 2:174: Found: "abc"
 REVIEW-over_dropped_local.interp	fail	-	refused 2:174: Found: "abc"
 REVIEW-over_dropped_local.js	fail	-	refused 2:174: Found: "abc"
 REVIEW-over_dropped_local.jvm	fail	-	refused 2:174: Found: "abc"
 REVIEW-over_dropped_local.workers	pass	-	
-REVIEW-over_dropped_ordinary.check	fail	-	refused 1:304: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_dropped_ordinary.interp	fail	-	refused 1:304: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_dropped_ordinary.js	fail	-	refused 1:304: None of the overloaded alternatives of method m in class D with types
-REVIEW-over_dropped_ordinary.jvm	fail	-	refused 1:304: None of the overloaded alternatives of method m in class D with types
+REVIEW-over_dropped_ordinary.check	pass	-	
+REVIEW-over_dropped_ordinary.interp	pass	-	
+REVIEW-over_dropped_ordinary.js	pass	-	
+REVIEW-over_dropped_ordinary.jvm	pass	-	
 REVIEW-over_dropped_ordinary.workers	pass	-	
 REVIEW-over_generic_local.check	fail	-	refused 2:162: Found: "s"
 REVIEW-over_generic_local.interp	fail	-	refused 2:162: Found: "s"
@@ -4125,15 +4125,15 @@ WITNESS-narrow-member.interp	pass	-
 WITNESS-narrow-member.js	pass	-	
 WITNESS-narrow-member.jvm	pass	-	
 WITNESS-narrow-member.workers	pass	-	
-WITNESS-overload-local.check	fail	-	refused 4:9: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-local.interp	fail	-	refused 4:9: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-local.js	fail	-	refused 4:9: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-local.jvm	fail	-	refused 4:9: None of the overloaded alternatives of method m in trait B with types
+WITNESS-overload-local.check	pass	-	
+WITNESS-overload-local.interp	pass	-	
+WITNESS-overload-local.js	pass	-	
+WITNESS-overload-local.jvm	pass	-	
 WITNESS-overload-local.workers	pass	-	
-WITNESS-overload-member.check	fail	-	refused 3:29: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-member.interp	fail	-	refused 3:29: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-member.js	fail	-	refused 3:29: None of the overloaded alternatives of method m in trait B with types
-WITNESS-overload-member.jvm	fail	-	refused 3:29: None of the overloaded alternatives of method m in trait B with types
+WITNESS-overload-member.check	pass	-	
+WITNESS-overload-member.interp	pass	-	
+WITNESS-overload-member.js	pass	-	
+WITNESS-overload-member.jvm	pass	-	
 WITNESS-overload-member.workers	pass	-	
 WITNESS-prior-local.check	pass	-	
 WITNESS-prior-local.interp	fail	-	crash 3

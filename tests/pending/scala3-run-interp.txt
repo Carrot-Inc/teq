@@ -193,7 +193,6 @@ i15903b	compile-error: value getGenericReturnType is not a member of Method
 i15903c	compile-error: value getGenericReturnType is not a member of Method
 i15903d	compile-error: value getGenericReturnType is not a member of Method
 i15998	compile-error: extension method isRotationOf is not applicable to String
-i16006	compile-error: None of the overloaded alternatives of method toString in class Foo with types
 i16458	compile-error: expected end of statement, found identifier
 i16459	compile-error: expected end of statement, found identifier
 i16464	compile-error: operator - cannot be applied to Int and Seq[Int]

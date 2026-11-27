@@ -315,7 +315,7 @@ worker_fields! {
         entry_points, deferred_bounds, unchecked_variance, variance_checked, main_name, choose_entry, open_world,
         jvm_volatile, jvm_thread_unsafe, writes_products, emits_bodies, withheld_met, dialect, jvm, unit_ops,
         java_serializable, interp, semantic, sem_records, form_passes, unsettled_std_entries, dispatch_pending,
-        named_like, vals_by_accessor, suffixed_roots, prog_index, roots_memo, inherited_named, subclasses,
+        named_like, vals_by_accessor, suffixed_roots, prog_index, roots_memo, inherited_defaults_memo, inherited_named, subclasses,
         alternatives_named, inherited_pairs, loaded, std, entering_done, array_seq_asked, refinement_sigs,
         poly_rebound, outer_prefixes, receiver_types, sam_arity, member_cycles, merged_overloads, views_on,
         profile, other_view_memos, macro_files, cacheable_state, cacheable_state_classes, known_caches,

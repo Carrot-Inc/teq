@@ -2372,6 +2372,10 @@ cases/overload_extensions	pass	-
 cases/overload_function_input_arity	pass	-	
 cases/overload_functions	pass	-	
 cases/overload_inheritance	pass	-	
+cases/overload_inherited_default	pass	-	
+cases/overload_inherited_default_generic_curried	pass	-	
+cases/overload_inherited_default_order	pass	-	
+cases/overload_inherited_default_preference	pass	-	
 cases/overload_inherited_value	pass	-	
 cases/overload_jdk_using	pass	-	
 cases/overload_lambda_explicit_targs	pass	-	

@@ -400,7 +400,7 @@ i15943.scala	pass	lean:pass
 i15988a.scala	pass	lean:pass	
 i15988b.scala	pass	lean:pass	
 i15998.scala	fail	lean:fail	i15998.scala:11:3: extension method isRotationOf is not applicable to String
-i16006.scala	fail	lean:fail	i16006.scala:6:37: None of the overloaded alternatives of method toString in class Foo with types
+i16006.scala	pass	lean:pass	
 i16065.scala	pass	lean:pass	
 i16092.scala	pass	lean:pass	
 i16108.scala	pass	lean:pass	

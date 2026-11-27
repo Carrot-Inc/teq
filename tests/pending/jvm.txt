@@ -181,6 +181,7 @@ mixin_getter_bridge_clash	output
 module_selection_effectful_qualifier	compile
 named_reorder_block_prefix_defaults	output
 native_overload_reflection	output
+overload_inherited_default_generic_curried	verify; queued: master's row "the JVM calls an inherited later-clause getter by the override's descriptor over a generic parent"
 overload_jdk_using	compile
 overloaded_type_argument_kinds	compile
 package_extension_path	compile

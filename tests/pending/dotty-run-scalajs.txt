@@ -123,7 +123,6 @@ i15725.scala	output: line 1: the .check has '2 meters', the program printed 'ToS
 i15840.scala	i15840.scala:9:32: expected ':', found 'val'
 i15855.scala	i15855.scala:10:57: type mismatch: found () => R, required MyFunction0[R]
 i15998.scala	i15998.scala:11:3: extension method isRotationOf is not applicable to String
-i16006.scala	i16006.scala:6:37: None of the overloaded alternatives of method toString in class Foo with types
 i16458.scala	i16458.scala:5:38: expected end of statement, found identifier
 i16459.scala	i16459.scala:6:6: expected end of statement, found identifier
 i16464.scala	i16464.scala:10:20: operator - cannot be applied to Int and Seq[Int]

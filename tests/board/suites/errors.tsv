@@ -848,6 +848,7 @@ overload_arg_position	pass	-
 overload_common_formal_function	pass	-	
 overload_definitions	pass	-	
 overload_inheritance	pass	-	
+overload_inherited_default_definitions	pass	-	
 overload_named_lambda_partial	pass	-	
 overload_parenthesized_method_arg	fail	-	exit code 0
 overload_resolution	pass	-	
