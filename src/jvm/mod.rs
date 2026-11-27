@@ -1301,7 +1301,6 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
         lap.done("store updated", usage.kept + usage.emitted);
     }
     let names = cx.input.named.iter().map(|&c| (c, cx.class_names[c.idx()].clone())).collect();
-    lifted::report_late_entries();
     Output { classes, main_class, errors, refused, main_classes, inits, kept: usage, names, twice }
 }
 

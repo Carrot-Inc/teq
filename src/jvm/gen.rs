@@ -5,7 +5,7 @@
 use crate::lir::{Adaptation, Capture, Comparing, ErasedType, FieldRole, Invoke, Kind, LiftedShape, LirId, MethodParam, MethodRef, ParamRole, Place, Relation};
 use super::classfile::*;
 use super::free::{Analysis, Free};
-use super::lifted::{Asker, LiftedBody, Placed};
+use super::lifted::{LiftedBody, Placed};
 use super::names::*;
 use super::{Cx, Unit};
 use crate::ast::{mods, ListRef};
@@ -666,13 +666,6 @@ impl<T> Phased<T> {
     }
 }
 
-/// Whether a write of the class being written runs (`write_phase`), in checks builds; a release build answers false.
-/// Once the class's walk has started, no write makes a lifted method's first ask or queues a body: each is plan work
-/// made after the plan is whole.
-pub fn writing() -> bool {
-    cfg!(debug_assertions) && PHASE.with(|p| p.get().0 > 0)
-}
-
 impl<T> std::ops::Deref for Phased<T> {
     type Target = T;
     fn deref(&self) -> &T {
@@ -747,6 +740,9 @@ pub struct Gen<'a> {
     pub plan: crate::lir::ClassDef,
     /// The class's plan in the order its maker made it, written by the class's walk (`Gen::write_entries`).
     pub(super) entries: Vec<super::classes::Entry>,
+    /// Whether the class's walk has started: its plan is whole, so a lifted method asked or a body queued after it is
+    /// an internal error that refuses the class (`Gen::lifted_entry`, `Gen::defer`).
+    pub(super) walking: bool,
     /// The class's lifted methods by their unit's names and places, beside `plan` (`lifted::LiftedTable`).
     pub(super) lifted_table: super::lifted::LiftedTable,
     /// The interfaces the class being written names in an `invokespecial`, each with the place
@@ -899,6 +895,7 @@ impl<'a> Gen<'a> {
             cw: ClassWriter::new(0, "x", OBJECT, &[]),
             plan: Default::default(),
             entries: Vec::new(),
+            walking: false,
             lifted_table: Default::default(),
             super_targets: Phased::new(PhasedField::SuperTargets, Vec::new()),
             super_call_at: None,
@@ -1014,6 +1011,7 @@ impl<'a> Gen<'a> {
         self.pending.clear();
         self.pending_next.clear();
         self.entries.clear();
+        self.walking = false;
         self.draining = false;
         self.local_defs.clear();
         self.pair_bridged.clear();
@@ -5948,8 +5946,8 @@ impl<'a> Gen<'a> {
     /// is queued while a lowering runs (docs/LIR.md, "What a slice may not do").
     pub(super) fn defer(&mut self, body: Pending) {
         assert!(!self.code.frozen, "a lifted body is queued while a lowering runs");
-        if writing() {
-            panic!("a write of its class queues the lifted body of {}", body.lifted.name);
+        if self.walking {
+            self.refuse_written(&format!("internal error: the lifted body of {} queued after the class's writing started", body.lifted.name), None);
         }
         self.pending.push(body);
     }
@@ -6008,9 +6006,6 @@ impl<'a> Gen<'a> {
         let Some((shape, body, (params, code))) = self.lifted_table.made(placed).and_then(|(shape, body)| body.code.clone().map(|code| (shape, body, code))) else {
             return self.unsupported(&format!("internal error: the closure's lifted method {} has no body in the class", target.name));
         };
-        if writing() {
-            panic!("a write of its class makes the first ask of a lambda's method");
-        }
         let place = self.lifted_table.place(placed);
         let return_target = if shape.key { self.return_target() } else { ReturnTarget::Unknown };
         let lifted = Rc::new(Lifted::new(target.name.clone(), shape, body.captures.clone(), body.home, body.module.clone(), place));
@@ -6081,12 +6076,9 @@ impl<'a> Gen<'a> {
         if let Some(l) = self.lifted.get(&s) {
             return l.clone();
         }
-        if writing() {
-            panic!("a write of its class makes the first ask of a local def's method");
-        }
         let cx = self.cx;
         let (shape, body) = self.local_fun_shape(s);
-        let (name, place) = self.lifted_entry(Placed::Def(s), Asker::LiftedFun, &shape);
+        let (name, place) = self.lifted_entry(Placed::Def(s), &shape);
         let lifted = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone(), place));
         self.lifted.insert(s, lifted.clone());
         // A local inline method has its getters alone (`Desugar.addDefaultGetters`), which
@@ -6128,12 +6120,9 @@ impl<'a> Gen<'a> {
         if let Some(l) = self.lifted_defaults.get(&(s, i)) {
             return (l.clone(), None);
         }
-        if writing() {
-            panic!("a write of its class makes the first ask of a local default's getter");
-        }
         let f = self.cx.fun_of_sym[s.idx()];
         let (shape, body) = self.local_default_shape(s, i);
-        let (name, place) = self.lifted_entry(Placed::Default(s, i), Asker::LocalDefaultMethod, &shape);
+        let (name, place) = self.lifted_entry(Placed::Default(s, i), &shape);
         let l = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, body.module.clone(), place));
         self.lifted_defaults.insert((s, i), l.clone());
         (l.clone(), Some(Pending { lifted: l, body: PendingBody::Default(FunId(f), i), return_target: ReturnTarget::Unknown }))

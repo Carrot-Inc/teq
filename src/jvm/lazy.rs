@@ -4,7 +4,7 @@
 
 use crate::lir::{Capture, Comparing, ErasedType, FieldFlags, Invoke, Kind, LiftedShape, LirId, MethodFlags, MethodRef, Relation, Visibility};
 use super::gen::*;
-use super::lifted::{Asker, LiftedBody, Placed};
+use super::lifted::{LiftedBody, Placed};
 use super::names::*;
 use crate::ast::{mods, ListRef};
 use crate::symbols::*;
@@ -113,13 +113,10 @@ impl<'a> Gen<'a> {
         if let Some(l) = cached {
             return l.clone();
         }
-        if writing() {
-            panic!("a write of its class makes the first ask of a local lazy val's {}", if init { "initialiser" } else { "accessor" });
-        }
         let cx = self.cx;
         let (shape, body) = self.lazy_shape(s);
         let placed = cx.local_home(s).is_some();
-        let (name, place) = self.lifted_entry(if init { Placed::LazyInit(s) } else { Placed::Def(s) }, Asker::LazyMethod, &shape);
+        let (name, place) = self.lifted_entry(if init { Placed::LazyInit(s) } else { Placed::Def(s) }, &shape);
         let lifted = Rc::new(Lifted::new(name, shape, body.captures.clone(), body.home, None, place));
         if init {
             self.lifted_lazy_inits.insert(s, lifted.clone());

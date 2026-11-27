@@ -932,10 +932,16 @@ impl<'a> Gen<'a> {
     }
 
     /// The class's plan written in its order, the class's walk: each field declared, each method without a body
-    /// declared, each held method written, the interfaces set. It stops at a method whose code could not be written,
-    /// and the class is refused (false): no method leaves the plan and no later member is written beside an internal
-    /// error.
+    /// declared, each held method written, the interfaces set. The plan is whole from its start (`Gen::walking`): a
+    /// lifted body still queued refuses the class before any write. It stops at a method whose code could not be
+    /// written, and the class is refused (false): no method leaves the plan and no later member is written beside an
+    /// internal error.
     pub(super) fn write_entries(&mut self) -> bool {
+        self.walking = true;
+        if !self.pending.is_empty() || !self.pending_next.is_empty() {
+            self.refuse_written("internal error: a lifted body queued after the class's last round", None);
+            return false;
+        }
         self.plan_phase(false);
         let mut whole = true;
         for entry in std::mem::take(&mut self.entries) {

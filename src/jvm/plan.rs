@@ -83,6 +83,7 @@ impl<'a> Gen<'a> {
         super::gen::write_phase(None);
         self.cw.cp.plan_frozen = cfg!(debug_assertions);
         debug_assert!(self.entries.is_empty(), "a class begun while the plan of {} is open", self.plan.name);
+        self.walking = false;
         self.plan = class;
         self.module_tree = None;
         self.writing_mirror = false;

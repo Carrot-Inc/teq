@@ -101,41 +101,6 @@ pub(super) struct LiftedBody {
     pub module: Option<Rc<str>>,
 }
 
-/// Who makes an entry of the class's table: a lowering, which names the method a closure or a call stands for
-/// (`Gen::closure_entry`, `Gen::lifted_call_ref`), or one of the three that make a lifted method where the class holds
-/// what asks for it.
-#[derive(Clone, Copy)]
-pub(super) enum Asker {
-    ClosureEntry,
-    LiftedFun,
-    LazyMethod,
-    LocalDefaultMethod,
-    LiftedCallRef,
-}
-
-const ASKERS: [&str; 5] = ["closure_entry", "lifted_fun", "lazy_method", "local_default_method", "lifted_call_ref"];
-
-/// The entries made, by asker, once their class's plan held a method (`TEQ_LIFTED_LATE`).
-static LATE: [std::sync::atomic::AtomicU32; 5] = [const { std::sync::atomic::AtomicU32::new(0) }; 5];
-
-/// Whether a build counts the entries of the classes' tables made once their class's plan holds a method, by asker,
-/// and reports them as it ends (`TEQ_LIFTED_LATE` set; `report_late_entries`): what is left of a class's lifted methods
-/// being in its plan before its code.
-fn lifted_late() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("TEQ_LIFTED_LATE").is_some())
-}
-
-/// The build's line of the entries made late, `LIFTEDLATE<TAB>closure_entry N<TAB>...`, one count by asker, where
-/// `TEQ_LIFTED_LATE` is set; the counts start again for the next build.
-pub fn report_late_entries() {
-    if !lifted_late() {
-        return;
-    }
-    let counts: Vec<String> = ASKERS.iter().zip(&LATE).map(|(asker, n)| format!("{} {}", asker, n.swap(0, std::sync::atomic::Ordering::Relaxed))).collect();
-    eprintln!("LIFTEDLATE\t{}", counts.join("\t"));
-}
-
 /// A lifted method of the unit by what it lifts, as `LiftedNames::places` keys its place: the order in which
 /// `LambdaLift.transformDefDef` meets its definition (LambdaLift.scala 325-333), a definition after what it holds,
 /// in which `Lifter.liftDef` (216-220) appends it to its class's lifted definitions, which `transformTemplate`
@@ -588,17 +553,14 @@ impl<'a> Gen<'a> {
 
     /// The name and the place of the lifted method of `p`, of the shape `shape`, in the class being written, by the
     /// class's table: a lookup of the unit's names the first time the class asks for it, which queues nothing. Two
-    /// methods of one name and one descriptor in the class are an internal error, where the second is named.
-    pub(super) fn lifted_entry(&mut self, p: Placed, asker: Asker, shape: &LiftedShape) -> (String, Option<u32>) {
+    /// methods of one name and one descriptor in the class are an internal error, where the second is named; so is an
+    /// entry first asked once the class's walk has started (`Gen::walking`), which refuses the class.
+    pub(super) fn lifted_entry(&mut self, p: Placed, shape: &LiftedShape) -> (String, Option<u32>) {
         if let Some(entry) = self.lifted_table.entries.get(&p) {
             return entry.clone();
         }
-        // A write finds the entries the class's holds made (the table checked by its key, not as a field).
-        if super::gen::writing() {
-            panic!("a write of its class makes a lifted method's entry in the class's table, asked by {}", ASKERS[asker as usize]);
-        }
-        if lifted_late() && !self.plan.methods.is_empty() {
-            LATE[asker as usize].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if self.walking {
+            self.refuse_written("internal error: a lifted method asked after the class's writing started", None);
         }
         let name = match p {
             Placed::Lambda(body, place) => self.lambda_name(body, place),
@@ -624,7 +586,7 @@ impl<'a> Gen<'a> {
     pub(super) fn closure_entry(&mut self, code: TExprId, made: (Rc<LiftedShape>, Rc<LiftedBody>)) -> String {
         let at = *self.lifted_table.lambda_places.entry(code).and_modify(|n| *n += 1).or_insert(0);
         let p = Placed::Lambda(code, at);
-        let (name, _) = self.lifted_entry(p, Asker::ClosureEntry, &made.0);
+        let (name, _) = self.lifted_entry(p, &made.0);
         self.lifted_table.keep_made(p, made);
         name
     }

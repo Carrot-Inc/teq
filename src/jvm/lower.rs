@@ -5,7 +5,7 @@
 
 use crate::lir::{Arith, Capture, Cast, Catch, Caught, Comparing, ErasedType, ExceptionHandler, FieldRole, Invoke, Kind, LiftedFrom, LiftedShape, LirId, List, MethodRef, ParamRole, Place, Refusal, Relation, TempId};
 use super::gen::{rank_type, CallRoute, CaptureArgument, CtorArguments, CtorDefault, DefaultRoute, ExtensionRoute, Extras, FieldRoute, Fit, Gen, GetterArgument, Held, HeldIn, NewRoute, PassedCapture, Referenced, ReturnTarget, Site, StaticCallRoute, StaticRoute, SuperArguments, ThisValue, ViaArguments, ViaRoute};
-use super::lifted::{Asker, Placed};
+use super::lifted::Placed;
 use super::names::*;
 use crate::ast::ListRef;
 use crate::classfile::ACC_STATIC;
@@ -2281,7 +2281,7 @@ impl<'a> Gen<'a> {
     /// The method a call of the lifted method of `placed` calls, of the class `owner` and of the shape `lifted` the
     /// lowering has: its name by the class's table (`Gen::lifted_entry`), a lookup that queues nothing.
     fn lifted_call_ref(&mut self, placed: Placed, lifted: &LiftedShape, owner: (Rc<str>, bool)) -> Rc<MethodRef> {
-        let (name, _) = self.lifted_entry(placed, Asker::LiftedCallRef, lifted);
+        let (name, _) = self.lifted_entry(placed, lifted);
         lifted_method_ref(name, lifted, owner)
     }
 
