@@ -230,9 +230,12 @@ kept-body-lists 34
 # estimated: kept-body-lists on sixteen CPUs, from its 34 s on eight by its family kept's ratio 0.86 (1 lines)
 kept-body-lists@16 29
 default-getters@16 30
-native-link 74
-# measured: native-link on sixteen CPUs, in the gates of 25 Nov that preceded these rows
-native-link@16 67
+# estimated: native-link with its null-check classification, from its rows of 74 s on eight CPUs and 67 s on sixteen
+# by the ratio 3.3 of one run of it to one without it on one machine at load 24 (343 s, its two lowerings of a
+# listing and its classifier one after another, against 103 s); an upper bound, the suite since running them at once;
+# the next gate with --record writes the measured rows
+native-link 244
+native-link@16 221
 nir 2
 # estimated: nir on sixteen CPUs, from its 1 s on eight by every measured line's ratio 0.89 (17 lines)
 nir@16 1
@@ -272,7 +275,7 @@ interp@guest 35
 java-sources@guest 28
 mill-test-verb@guest 41
 native-build@guest 237
-native-link@guest 98
+native-link@guest 323
 parser@guest 26
 reference-test-verb@guest 20
 scala3-macros-interp@guest 2

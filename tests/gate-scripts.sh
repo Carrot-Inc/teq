@@ -3253,6 +3253,13 @@ check "builtin-receiver-extensions: the table's templates and its judge's plante
 check "block-object-imports: the table's templates and its judge's planted tables judged as they must be" "$work/block-object-imports.log" \
   eval 'python3 tests/support/block_object_imports.py --self-test > "$work/block-object-imports.log" 2>&1'
 
+# The judge of the native lowering's listings and modules by teq's null-check rule against Scala Native's
+# (tests/support/null_guards.py, run by tests/native-link.scala): the classifier's, the reconciliation's and the
+# comparison's planted records, and its exit codes and summary lines.
+check "null-guards: the classifier's and its reconciliation's planted records judged as they must be" "$work/null-guards.log" \
+  eval 'python3 -I -B tests/support/null_guards.py --self-test > "$work/null-guards.log" 2>&1 &&
+    grep -q -x "null_guards self-test: [0-9]* planted records judged as planted" "$work/null-guards.log"'
+
 fi
 unit_close
 check "units: each unit within its bound (three times its weight, by the CPUs of its machine, 180 s at least)" "$work/unit-bounds.log" \

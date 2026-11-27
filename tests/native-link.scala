@@ -1,18 +1,25 @@
 //> using file ../tools/script
+//> using file support/null-guards-judge.scala
 // Tests of the native link, its lowering and its LLVM IR: the program of tests/nir/fixtures (main
 // class fix.Shapes, written by Scala Native's compiler plugin; tests/nir/README) linked against the
-// jars of Scala Native that tests/nir/digests.txt names. What `teq nir --link` and `teq nir --lower`
-// print and the modules `teq nir --lower --ll=<directory>` writes have to have the SHA-256 that
+// jars of Scala Native that tests/nir/digests.txt names. What `teq nir --link` prints, and what
+// `teq nir --lower --null-guards=scala-native` prints and writes with --ll=<directory> (the lowering
+// by Scala Native's own rule of where a null check is needed), have to have the SHA-256 that
 // tests/native-link/digests.txt records of Scala Native's own output, once as its build decides on
 // threads and once with threads; and of each first output the definitions of the classes named
 // below have to be, byte for byte, the ones kept whole in tests/native-link/linked.txt, lowered.txt
-// and ll.txt (tests/native-link/README says what wrote the expectations). The same of the programs
+// and ll.txt (tests/native-link/README says what wrote the expectations). Each lowered listing and
+// module of teq's own rule (`teq nir --lower`, which checks a value again where a way into its block
+// did not check it) has to be the reference's or differ from it only by added null checks, as
+// tests/support/null_guards.py judges them, every listing and module judged; the two rules' lowerings of a
+// cell run at once, and the classifier beside the next cells' lowerings. The same of the programs
 // of tests/native-link/collisions, whose names share a hash, and of tests/native-link/directories,
 // whose sources lie in directories of one hash (their READMEs). Each digests file's records are read
 // whole, a line of another form failing, and have to cover every cell of their program, each kind
 // by name. The program of tests/native-link/diamond is linked at each depth its digests.txt names,
-// within a bound. The judges of the digests, the modules and the links are held to planted records
-// first, a self-test that needs no jar (`judgesSelfTest`, `linksSelfTest`). A link reads every jar:
+// within a bound. The judges of the digests, the modules, the links and the classifier's verdicts
+// are held to planted records first, a self-test that needs no jar (`judgesSelfTest`,
+// `linksSelfTest`, `guardsSelfTest`; the classifier runs its own each time). A link reads every jar:
 // where one is not in the coursier cache (tests/support/jars.sh names them for the fetch) the suite
 // says so on a skip line and passes nothing. Run from the repository's root:
 // `./teq interp tests/native-link.scala [-- --teq <binary>]`, the compiler `--teq`, else $TEQ,
@@ -352,16 +359,46 @@ def linksSelfTest(): (Int, Int, List[String]) =
   var pass = 0
   var fail = 0
 
-  // The judges of the modules and the checks of the links, refusals and the diamond first, held to planted records
-  // (`judgesSelfTest`, `linksSelfTest`).
-  val (judgesPlanted, judgesSound, judgesWrong) = judgesSelfTest()
-  val (linksPlanted, linksSound, linksWrong) = linksSelfTest()
-  if judgesWrong.isEmpty && linksWrong.isEmpty then
+  // The judges of the modules, the checks of the links, refusals and the diamond and the judge of the classifier's
+  // verdicts first, held to planted records (`judgesSelfTest`, `linksSelfTest`, `guardsSelfTest`).
+  val selfTests = List(judgesSelfTest(), linksSelfTest(), guardsSelfTest())
+  val selfWrong = selfTests.flatMap(_._3)
+  if selfWrong.isEmpty then
     pass += 1
-    println(s"native-link self-test: ${judgesPlanted + linksPlanted} planted records failed, ${judgesSound + linksSound} sound ones passed")
+    println(s"native-link self-test: ${selfTests.map(_._1).sum} planted records failed, ${selfTests.map(_._2).sum} sound ones passed")
   else
     fail += 1
-    (judgesWrong ++ linksWrong).foreach(p => println(s"FAIL native-link self-test: $p"))
+    selfWrong.foreach(p => println(s"FAIL native-link self-test: $p"))
+
+  // The listings and modules of teq's own null-check rule, each against the reference's (`guardsOf`): how many were
+  // equal, how many differed by added null checks and by how many checks, and how many were neither or not judged.
+  var guardsEqual = 0
+  var guardsAdded = 0
+  var guardsChecks = 0
+  var guardsOtherwise = 0
+  // The classifier runs beside the lowerings, a few runs at once, each judged in its turn, the oldest first, the last
+  // ones at the end (`judgeAll`).
+  val judgesAtOnce = 4
+  val judging = scala.collection.mutable.Queue.empty[(String, Sh.Result, Sh.Running, Int)]
+  def nullGuards(label: String, reference: Path, written: Sh.Result, default: Path, listings: Int): Unit =
+    if judging.length >= judgesAtOnce then judgeOldest()
+    judging.enqueue((label, written, Sh("python3", "-I", "-B", "tests/support/null_guards.py", reference.toString, default.toString).mergeErr.timeout(600).check(false).spawn(), listings))
+  def judgeAll(): Unit = while judging.nonEmpty do judgeOldest()
+  def judgeOldest(): Unit =
+    val (label, written, running, listings) = judging.dequeue()
+    val judged = running.await()
+    guardsOf(written.status, written.timedOut, judged.status, judged.timedOut, judged.out, listings) match
+      case Right(guards) =>
+        pass += 1
+        guardsEqual += guards.equal
+        guardsAdded += guards.added
+        guardsChecks += guards.checks
+      case Left(problems) =>
+        fail += 1
+        guardsOtherwise += listings
+        println(s"FAIL $label, teq's null-check rule against Scala Native's: ${problems.mkString("; ")}")
+        judged.lines.filter(l => l.startsWith("UNCLASSIFIED") || l.startsWith("UNRECONCILED") || l.startsWith("null_guards: cannot")).take(8).foreach(l => println(s"  $l"))
+        written.err.linesIterator.take(5).foreach(println)
 
   // The class path: the program's own files, then Scala Native's jars.
   val caches = Option(System.getenv("COURSIER_CACHE")).filter(_.nonEmpty).toList ++
@@ -376,10 +413,17 @@ def linksSelfTest(): (Int, Int, List[String]) =
     // The classes whose definitions are kept whole: a case class, a class of which the link keeps
     // little, a trait with a method of its own, a lambda's class and a module of C functions.
     val shown = Set("fix.Circle", "fix.Counters", "fix.Named", "fix.Shapes$$$Lambda$1", "fix.libm$")
-    def runOn(main: String, path: String, verb: String, threads: String, more: String*) =
+    def commandOn(main: String, path: String, verb: String, threads: String, more: String*) =
       val options = if threads == "detected" then Nil else List(s"--threads=$threads")
-      Sh((List(teq, "nir", verb, main, path, "--triple=x86_64-unknown-linux-musl") ++ options ++ more)*).timeout(300).check(false).run()
+      Sh((List(teq, "nir", verb, main, path, "--triple=x86_64-unknown-linux-musl") ++ options ++ more)*).timeout(300).check(false)
+    def runOn(main: String, path: String, verb: String, threads: String, more: String*) = commandOn(main, path, verb, threads, more*).run()
     def run(verb: String, threads: String, more: String*) = runOn("fix.Shapes", classPath, verb, threads, more*)
+    // teq's own rule's lowering, started before the reference's and waited for after it, the two running at once.
+    def ownLowering(main: String, path: String, threads: String, more: String*): Sh.Running = commandOn(main, path, "--lower", threads, more*).spawn()
+    def tempDir(): Path =
+      val dir = Files.createTempDirectory("teq-native-link.")
+      Script.atExit(Sh.remove(dir))
+      dir
     // The text a failure is read against: the named classes' definitions in the first output.
     def keptWhole(label: String, text: String, kept: String, classes: Set[String] = shown): Unit =
       val cut = Files.createTempFile("teq-native-link.", ".txt")
@@ -406,7 +450,8 @@ def linksSelfTest(): (Int, Int, List[String]) =
     val expected = recordsOf(Paths.get("tests/native-link/digests.txt"), Some("fix.Shapes"), Paths.get("tests/nir/fixtures"), Nil)
     for r <- expected if r.kind != "ll" do
       val label = s"${r.kind}, threads ${r.threads}"
-      val listing = run(if r.kind == "linked" then "--link" else "--lower", r.threads)
+      val own = Option.when(r.kind == "lowered")(ownLowering("fix.Shapes", classPath, r.threads))
+      val listing = if r.kind == "linked" then run("--link", r.threads) else run("--lower", r.threads, ScalaNativeGuards)
       val bytes = Files.readAllBytes(listing.outFile)
       if listing.ok && sha256(bytes) == r.sha then pass += 1
       else
@@ -414,6 +459,9 @@ def linksSelfTest(): (Int, Int, List[String]) =
         println(s"FAIL $label: exit code ${listing.status}, ${lineCount(bytes)} lines of sha256 ${sha256(bytes)}, Scala Native's ${r.lines} of ${r.sha}")
         listing.err.linesIterator.take(5).foreach(println)
       if r.threads == "detected" && listing.ok then keptWhole(label, listing.outAll(), s"tests/native-link/${r.kind}.txt")
+      for running <- own do
+        val written = running.await()
+        nullGuards(label, listing.outFile, written, written.outFile, 1)
 
     // The modules a run wrote, against the manifest (`moduleProblems`) and whatever more is asked of them; the
     // modules' text, in their names' order, for what is kept whole.
@@ -426,13 +474,15 @@ def linksSelfTest(): (Int, Int, List[String]) =
         problems.take(8).foreach(p => println(s"  $p"))
         written.err.linesIterator.take(5).foreach(println)
       Option.when(written.ok)(filesIn(dir).sortBy(_.stripSuffix(".ll")).map(name => Files.readString(dir.resolve(name))).mkString)
+    // The modules of teq's own null-check rule are judged each against the reference's module of its name (`nullGuards`).
     for (threads, modules) <- expected.filter(_.kind == "ll").groupBy(_.threads).toList.sortBy(_._1) do
       val label = s"ll, threads $threads"
-      val dir = Files.createTempDirectory("teq-native-link.")
-      Script.atExit(Sh.remove(dir))
-      val written = run("--lower", threads, s"--ll=$dir")
+      val (dir, ownDir) = (tempDir(), tempDir())
+      val own = ownLowering("fix.Shapes", classPath, threads, s"--ll=$ownDir")
+      val written = run("--lower", threads, s"--ll=$dir", ScalaNativeGuards)
       val text = modulesOf(label, written, dir, modules.map(r => (r.sha, r.lines, r.module)))
       if threads == "detected" then text.foreach(keptWhole(label, _, "tests/native-link/ll.txt"))
+      nullGuards(label, dir, own.await(), ownDir, modules.length)
 
     // Programs of class paths of their own (tests/native-link/<fixture>/nir before the jars), each one's link, lowering
     // and modules byte for byte what its digests.txt records of Scala Native's (its records and their cells judged as
@@ -459,7 +509,8 @@ def linksSelfTest(): (Int, Int, List[String]) =
       val records = recordsOf(root.resolve("digests.txt"), None, root.resolve("nir"), owners)
       for r <- records if r.kind != "ll" do
         val label = s"${r.main} ${r.kind}, threads ${r.threads}"
-        val listing = runOn(r.main, path, if r.kind == "linked" then "--link" else "--lower", r.threads)
+        val own = Option.when(r.kind == "lowered")(ownLowering(r.main, path, r.threads))
+        val listing = if r.kind == "linked" then runOn(r.main, path, "--link", r.threads) else runOn(r.main, path, "--lower", r.threads, ScalaNativeGuards)
         val bytes = Files.readAllBytes(listing.outFile)
         if listing.ok && sha256(bytes) == r.sha then pass += 1
         else
@@ -470,14 +521,18 @@ def linksSelfTest(): (Int, Int, List[String]) =
           val pkg = r.main.substring(0, r.main.lastIndexOf('.'))
           val own = filesIn(root.resolve("nir").resolve(pkg.replace('.', '/'))).map(f => pkg + "." + f.stripSuffix(".nir")).toSet
           keptWhole(label, listing.outAll(), root.resolve(s"${r.main}.txt").toString, own)
+        for running <- own do
+          val written = running.await()
+          nullGuards(label, listing.outFile, written, written.outFile, 1)
       for ((main, threads), modules) <- records.filter(_.kind == "ll").groupBy(r => (r.main, r.threads)).toList.sortBy(_._1) do
         val manifest = modules.map(r => (r.sha, r.lines, r.module))
         for round <- 1 to runs do
-          val dir = Files.createTempDirectory("teq-native-link.")
-          Script.atExit(Sh.remove(dir))
-          val written = runOn(main, path, "--lower", threads, s"--ll=$dir")
+          val (dir, ownDir) = (tempDir(), tempDir())
+          val own = ownLowering(main, path, threads, s"--ll=$ownDir")
+          val written = runOn(main, path, "--lower", threads, s"--ll=$dir", ScalaNativeGuards)
           val label = if runs == 1 then s"$main ll, threads $threads" else s"$main ll, threads $threads, run $round of $runs"
           modulesOf(label, written, dir, manifest, ownerProblems(dir, owners))
+          nullGuards(label, dir, own.await(), ownDir, modules.length)
     // Programs whose names share a String.hashCode (tests/native-link/collisions/README): a class's virtual methods
     // and a trait's methods in the order of the set of its called signatures, two of one hash in the order the link
     // met them.
@@ -556,6 +611,8 @@ def linksSelfTest(): (Int, Int, List[String]) =
         case problems =>
           fail += 1
           println(s"FAIL the diamond of depth $depth, $whose's listing: ${problems.mkString("; ")}")
+    judgeAll()
+    println(s"native-link: $guardsEqual equal, $guardsAdded by added null checks ($guardsChecks checks), $guardsOtherwise otherwise")
 
   println(s"native-link: $pass passed, $fail failed")
   Script.exit(if fail == 0 then 0 else 1)

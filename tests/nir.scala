@@ -63,7 +63,8 @@ import java.nio.file.{Files, Path, Paths}
       println(s"FAIL teq nir ${(verb ++ List("tests/nir/fixtures", "fix/Shape.nir")).mkString(" ")}: exit code ${r.status}, ${r.out.take(120)}")
   // An option in a filter's place is no filter: each verb that takes one prints the usage, exits 2 and lists
   // nothing, so that an option the verb does not take is never read as a filter that selects no file.
-  for (verb, option) <- List(Nil -> "--verify", List("--verify") -> "--rewrite", List("--rewrite") -> "--threads=true") do
+  for (verb, option) <- List(Nil -> "--verify", List("--verify") -> "--rewrite", List("--rewrite") -> "--threads=true",
+      List("--verify") -> "--null-guards=scala-native") do
     val misused = Sh((List(teq, "nir") ++ verb ++ List("tests/nir/fixtures", option))*).timeout(60).check(false).run()
     if misused.status == 2 && misused.out.isEmpty && misused.err.startsWith("usage: teq nir") then pass += 1
     else

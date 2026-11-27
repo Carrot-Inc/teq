@@ -10,8 +10,20 @@ def afterBranch(box: Box, c: Boolean, d: Boolean): Int =
   if d then println("after the branch")
   box.v
 
+def reorder(p: Box, q: Box, c: Boolean): Unit =
+  try
+    if c then throw IllegalStateException()
+    println(p.v)
+  catch
+    case _: IllegalStateException =>
+      println(p.v)
+      try println(q.v) catch case _: IllegalStateException => println("z")
+
 @main def nullguard(): Unit =
   twice(null)
   twice(Box2(1))
   try println(afterBranch(null, false, true)) catch case _: NullPointerException => println("caught after the branch")
   println(afterBranch(Box(2), true, true))
+  reorder(Box2(1), Box2(2), false)
+  reorder(Box2(1), Box2(2), true)
+  try reorder(null, Box(2), true) catch case _: NullPointerException => println("caught in a catch case")

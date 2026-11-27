@@ -16,9 +16,19 @@ digests.txt   the SHA-256 and the lines of what Scala Native's own tools (tools_
                          but __buildInfo.ll, which this build leaves empty and teq does not write;
                          where directories share a hash, Scala Native writes their modules into one
                          file and teq numbers them (tests/native-link/directories, its README)
-              They are Scala Native's bytes, never teq's: `teq nir --link` and `teq nir --lower`
-              have to print the same, and `teq nir --lower --ll=<directory>` has to write the same
-              modules, no other.
+              They are Scala Native's bytes, never teq's: `teq nir --link` and `teq nir --lower
+              --null-guards=scala-native` have to print the same, and the latter with
+              --ll=<directory> has to write the same modules, no other. The option places null checks
+              only where Scala Native places them, for comparing with its output; teq's default (the
+              lowering without it, src/native/lower.rs, `checked_into`) adds more, checking a value
+              again where a way into its block did not check it, so its listings and modules may
+              differ from these by added null checks and nothing else, as tests/support/null_guards.py
+              judges each: every other line the reference's in order, but for the null pointer's slow
+              paths, which the lowering writes one for each handler, in the order of their first use,
+              so that an added check may bring a path forward; the reference's paths each the
+              default's of its label, line for line, the default's others reached by added checks
+              alone, each listing's in one run, which stands where the reference's stands, and in the
+              order of their first use.
 linked.txt    of the first link's dump, the definitions of the classes tests/native-link.scala
               names, whole and as they stand there: what a failure is read against
 lowered.txt   the same of the first lowered dump

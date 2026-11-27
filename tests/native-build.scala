@@ -1,10 +1,14 @@
 //> using file ../tools/script
+//> using file support/null-guards-judge.scala
 // Tests of the native build: `teq nir --link <main> <class path> --build=<executable>` over NIR that Scala Native's
 // compiler plugin wrote (tests/native-build/fixtures: hello world, the nine programs of tests/cases/bench_*.scala, a
 // program reading a null receiver where a path into the read checked it and another did not, and the renamed fixture;
 // tests/native-build/README says how), linked against the jars of Scala Native 0.5.12 that tests/nir/digests.txt
 // names, built by zig into a static x86_64-linux-musl executable and run: its output has to be what scalac's JVM
-// build prints (tests/native-build/hello.expected, nullguard.expected, tests/cases/bench_<name>.expected). The commands
+// build prints (tests/native-build/hello.expected, nullguard.expected, tests/cases/bench_<name>.expected); the null
+// receiver's program lowered by teq's own null-check rule (its listing and its modules) has to be what the rule of
+// Scala Native's (--null-guards=scala-native) lowers or differ from it only by added null checks, as
+// tests/support/null_guards.py judges it (the judge of tests/native-link.scala, held to its planted verdicts). The commands
 // hello world's build gives zig have to be Scala Native's own build's (tests/native-build/commands.txt). A build
 // compiles every C, C++ and assembly source again and takes the program's LLVM IR modules from zig's cache: a second
 // build has to compile every source again and no module, and a zig of another build that prints the same version is
@@ -405,6 +409,41 @@ def builtFiles(work: Path): Vector[Path] = files(work).filterNot(f => work.relat
         built.out.linesIterator.take(20).foreach(println)
       else if runs(name, expected) then pass += 1
       else fail += 1
+
+    // The pinned case's lowered listing and modules by teq's own null-check rule, each against the reference rule's
+    // (`teq nir --lower`, and with --null-guards=scala-native), judged by tests/support/null_guards.py as
+    // tests/native-link.scala judges its programs' (`guardsOf`, held to its planted verdicts first): its `reorder`
+    // brings a null pointer's slow path forward, an added check in a catch case being the first use of the path
+    // outside any `try`.
+    val judgeWrong = guardsSelfTest()._3
+    val nullguardPath = (Paths.get("tests/native-build/fixtures/nullguard").toAbsolutePath.toString :: jars).mkString(separator)
+    def lowerNullguard(more: String*) =
+      Sh((List(teq, "nir", "--lower", "nullguard", nullguardPath, "--triple=x86_64-unknown-linux-musl") ++ more)*).timeout(300).check(false).run()
+    val lowered = out.resolve("nullguard-lowered")
+    Sh.remove(lowered)
+    val (referenceDir, ownDir) = (lowered.resolve("reference"), lowered.resolve("own"))
+    val referenceListing = lowerNullguard(ScalaNativeGuards)
+    val ownListing = lowerNullguard()
+    val referenceModules = lowerNullguard(ScalaNativeGuards, s"--ll=$referenceDir")
+    val ownModules = lowerNullguard(s"--ll=$ownDir")
+    def classified(reference: Path, own: Path) =
+      Sh("python3", "-I", "-B", "tests/support/null_guards.py", reference.toString, own.toString).mergeErr.timeout(600).check(false).run()
+    val modules = (files(referenceDir) ++ files(ownDir)).map(_.getFileName.toString).distinct.length
+    val judged = List(
+      ("its lowered listing", classified(referenceListing.outFile, ownListing.outFile), ownListing, 1),
+      ("its modules", classified(referenceDir, ownDir), ownModules, modules))
+    val verdicts = judged.map((what, ran, written, listings) => (what, ran, guardsOf(written.status, written.timedOut, ran.status, ran.timedOut, ran.out, listings)))
+    val referenceFailed = List("listing" -> referenceListing, "modules" -> referenceModules).collect {
+      case (what, ran) if !ran.ok || ran.timedOut => s"the reference rule's $what: exit code ${ran.status}${if ran.timedOut then ", timed out" else ""}" }
+    val problems = judgeWrong ++ referenceFailed ++ verdicts.collect { case (what, _, Left(why)) => s"$what: ${why.mkString("; ")}" }
+    if problems.isEmpty then
+      pass += 1
+      val said = verdicts.collect { case (what, _, Right(g)) => s"$what ${g.equal} equal, ${g.added} by added null checks (${g.checks} checks)" }
+      println(s"native-build nullguard, teq's null-check rule against Scala Native's: ${said.mkString("; ")}; 0 otherwise")
+    else
+      fail += 1
+      println(s"FAIL nullguard, teq's null-check rule against Scala Native's: ${problems.mkString("; ")}")
+      verdicts.flatMap(_._2.lines).filter(l => l.startsWith("UNCLASSIFIED") || l.startsWith("UNRECONCILED") || l.startsWith("null_guards: cannot")).take(8).foreach(l => println(s"  $l"))
 
     // The commands hello world's build gave zig, as its `keeping` zig kept them, its work directory written `<work>`: the
     // class path's C code and the program's modules, each object's arguments without the build's own `-MD -MF <file>`, in

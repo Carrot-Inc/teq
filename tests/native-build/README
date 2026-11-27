@@ -5,7 +5,9 @@ fixtures/<name>/  the .nir files Scala Native 0.5.12's compiler plugin wrote for
                   classes directory) for eleven programs: hello, of src/hello.scala, and adts, boxing, closures,
                   codec, collections, dispatch, numeric, strings and toplevel, of tests/cases/bench_<name>.scala;
                   and nullguard, of src/nullguard.scala as it stands, no directive in the file (`scala-cli --power
-                  compile --native --native-version 0.5.12 -S 3.8.4`), so that its positions are the file's lines
+                  compile --native --native-version 0.5.12 -S 3.8.4`), so that its positions are the file's lines; a
+                  compile of it again writes the same files but nullguard$package.nir, the static forwarders of its
+                  top-level definitions, whose definitions it may write in another order
 fixtures/renamed/ the .nir files of src/renamed (package renamed), written the same way: renamed.First, which reaches
                   B (AaBB/B.scala) alone, and renamed.Second, which reaches A (AaAa/A.scala) too, of directories of one
                   String.hashCode (1f0080), so that Second's build gives B's module another name; renamed-first.expected
@@ -15,8 +17,8 @@ hello.expected    what src/hello.scala prints when scalac 3.8.4 compiles it for 
                   hold, which scalac's JVM build printed too
 nullguard.expected what src/nullguard.scala prints the same way: each read of its null receiver throws a
                   NullPointerException, where a check for null came first on one path into the read (in an
-                  earlier `try`, on a branch) and not on another; Scala Native's own build of it (its optimizer on)
-                  dies of signal 11 instead
+                  earlier `try`, on a branch, in the `try` whose catch case reads it) and not on another; Scala
+                  Native's own build of it (its optimizer on) dies of signal 11 instead
 commands.txt      the commands Scala Native's own build (tools_3 0.5.12, a debug build with the immix collector,
                   its optimizer off, for x86_64-unknown-linux-musl, hello's directory and the jars of the suite's
                   class path) ran to compile hello's C code and LLVM IR, as its log lists them, one a line in the
