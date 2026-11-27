@@ -2,13 +2,14 @@
 //> using file support/null-guards-judge.scala
 // Tests of the native build: `teq nir --link <main> <class path> --build=<executable>` over NIR that Scala Native's
 // compiler plugin wrote (tests/native-build/fixtures: hello world, the nine programs of tests/cases/bench_*.scala, a
-// program reading a null receiver where a path into the read checked it and another did not, and the renamed fixture;
-// tests/native-build/README says how), linked against the jars of Scala Native 0.5.12 that tests/nir/digests.txt
-// names, built by zig into a static x86_64-linux-musl executable and run: its output has to be what scalac's JVM
-// build prints (tests/native-build/hello.expected, nullguard.expected, tests/cases/bench_<name>.expected); the null
-// receiver's program lowered by teq's own null-check rule (its listing and its modules) has to be what the rule of
-// Scala Native's (--null-guards=scala-native) lowers or differ from it only by added null checks, as
-// tests/support/null_guards.py judges it (the judge of tests/native-link.scala, held to its planted verdicts). The commands
+// program reading a null receiver where a path into the read checked it and another did not and synchronizing on
+// null, and the renamed fixture; tests/native-build/README says how), linked against the jars of Scala Native 0.5.12
+// that tests/nir/digests.txt names, built by zig into a static x86_64-linux-musl executable and run: its output has
+// to be what scalac's JVM build prints (tests/native-build/hello.expected, nullguard.expected,
+// tests/cases/bench_<name>.expected); the null receiver's program lowered by teq's own null-check rule (its listing
+// and its modules) has to be what the rule of Scala Native's (--null-guards=scala-native) lowers or differ from it
+// only by added null checks, as tests/support/null_guards.py judges it (the judge of tests/native-link.scala, held to
+// its planted verdicts). The commands
 // hello world's build gives zig have to be Scala Native's own build's (tests/native-build/commands.txt). A build
 // compiles every C, C++ and assembly source again and takes the program's LLVM IR modules from zig's cache: a second
 // build has to compile every source again and no module, and a zig of another build that prints the same version is

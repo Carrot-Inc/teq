@@ -10,7 +10,8 @@
 // below have to be, byte for byte, the ones kept whole in tests/native-link/linked.txt, lowered.txt
 // and ll.txt (tests/native-link/README says what wrote the expectations). Each lowered listing and
 // module of teq's own rule (`teq nir --lower`, which checks a value again where a way into its block
-// did not check it) has to be the reference's or differ from it only by added null checks, as
+// did not check it, and a monitor's receiver before it is entered) has to be the reference's or differ
+// from it only by added null checks, as
 // tests/support/null_guards.py judges them, every listing and module judged; the two rules' lowerings of a
 // cell run at once, and the classifier beside the next cells' lowerings. The same of the programs
 // of tests/native-link/collisions, whose names share a hash, and of tests/native-link/directories,

@@ -11,3 +11,11 @@ after the branch
 101
 102
 caught in a catch case
+caught a monitor of null
+7
+caught in the try
+locked
+finally
+caught after the finally
+locked
+finally

@@ -17,8 +17,9 @@ hello.expected    what src/hello.scala prints when scalac 3.8.4 compiles it for 
                   hold, which scalac's JVM build printed too
 nullguard.expected what src/nullguard.scala prints the same way: each read of its null receiver throws a
                   NullPointerException, where a check for null came first on one path into the read (in an
-                  earlier `try`, on a branch, in the `try` whose catch case reads it) and not on another; Scala
-                  Native's own build of it (its optimizer on) dies of signal 11 instead
+                  earlier `try`, on a branch, in the `try` whose catch case reads it) and not on another, and so
+                  does `synchronized` on null (in a `try` that catches it, in a `try` with a `finally`); Scala
+                  Native's own build of it (its optimizer on) dies of signal 11 at the first of those reads instead
 commands.txt      the commands Scala Native's own build (tools_3 0.5.12, a debug build with the immix collector,
                   its optimizer off, for x86_64-unknown-linux-musl, hello's directory and the jars of the suite's
                   class path) ran to compile hello's C code and LLVM IR, as its log lists them, one a line in the

@@ -19,6 +19,17 @@ def reorder(p: Box, q: Box, c: Boolean): Unit =
       println(p.v)
       try println(q.v) catch case _: IllegalStateException => println("z")
 
+def locked(o: AnyRef): Int = o.synchronized(7)
+
+def lockedInTry(o: AnyRef): Unit =
+  try
+    o.synchronized(7)
+    println("locked")
+  catch case _: NullPointerException => println("caught in the try")
+
+def lockedInTryFinally(o: AnyRef): Unit =
+  try o.synchronized(println("locked")) finally println("finally")
+
 @main def nullguard(): Unit =
   twice(null)
   twice(Box2(1))
@@ -27,3 +38,9 @@ def reorder(p: Box, q: Box, c: Boolean): Unit =
   reorder(Box2(1), Box2(2), false)
   reorder(Box2(1), Box2(2), true)
   try reorder(null, Box(2), true) catch case _: NullPointerException => println("caught in a catch case")
+  try println(locked(null)) catch case _: NullPointerException => println("caught a monitor of null")
+  println(locked("m"))
+  lockedInTry(null)
+  lockedInTry("m")
+  try lockedInTryFinally(null) catch case _: NullPointerException => println("caught after the finally")
+  lockedInTryFinally("m")

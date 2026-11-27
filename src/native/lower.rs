@@ -68,6 +68,8 @@ struct Names {
     /// lowering itself implements.
     linked_classes: Global,
     intrinsics: Global,
+    /// The runtime's `enterMonitor`, which Scala Native's plugin calls for `synchronized`.
+    enter_monitor: Global,
 }
 
 /// What a check branches to when it fails: a call of one of the runtime's throwers, the place of
@@ -181,6 +183,11 @@ impl Names {
             load_sig: cx.generated_sig(b"load"),
             linked_classes: cx.top("scala.scalanative.runtime.LinkedClassesRepository$"),
             intrinsics: cx.top("scala.scalanative.runtime.Intrinsics$"),
+            enter_monitor: {
+                let sig = cx.method_sig("enterMonitor", &[rt.object_ty, unit], SigScope::PublicStatic);
+                let owner = cx.top("scala.scalanative.runtime.package");
+                cx.member(owner, sig)
+            },
         }
     }
 }
@@ -208,10 +215,11 @@ enum Edge {
 /// The rule that says a value is checked for null on entering a block (`Lowering::checked_into`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum NullGuards {
+    /// teq's: sound across joins and handlers, and a monitor's receiver checked too.
     #[default]
     Sound,
     /// Scala Native 0.5.12's own rule, which `teq nir --lower` alone takes: the reference the
-    /// lowered listings are held to.
+    /// lowered listings are held to. It writes no check before a monitor is entered.
     ScalaNative,
 }
 
@@ -1333,7 +1341,20 @@ impl<'a> Lowering<'a> {
                         let high = self.emit_plain(Op::Bin { bin: if signed { Bin::Ashr } else { Bin::Lshr }, ty: wide, l: product, r: Val::Int(64) });
                         self.let_as(n, Op::Conv { conv: Conv::Trunc, ty: rt.long, value: high }, Next::None);
                     }
-                    None => self.call_op(n, *ty, ptr, args)?,
+                    None => {
+                        // The runtime's enterMonitor checks nothing (nativelib 0.5.12,
+                        // scala/scalanative/runtime/package.scala 25-30) and Scala Native's
+                        // lowering writes no check before it, so `synchronized` on null would run
+                        // its body: teq's rule checks the receiver as the JVM's monitorenter does.
+                        // The check spares no later one, so that every check of Scala Native's
+                        // listing stays in teq's (docs/NATIVE.md, "The lowered listings' oracle").
+                        if self.null_guards == NullGuards::Sound && matches!(ptr, Val::Global(name, _) if *name == self.names.enter_monitor) {
+                            if let Some(obj) = args.first() {
+                                self.check_not_null(obj, false)?;
+                            }
+                        }
+                        self.call_op(n, *ty, ptr, args)?
+                    }
                 }
             }
             Op::Comp { comp, ty, l, r } => {
@@ -1468,6 +1489,12 @@ impl<'a> Lowering<'a> {
     }
 
     fn guard_not_null(&mut self, obj: &Val) -> Res<()> {
+        self.check_not_null(obj, true)
+    }
+
+    /// A check of `obj` for null where the rule does not already know it checked; `recorded`: whether the
+    /// rule may then take it as checked, so that a later check of it is spared.
+    fn check_not_null(&mut self, obj: &Val, recorded: bool) -> Res<()> {
         let ty = self.val_ty(obj);
         let never_null = match self.cx.type_of(ty) {
             Type::Unit => true,
@@ -1477,7 +1504,9 @@ impl<'a> Lowering<'a> {
         if never_null || self.is_null_guarded(obj) {
             return Ok(());
         }
-        self.guarded.entry(self.current_block).or_default().push(obj.clone());
+        if recorded {
+            self.guarded.entry(self.current_block).or_default().push(obj.clone());
+        }
         let v = self.gen_val(obj)?;
         let not_null = self.fresh();
         let is_null = self.slow_path(SlowPath::NullPointer);
