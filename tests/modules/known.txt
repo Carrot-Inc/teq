@@ -91,6 +91,121 @@ valueclasssuperequals over-scalac-js  scalac pickles a value class's super call 
 traitclassparent scalac-run  teq's products pickle a trait whose class parent comes through another trait (`trait Quiet extends NoStackTrace`) with `Object` first, where dotty's `Namer.ensureFirstIsClass` puts that class (`Throwable`): scalac, compiling the downstream over them, gives `class Hushed extends tcpa.Quiet` the superclass Object, and its run fails the verifier ("Type 'tcpb/Hushed' ... is not assignable to 'java/lang/Throwable'"); teq reads its own pickle right
 localsecondarydefault bundle  the products' anonymous class has its superclass's call first, as scalac's pickle holds it, its arguments passed at the creation; the whole build's has the trait first and makes the call in its constructor: one program, two bundles
 localsecondarydefault readtasty-a  scalac reads teq's pickle of a local object's member class through the object's ThisType (`new LO.C`) and finds no constructor there
+fpcaseobjectdefaults positions  A2's normalisation: in a2/O.tasty, scalac's parent node `SELECT 85 .. 85` is not in teq's pickle (the case object writer writes `Object()` and its parents as types)
+fpcaseobjectgeneric positions  A2's normalisation: in a2/O.tasty, scalac's parent node `APPLIEDtype 111 .. 111` is not in teq's pickle (the case object writer writes `Object()` and its parents as types)
+fpcaseobjectgeneric bundle  master's own, as genericdefaults bundle: the bundle over the lean products types `C.n`'s `x.size` from the pickle as a library body through scala-library's `Option` (the split's `$isA`, `$seqHash`, `Option$M`)
+fpcaseobjectnoparams positions  A2's normalisation: in a2/O.tasty, scalac's parent node `IDENTtpt 79 .. 80` is not in teq's pickle (the case object writer writes `Object()` and its parents as types)
+fpclassdefaults positions  A2's normalisation: in a2/K.tasty, scalac's parent node `IDENTtpt 89 .. 90` is not in teq's pickle (teq writes the written trait parent after the inserted first parent as a type (TYPEREF))
+fpclassgeneric positions  A2's normalisation: in a2/K.tasty, scalac's parent node `IDENTtpt 115 .. 116` is not in teq's pickle (teq writes the written trait parent after the inserted first parent as a type (TYPEREF))
+fpclassgeneric bundle  master's own, as genericdefaults bundle: the bundle over the lean products types `C.n`'s `x.size` from the pickle as a library body through scala-library's `Option` (the split's `$isA`, `$seqHash`, `Option$M`)
+fpclassnoparams positions  A2's normalisation: in a2/K.tasty, scalac's parent node `IDENTtpt 73 .. 74` is not in teq's pickle (teq writes the written trait parent after the inserted first parent as a type (TYPEREF))
+fpctorforms positions  A2's normalisation: in a2/ByNK.tasty, scalac's parent node `IDENTtpt 439 .. 443` is not in teq's pickle (a trait's parent written as a type; and a type application written again where scalac shares it)
+fpctorforms bundle  master's own, as nesteddefaultssecondary bundle: the bundle over the lean products lowers `Sec`'s secondary constructor as a primary call and an `$init1`
+fpgenericdefaultparents positions  A2's normalisation: in a2/K.tasty, scalac's parent node `IDENTtpt 162 .. 163` is not in teq's pickle (teq writes the written trait parent after the inserted first parent as a type (TYPEREF))
+fpgenericdefaultparents bundle  master's own, as genericdefaults bundle: the bundle over the lean products types `C.n`'s `x.size` from the pickle as a library body through scala-library's `Option` (the split's `$isA`, `$seqHash`, `Option$M`)
+fpgivenclassdefaults classes  master's own: teq's whole build places a top-level given class in its package (`a2.gp`), where scalac and teq's products place it in the file's package object (`a2.A$package$.gp`, scalac's `A$package$gp.class`): b's Run.tasty names it so
+fpgivenclassdefaults subset  the same as classes
+fpgivenclassdefaults check-lean-whole  the same as classes
+fpgivenclassdefaults positions  A2's normalisation: in a2/A$package.tasty, scalac's parent node `APPLY 79 .. 79` is not in teq's pickle (the given template's first parent is `Object()` and its nodes are at 0 .. 0)
+fpgivenclassdefaults bundle  master's own: the JavaScript of a's given class `gp` built from its lean products stores its unused using parameter as a field (`this.k = k`), the whole build's does not
+fpgivenclassgeneric classes  master's own: teq's whole build places a top-level given class in its package (`a2.gp`), where scalac and teq's products place it in the file's package object (`a2.A$package$.gp`, scalac's `A$package$gp.class`): b's Run.tasty names it so
+fpgivenclassgeneric subset  the same as classes
+fpgivenclassgeneric check-lean-whole  the same as classes
+fpgivenclassgeneric positions  A2's normalisation: in a2/A$package.tasty, scalac's parent node `APPLY 105 .. 105` is not in teq's pickle (the given template's first parent is `Object()` and its nodes are at 0 .. 0)
+fpgivenclassgeneric bundle  master's own, as genericdefaults bundle: the bundle over the lean products types `C.n`'s `x.size` from the pickle as a library body through scala-library's `Option` (the split's `$isA`, `$seqHash`, `Option$M`)
+fpgivenclassnoparams classes  master's own: teq's whole build places a top-level given class in its package (`a2.gp`), where scalac and teq's products place it in the file's package object (`a2.A$package$.gp`, scalac's `A$package$gp.class`): b's Run.tasty names it so
+fpgivenclassnoparams subset  the same as classes
+fpgivenclassnoparams check-lean-whole  the same as classes
+fpgivenclassnoparams positions  A2's normalisation: in a2/A$package.tasty, scalac's parent node `APPLY 63 .. 63` is not in teq's pickle (the given template's first parent is `Object()` and its nodes are at 0 .. 0)
+fpgivenclassnoparams bundle  master's own: the JavaScript of a's given class `gp` built from its lean products stores its unused using parameter as a field (`this.k = k`), the whole build's does not
+fpgivenobjectdefaults positions  A2's normalisation: in a2/A$package.tasty, scalac's parent node `APPLY 79 .. 79` is not in teq's pickle (the given template's first parent is `Object()` and its nodes are at 0 .. 0)
+fpgivenobjectgeneric positions  A2's normalisation: in a2/A$package.tasty, scalac's parent node `APPLY 105 .. 105` is not in teq's pickle (the given template's first parent is `Object()` and its nodes are at 0 .. 0)
+fpgivenobjectgeneric bundle  master's own, as genericdefaults bundle: the bundle over the lean products types `C.n`'s `x.size` from the pickle as a library body through scala-library's `Option` (the split's `$isA`, `$seqHash`, `Option$M`)
+fpgivenobjectnoparams positions  A2's normalisation: in a2/A$package.tasty, scalac's parent node `APPLY 63 .. 63` is not in teq's pickle (the given template's first parent is `Object()` and its nodes are at 0 .. 0)
+fpglbcontra positions  A2's normalisation: in a2/BO.tasty, scalac's parent node `TYPEAPPLY 156 .. 156` is not in teq's pickle (the object writer's `Object()` for scalac's GLB first parent)
+fpinlineanondefaults classes  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fpinlineanondefaults subset  the same as classes
+fpinlineanondefaults positions  A2's normalisation: in a2/Api.tasty, scalac's parent node `TYPEREF 166 .. 166` is not in teq's pickle (the stored inline class's parents are `Object(), T`, with no call of the class parent)
+fpinlineanondefaults bundle  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fpinlineanondefaults scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fpinlineanongeneric classes  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fpinlineanongeneric subset  the same as classes
+fpinlineanongeneric positions  A2's normalisation: in a2/Api.tasty, scalac's parent node `TYPEAPPLY 192 .. 192` is not in teq's pickle (the stored inline class's parents are `Object(), T`, with no call of the class parent)
+fpinlineanongeneric bundle  master's own, as genericdefaults bundle: the bundle over the lean products types `C.n`'s `x.size` from the pickle as a library body through scala-library's `Option` (the split's `$isA`, `$seqHash`, `Option$M`); and as inlinesam, the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fpinlineanongeneric scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fpinlineanonnoparams classes  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fpinlineanonnoparams subset  the same as classes
+fpinlineanonnoparams positions  A2's normalisation: in a2/Api.tasty, scalac's parent node `TYPEREF 150 .. 150` is not in teq's pickle (the stored inline class's parents are `Object(), T`, with no call of the class parent)
+fpinlineanonnoparams bundle  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fpinlineanonnoparams scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fpinlinelocaldefaults classes  master's own, as ledgerlocalclass: the classes the expansions of the product's inline bodies make carry the pseudo file's SourceFile and line numbers
+fpinlinelocaldefaults subset  the same as classes
+fpinlinelocaldefaults positions  A2's normalisation: in a2/Api.tasty, scalac's parent node `TYPEREF 113 .. 113` is not in teq's pickle (the stored inline class's parents are `Object(), T`, with no call of the class parent)
+fpinlinelocaldefaults scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fpinlinelocalgeneric classes  master's own, as ledgerlocalclass: the classes the expansions of the product's inline bodies make carry the pseudo file's SourceFile and line numbers
+fpinlinelocalgeneric subset  the same as classes
+fpinlinelocalgeneric positions  A2's normalisation: in a2/Api.tasty, scalac's parent node `TYPEAPPLY 139 .. 139` is not in teq's pickle (the stored inline class's parents are `Object(), T`, with no call of the class parent)
+fpinlinelocalgeneric bundle  master's own, as genericdefaults bundle: the bundle over the lean products types `C.n`'s `x.size` from the pickle as a library body through scala-library's `Option` (the split's `$isA`, `$seqHash`, `Option$M`)
+fpinlinelocalgeneric scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fpinlinelocalnoparams classes  master's own, as ledgerlocalclass: the classes the expansions of the product's inline bodies make carry the pseudo file's SourceFile and line numbers
+fpinlinelocalnoparams subset  the same as classes
+fpinlinelocalnoparams positions  A2's normalisation: in a2/Api.tasty, scalac's parent node `TYPEREF 97 .. 97` is not in teq's pickle (the stored inline class's parents are `Object(), T`, with no call of the class parent)
+fpinlinelocalnoparams scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fpinlinetraitargs classes  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fpinlinetraitargs subset  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's; and b alone the stored inline class's trait argument is lost (the written `Arg(7)` read back as the default 11), and the split prints 11 where the whole build prints scalac's value (A2's normalisation)
+fpinlinetraitargs positions  A2's normalisation: in a2/Api.tasty, scalac's parent node `TYPEREF 151 .. 151` is not in teq's pickle (the stored inline class's parents are `Object(), T`, with no call of the class parent)
+fpinlinetraitargs jvm-run  A2's normalisation: over the products the stored inline class's trait argument is lost (the written `Arg(7)` read back as the default 11), and the split prints 11 where the whole build prints scalac's value
+fpinlinetraitargs js-run  the same as jvm-run
+fpinlinetraitargs interp-run  the same as jvm-run
+fpinlinetraitargs bundle  A2's normalisation: the split's expansion calls `Arg.$default$1()` for the written argument (the stored template's argument lost); and as inlinesam, the class is named at the product's pseudo file's place (master's own)
+fpinlinetraitargs scalac-b  A2's normalisation: scalac's compilation of b over teq's products crashes in Mixin expanding the stored class (`missing parameters for trait Arg`, its pickled parents `Object(), Arg`)
+fpinlinetraitargs scalac-run  the same as scalac-b: scalac wrote no Run to run
+fpladder positions  A2's normalisation, the writer's evidence of a synthesized given (ValueOf; with the generic mirror's evidence in the writer): in a2/Api.tasty, scalac's parent node `APPLY 419 .. 419` is not in teq's pickle (the local class's first parent `Object()` where scalac calls `Mono(using ValueOf[31])`)
+fpobjectdefaults positions  A2's normalisation: in a2/O.tasty, scalac's parent node `SELECT 80 .. 80` is not in teq's pickle (the object writer writes `Object()` and its parents as types)
+fpobjectgeneric positions  A2's normalisation: in a2/O.tasty, scalac's parent node `TYPEAPPLY 106 .. 106` is not in teq's pickle (the object writer writes `Object()` and its parents as types)
+fpobjectgeneric bundle  master's own, as genericdefaults bundle: the bundle over the lean products types `C.n`'s `x.size` from the pickle as a library body through scala-library's `Option` (the split's `$isA`, `$seqHash`, `Option$M`)
+fpobjectnoparams positions  A2's normalisation: in a2/O.tasty, scalac's parent node `IDENTtpt 74 .. 75` is not in teq's pickle (the object writer writes `Object()` and its parents as types)
+fppanonsite classes  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fppanonsite subset  the same as classes
+fppanonsite positions  A2's normalisation: in anon_site/Api.tasty, scalac's parent node `TYPEREF 228 .. 228` is not in teq's pickle (the stored inline class's parents are `Object(), T`, with no call of the class parent)
+fppanonsite scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fpparentdefaulttargs positions  A2's normalisation, a written or synthetic parent's own span: in a2/E.tasty, scalac's parent node `TYPEREF 657 .. 657` is not in teq's pickle (a case class's or an enum's synthetic parent, its span)
+fpparentdefaulttargs bundle  master's own, as genericdefaults bundle: the bundle over the lean products types `C.n`'s `x.size` from the pickle as a library body through scala-library's `Option` (the split's `$isA`, `$seqHash`, `Option$M`)
+fppclasstag positions  A2's normalisation: in classtag/K.tasty, scalac's parent node `IDENTtpt 130 .. 131` is not in teq's pickle (teq writes the written trait parent after the inserted first parent as a type (TYPEREF))
+fppclasstag js-run  master's own: a `ClassTag[List[Int]]` prints `scala.List` for scalac's `scala.collection.immutable.List` on JavaScript and in the interpreter, whole and over the products
+fppclasstag interp-run  the same as js-run
+fppclasstag over-scalac-js  the same as js-run, over scalac's classes
+fppcovariant positions  A2's normalisation: in covariant/K.tasty, scalac's parent node `IDENTtpt 104 .. 105` is not in teq's pickle (teq writes the written trait parent after the inserted first parent as a type (TYPEREF))
+fppinline7 classes  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fppinline7 subset  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's; and b alone the stored inline class's trait argument is lost (the written `Arg(7)` read back as the default 11), and the split prints 11 where the whole build prints scalac's value (A2's normalisation)
+fppinline7 positions  A2's normalisation: in inl/Api.tasty, scalac's parent node `TYPEREF 156 .. 156` is not in teq's pickle (the stored inline class's parents are `Object(), T`, with no call of the class parent)
+fppinline7 jvm-run  A2's normalisation: over the products the stored inline class's trait argument is lost (the written `Arg(7)` read back as the default 11), and the split prints 11 where the whole build prints scalac's value
+fppinline7 js-run  the same as jvm-run
+fppinline7 interp-run  the same as jvm-run
+fppinline7 bundle  A2's normalisation: the split's expansion calls `Arg.$default$1()` for the written argument (the stored template's argument lost); and as inlinesam, the class is named at the product's pseudo file's place (master's own)
+fppinline7 scalac-b  A2's normalisation: scalac's compilation of b over teq's products crashes in Mixin expanding the stored class (`missing parameters for trait Arg`, its pickled parents `Object(), Arg`)
+fppinline7 scalac-run  the same as scalac-b: scalac wrote no Run to run
+fppmirror positions  A2's normalisation, a written or synthetic parent's own span: in mirror/Box.tasty, scalac's parent node `SELECTtpt 67 .. 67` is not in teq's pickle (a case class's or an enum's synthetic parent, its span)
+fppprefix positions  A2's normalisation: in prefix/K.tasty, scalac's parent node `SELECTtpt 119 .. 122` is not in teq's pickle (teq writes the written trait parent after the inserted first parent as a type (TYPEREF))
+fpprovisional positions  A2's normalisation: in a2/Coin.tasty, scalac's parent node `IDENTtpt 360 .. 377` is not in teq's pickle (the provisional superclass (i12722): teq writes a trait's parent as a type)
+fpprovisional scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fptraitparentdefaults positions  A2's normalisation: in a2/T.tasty, scalac's parent node `IDENTtpt 71 .. 72` is not in teq's pickle (teq writes a trait's parent as a type where scalac writes its type tree)
+fptraitparentdefaults scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fptraitparentgeneric classes  a default getter's completed result, the source side's: the whole build types the constructor default getter `C.<init>$default$1[Int]` by its default `None` (a `checkcast` to `None$` before `C.<init>`), the getter read from the pickle by the parameter's `Option` (Namer.inferredResultType)
+fptraitparentgeneric subset  the same as classes
+fptraitparentgeneric positions  A2's normalisation: in a2/T.tasty, scalac's parent node `APPLIEDtpt 92 .. 98` is not in teq's pickle (teq writes a trait's parent as a type where scalac writes its type tree)
+fptraitparentgeneric bundle  master's own, as genericdefaults bundle: the bundle over the lean products types `C.n`'s `x.size` from the pickle as a library body through scala-library's `Option` (the split's `$isA`, `$seqHash`, `Option$M`)
+fptraitparentgeneric scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fptraitparentnoparams positions  A2's normalisation: in a2/T.tasty, scalac's parent node `IDENTtpt 55 .. 56` is not in teq's pickle (teq writes a trait's parent as a type where scalac writes its type tree)
+fptraitparentnoparams scalac-run  A2's normalisation: scalac's consumer over teq's products takes the class parent from teq's pickle, `Object` first where scalac's is the class (`C`, `JsObject`), and the cast fails (ClassCastException)
+fpusingtraits classes  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fpusingtraits subset  the same as classes
+fpusingtraits positions  A2's normalisation and takesImplicitParams with addUsingTraits: in a2/Api.tasty, scalac's parent node `IDENTtpt 458 .. 459` is not in teq's pickle (the inserted using traits and the stored class's parents)
+fpusingtraits bundle  master's own, as inlinesam: the class an expansion of the product's inline body makes is named at the product's pseudo file's place, the whole build's at A.scala's
+fpusingtraits scalac-b  takesImplicitParams with addUsingTraits: scalac refuses b over teq's products (`parameterized trait B1 is indirectly implemented`): teq's pickles lack the inserted using traits scalac's have
+fpusingtraits scalac-run  the same as scalac-b: scalac wrote no Run to run
+fpusingtraits scalac-lean-b  the same as scalac-b, over the lean pickles
+fpwrittenanyref positions  A2's normalisation: in a2/W.tasty, scalac's parent node `APPLY 27 .. 33` is not in teq's pickle (the written `AnyRef` call: teq writes the inferred call at the name)
 efabstract bundle  a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the whole build writes the interface's getter (`a + 7`), which nothing calls over the products, where the class's own getter member answers; the same value
 efabstractmember bundle  a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the whole build writes the interface's getter (`a + 7`), which nothing calls over the products, where the class's own getter member answers; the same value
 efextension bundle  an extension's default: the products' class keeps the extension's getter `m$default$2` as a method of its own and its parameter without a default, where the whole build writes `y = 7` in place; the same value
