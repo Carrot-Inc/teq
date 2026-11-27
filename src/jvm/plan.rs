@@ -89,14 +89,13 @@ impl<'a> Gen<'a> {
         if let Some(file) = &class.source {
             self.cw.source_file(file);
         }
-        super::gen::write_phase(None);
         self.cw.cp.plan_frozen = cfg!(debug_assertions);
         debug_assert!(self.entries.is_empty(), "a class begun while the plan of {} is open", self.plan.name);
         self.walking = false;
         self.plan = class;
         self.module_tree = None;
         self.writing_mirror = false;
-        *self.long_name_refused = false;
+        self.long_name_refused = false;
         self.checked_methods.clear();
     }
 
@@ -139,19 +138,16 @@ impl<'a> Gen<'a> {
         self.entries.push(super::classes::Entry::Abstract(m, desc.to_string()));
     }
 
-    /// The class file of the class being written, which is the plan's class: its name, its flags
-    /// and its superclass, the plan's interfaces among its own in their order, and the plan's
-    /// fields and methods and no other, each one's flags and descriptor as its facts and its
-    /// erased types give them, the methods in the plan's order (`ClassDef::order_lifted`).
+    /// The class file of the class being written, which is the plan's class, as the class's walk writes it from the
+    /// plan's entries (`Gen::write_entries`): its name, its flags and its superclass, the plan's interfaces among its
+    /// own in their order, and the plan's fields and methods and no other, each one's flags and descriptor as its facts
+    /// and its erased types give them, the methods in the plan's order (`ClassDef::order_lifted`).
     pub fn finish_writer(&mut self) -> Vec<u8> {
         if !self.write_entries() {
             return Vec::new();
         }
         self.cw.cp.plan_frozen = false;
-        super::gen::write_phase(Some(true));
-        let bytes = self.finish_writer_now();
-        super::gen::write_phase(Some(false));
-        bytes
+        self.finish_writer_now()
     }
 
     fn finish_writer_now(&mut self) -> Vec<u8> {
@@ -171,18 +167,6 @@ impl<'a> Gen<'a> {
         if let Some((m, desc)) = self.plan.methods.iter().zip(&descs).find(|(m, desc)| !self.checked_methods.contains_key(&(m.name().clone(), (*desc).clone()))) {
             panic!("the method {}{} of {} entered the plan past its gate (`Gen::check_method`)", m.name(), desc, self.plan.name);
         }
-        let class = &self.plan;
-        if !cw.is_class(class_access(class.flags), &class.name, &class.superclass) || !cw.holds_interfaces(class.interfaces.iter().map(|i| &**i)) {
-            panic!("the plan of {} is not its class file's: {:?} {} {:?}", class.name, class.flags, class.superclass, class.interfaces);
-        }
-        let fields: Vec<(u16, &str, String)> = class.fields.iter().map(|f| (field_access(f.flags), &*f.name, self.desc_of(&f.ty))).collect();
-        if let Some(at) = cw.fields_differ(&fields) {
-            panic!("the plan of {} is not its class file's from field {} on: {:?}", class.name, at, fields.get(at));
-        }
-        let methods: Vec<(u16, &str, String)> = class.methods.iter().zip(descs).map(|(m, desc)| (method_access(m.flags()), &**m.name(), desc)).collect();
-        if let Some(at) = cw.methods_differ(&methods) {
-            panic!("the plan of {} is not its class file's from method {} on: {:?}", class.name, at, methods.get(at));
-        }
         match cw.finish(self.cx.input.output_version) {
             Ok(bytes) => bytes,
             Err(limit) => self.class_too_large(limit),
@@ -194,7 +178,7 @@ impl<'a> Gen<'a> {
     /// `IllegalArgumentException` of a text past a constant's bytes), at the class's definition.
     fn class_too_large(&mut self, limit: PoolLimit) -> Vec<u8> {
         // The text is a name already refused where dotty refuses it.
-        if limit == PoolLimit::Text && *self.long_name_refused {
+        if limit == PoolLimit::Text && self.long_name_refused {
             return Vec::new();
         }
         let name = self.plan.name.clone();
@@ -214,7 +198,7 @@ impl<'a> Gen<'a> {
     /// the class's definition.
     pub(super) fn name_too_long(&mut self, message: &str, at: Option<(crate::source::FileId, crate::source::Span)>) {
         self.refuse_written(message, at);
-        *self.long_name_refused = true;
+        self.long_name_refused = true;
     }
 
     /// scalac's error `message` for what of the class being written a class file cannot hold, at `at` or

@@ -598,7 +598,7 @@ pub(super) trait UnitVisitor<'a> {
     fn val(&mut self, _g: &mut Gen<'a>, _sym: Option<SymId>) -> bool {
         true
     }
-    fn val_end(&mut self, _g: &mut Gen<'a>, _sym: Option<SymId>) {}
+    fn val_end(&mut self, g: &mut Gen<'a>, sym: Option<SymId>);
     /// Each expression the walk meets, before what it holds.
     fn expr(&mut self, _g: &mut Gen<'a>, _e: TExprId) {}
     /// Each pattern the walk meets, before the expressions it holds.

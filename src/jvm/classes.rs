@@ -408,7 +408,7 @@ impl<'a> Gen<'a> {
         if let Dotty::Writes { counted, name, no_generic_signature } = &site.dotty {
             if *no_generic_signature && !self.names_own_class(&desc) && !super::classfile::constant_text_fits(name.as_deref().unwrap_or(method.name()), &desc) {
                 if self.writing_mirror {
-                    *self.long_name_refused = true;
+                    self.long_name_refused = true;
                 } else {
                     self.name_too_long("Method signature is too long for the JVM", site.at);
                     refused = true;
@@ -998,13 +998,10 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The class's plan is made (`planning`) or one of its methods written: in checks builds the pool takes nothing
-    /// while the plan is made but the declarations the plan keeps in order (`Gen::field`, `Gen::field_first`,
-    /// `Gen::abstract_method_site`), and the class's state its writes touch is checked against the plan's reads and
-    /// writes (`Phased`).
+    /// The class's plan is made (`planning`) or written: in checks builds the pool takes nothing while the plan is made
+    /// (a constant interned then would move the pool's order).
     pub(super) fn plan_phase(&mut self, planning: bool) {
         self.cw.cp.plan_frozen = planning && cfg!(debug_assertions);
-        super::gen::write_phase(Some(!planning));
     }
 
     /// A def's body lowered (`Gen::write_method_body`); the def loops where it calls itself in tail position and
@@ -2252,7 +2249,7 @@ impl<'a> Gen<'a> {
     /// class that is no instance of the interface (a value class's method in its companion) names no interface of the
     /// class.
     fn write_interfaces(&mut self, step: InterfaceStep) {
-        let mut recorded = std::mem::take(&mut *self.super_targets);
+        let mut recorded = std::mem::take(&mut self.super_targets);
         if recorded.is_empty() {
             return;
         }

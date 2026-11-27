@@ -1155,38 +1155,6 @@ impl ClassWriter {
         self.interfaces = list;
     }
 
-    /// Whether the class is `name` of these access flags, extending `super_name`.
-    pub fn is_class(&self, access: u16, name: &str, super_name: &str) -> bool {
-        self.access == access && self.class_index(name) == Some(self.this_class) && self.class_index(super_name) == Some(self.super_class)
-    }
-
-    /// Whether the class's interfaces hold `interfaces` in their order.
-    pub fn holds_interfaces<'a>(&self, mut interfaces: impl Iterator<Item = &'a str>) -> bool {
-        let mut own = self.interfaces.iter();
-        interfaces.all(|n| self.class_index(n).is_some_and(|c| own.any(|&i| i == c)))
-    }
-
-    fn class_index(&self, name: &str) -> Option<u16> {
-        self.cp.utf8.get(name).and_then(|&n| self.cp.consts.get(&Const::Class(n))).copied()
-    }
-
-    /// The first place where the class's methods are not `expected` in order, each by its
-    /// access flags, name and descriptor; none where they are exactly those.
-    pub fn methods_differ(&self, expected: &[(u16, &str, String)]) -> Option<usize> {
-        self.differ(&self.methods, expected)
-    }
-
-    /// The same of its fields.
-    pub fn fields_differ(&self, expected: &[(u16, &str, String)]) -> Option<usize> {
-        self.differ(&self.fields, expected)
-    }
-
-    fn differ(&self, members: &[Member], expected: &[(u16, &str, String)]) -> Option<usize> {
-        let same = |m: &Member, e: &(u16, &str, String)| m.access == e.0 && self.cp.utf8.get(e.1) == Some(&m.name) && self.cp.utf8.get(e.2.as_str()) == Some(&m.desc);
-        let common = members.iter().zip(expected).position(|(m, e)| !same(m, e));
-        common.or((members.len() != expected.len()).then_some(members.len().min(expected.len())))
-    }
-
     pub fn method(&mut self, access: u16, name: &str, desc: &str, code: Option<Code>) {
         let name = self.cp.utf8(name);
         let desc = self.cp.utf8(desc);
