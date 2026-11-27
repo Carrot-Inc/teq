@@ -46,7 +46,7 @@ run_timeout=120
 sizes="
 adts          50 6   250 10
 boxing       120 6   600 10
-closures     100 6   500 10
+closures     100 12  500 10
 codec        200 6  1000 10
 collections  200 6  1000 10
 dispatch      80 6   400 10
