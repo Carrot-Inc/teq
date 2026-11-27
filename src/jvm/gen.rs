@@ -539,6 +539,8 @@ pub struct MethodCx {
     /// Where the method is defined, where the class writer knows it: the place of the refusals of its code
     /// (`Gen::end_method`), given with its context (`Gen::method_cx`).
     pub at: Option<(crate::source::FileId, crate::source::Span)>,
+    /// The jar method whose class file's attributes the method takes, written after its code (`MethodSite::attributes`).
+    pub attributes: Option<(ClassId, usize)>,
 }
 
 /// The state of a `try` that `Gen::open_try` began, for `Gen::close_try`.
@@ -592,6 +594,7 @@ impl Default for MethodCx {
             labels: FxMap::default(),
             try_exits: FxMap::default(),
             at: None,
+            attributes: None,
         }
     }
 }

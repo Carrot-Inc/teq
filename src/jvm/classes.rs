@@ -233,6 +233,10 @@ pub struct MethodSite {
     pub at: Option<(crate::source::FileId, crate::source::Span)>,
     pub dotty: Dotty,
     pub wider: Wider,
+    /// The jar method whose class file's attributes the method takes, by its class and its place among the class file's
+    /// methods: a trait default's forwarder of a jar trait's member takes its exceptions, deprecation and kept
+    /// annotations (`MixinOps.mkForwarderSym` copies the member's and its parameters' annotations).
+    pub attributes: Option<(ClassId, usize)>,
 }
 
 /// Whether the method teq writes is the method dotty writes: in dotty's class, under the name dotty gives it, with
@@ -307,7 +311,7 @@ impl<'a> Gen<'a> {
     fn method_cx(&mut self, method: &MethodDef, site: MethodSite, params: &[MethodParam], ret: ErasedType, roots: &[TExprId]) -> MethodCx {
         self.check_method(method, &site);
         debug_assert!(crate::lir::repeated_role(params).is_none(), "two parameters of {}{} take one role", method.name, method.desc);
-        let mut m = MethodCx { at: site.at, ..MethodCx::default() };
+        let mut m = MethodCx { at: site.at, attributes: site.attributes, ..MethodCx::default() };
         let mut slot = 0;
         if !method.flags.is_static {
             m.this_slot = Some(0);
@@ -430,6 +434,7 @@ impl<'a> Gen<'a> {
         self.method_open = false;
         let at = self.m.at;
         let code = std::mem::replace(&mut self.code, Code::new(Vec::new()));
+        let attributes = self.m.attributes.take();
         if code.underflow || code.misreserved {
             if entered {
                 self.plan.methods.retain(|p| p.name != m.name || p.desc != m.desc);
@@ -444,6 +449,10 @@ impl<'a> Gen<'a> {
         }
         let reached = !self.cw.overflow;
         self.cw.method(method_access(m.flags), &m.name, &m.desc, Some(code));
+        if let Some((class, index)) = attributes {
+            let jar = &self.cx.class_files[&class].methods[index];
+            self.cw.method_metadata(&m.name, &m.desc, jar);
+        }
         if reached && self.cw.overflow {
             self.too_large_methods.push((self.plan.name.clone(), m.name.to_string(), m.desc.clone(), at));
         }
@@ -606,7 +615,7 @@ impl<'a> Gen<'a> {
         } else {
             Wider::No
         };
-        let site = MethodSite { at, dotty, wider };
+        let site = MethodSite { at, dotty, wider, attributes: None };
         for (i, t) in l.params.iter().enumerate() {
             // The parameters of a lambda arrive boxed and get locals of their own below. A local lazy val's accessor
             // and initialiser take its holder last (`LazyVals.transformLocalDef`), the val as its holder.
@@ -1314,7 +1323,7 @@ impl<'a> Gen<'a> {
                     Dotty::Writes { name, no_generic_signature, .. } => Dotty::Writes { counted: Some((slots, count)), name, no_generic_signature: no_generic_signature && parameter_slots(&desc).0 == slots },
                     Dotty::NotSure => Dotty::NotSure,
                 };
-                let site = MethodSite { at: cx.input.prog.span_of(d), dotty, wider: Wider::LocalTraitMember(member.clone()) };
+                let site = MethodSite { at: cx.input.prog.span_of(d), dotty, wider: Wider::LocalTraitMember(member.clone()), attributes: None };
                 self.abstract_method_site(MethodFlags::ABSTRACT, &getter, &desc, site);
             }
         }
@@ -1337,7 +1346,7 @@ impl<'a> Gen<'a> {
             Dotty::Writes { name, no_generic_signature, .. } => Dotty::Writes { counted: Some((slots, count)), name, no_generic_signature: no_generic_signature && dottys_descriptor },
             Dotty::NotSure => Dotty::NotSure,
         };
-        let site = MethodSite { at, dotty, wider };
+        let site = MethodSite { at, dotty, wider, attributes: None };
         self.held_context(MethodFlags::PUBLIC, &pm.name, &pm.desc, &params, pm.ret.clone(), &[body], site);
         self.hold_def("local trait's member", cx.line_of(info.file, info.span.start), (fun.sym, &fun.params, body));
         // The static forwarder at the trait, where dotty places its error; a private member's is teq's alone. Where teq
@@ -4196,20 +4205,20 @@ impl<'a> Gen<'a> {
     /// `m` in the class, calling the trait's default `im`.
     fn mixin_forwarder(&mut self, m: &MethodRef, im: &MethodRef) {
         // Of another erased signature than the default's, the method is erasure's bridge.
-        self.default_forwarder(m, im, MethodFlags { synthetic: true, bridge: m.desc != im.desc, ..MethodFlags::PUBLIC });
+        self.default_forwarder(m, im, MethodFlags { synthetic: true, bridge: m.desc != im.desc, ..MethodFlags::PUBLIC }, MethodSite::default());
     }
 
     /// The class's method `m` of the access `access`, calling the trait's default `im` by
     /// `invokespecial`, every forwarder of a trait's member the class writes: each parameter
     /// loaded from its slot, the slots following the types' widths (dotty's `locals.makeLocal`),
-    /// and adapted to `im`'s, the result to `m`'s. Nothing where the class has `m` already.
-    fn default_forwarder(&mut self, m: &MethodRef, im: &MethodRef, flags: MethodFlags) {
+    /// and adapted to `im`'s, the result to `m`'s, defined at `site`. Nothing where the class has `m` already.
+    fn default_forwarder(&mut self, m: &MethodRef, im: &MethodRef, flags: MethodFlags, site: MethodSite) {
         if self.plan.has_method(&m.name, &m.desc) {
             return;
         }
         let params: Vec<(Option<SymId>, ErasedType)> = m.params.iter().map(|t| (None, t.clone())).collect();
         let default = Rc::new(MethodRef { kind: Invoke::Special, owner_is_interface: true, ..im.clone() });
-        self.hold_member(flags, &m.name, &m.desc, &params, m.ret.clone(), &[], MethodSite::default(), "trait default's forwarder", |g| g.forwarder_body(&default, &m.ret));
+        self.hold_member(flags, &m.name, &m.desc, &params, m.ret.clone(), &[], site, "trait default's forwarder", |g| g.forwarder_body(&default, &m.ret));
     }
 
     /// A forwarder's body: `target` called on the instance over the method's parameters, each
@@ -4460,14 +4469,11 @@ impl<'a> Gen<'a> {
             return;
         }
         let fin = meth.sym.is_some_and(|s| syms.sym(s).mods & mods::FINAL != 0);
-        self.default_forwarder(&im, &im, MethodFlags { is_final: fin, ..MethodFlags::PUBLIC });
-        // And the selected method's metadata as its class file holds it, the exceptions it
-        // declares and its parameters' annotations among them (`MixinOps.mkForwarderSym` copies
-        // the member's and its parameters' annotations); a member teq compiles declares none
-        // (`@throws` changes nothing, docs/COMPATIBILITY.md), alike whole and split.
-        if let Some(m) = cx.class_files.get(&mixin).and_then(|cf| cf.methods.iter().find(|m| m.name == text && m.descriptor == im.desc && m.access & (ACC_STATIC | ACC_BRIDGE) == 0)) {
-            self.cw.method_metadata(text, &im.desc, m);
-        }
+        // With the selected method's metadata as its class file holds it, the exceptions it declares and its
+        // parameters' annotations among them; a member teq compiles declares none (`@throws` changes nothing,
+        // docs/COMPATIBILITY.md), alike whole and split.
+        let attributes = cx.class_files.get(&mixin).and_then(|cf| cf.methods.iter().position(|m| m.name == text && m.descriptor == im.desc && m.access & (ACC_STATIC | ACC_BRIDGE) == 0)).map(|at| (mixin, at));
+        self.default_forwarder(&im, &im, MethodFlags { is_final: fin, ..MethodFlags::PUBLIC }, MethodSite { attributes, ..MethodSite::default() });
         let overridden = declared.iter().filter(|d| d.0 != mixin).flat_map(|d| d.1.iter()).filter(|d| !d.private && d.matches(meth)).chain(std::iter::once(object).filter(|o| o.matches(meth)));
         let overridden: Vec<String> = overridden.map(|d| d.desc.clone()).collect();
         let mut bridged: Vec<&str> = Vec::new();
