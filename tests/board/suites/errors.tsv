@@ -1,5 +1,17 @@
 # test	verdict	the other ways	the first line of the difference
 abstract_equals_overload	pass	-	
+abstract_member_and_conflicting_target_name_abstract_first	pass	-	
+abstract_member_and_conflicting_target_name_abstract_first.check	pass	-	
+abstract_member_and_conflicting_target_name_body_first	pass	-	
+abstract_member_and_conflicting_target_name_body_first.check	pass	-	
+abstract_member_and_long_value_class_overload_abstract_first	pass	-	
+abstract_member_and_long_value_class_overload_abstract_first.check	pass	-	
+abstract_member_and_long_value_class_overload_body_first	pass	-	
+abstract_member_and_long_value_class_overload_body_first.check	pass	-	
+abstract_member_and_value_class_overload_abstract_first	pass	-	
+abstract_member_and_value_class_overload_abstract_first.check	pass	-	
+abstract_member_and_value_class_overload_body_first	pass	-	
+abstract_member_and_value_class_overload_body_first.check	pass	-	
 abstract_member_misplaced	pass	-	
 abstract_member_variance	pass	-	
 abstract_var_accessors	pass	-	
@@ -1476,6 +1488,10 @@ unused_imports_renames	pass	-
 unused_imports_selectors	pass	-	
 unused_imports_settled	pass	-	
 unused_imports_testing_name	pass	-	
+user_member_named_as_default_getter_body_first	pass	-	
+user_member_named_as_default_getter_body_first.check	pass	-	
+user_member_named_as_default_getter_declaration_first	pass	-	
+user_member_named_as_default_getter_declaration_first.check	pass	-	
 using_list_overloaded_ctor_limited	pass	-	
 using_list_overloads_two_lists	pass	-	
 using_list_short_refused	pass	-	

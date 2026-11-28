@@ -749,13 +749,10 @@ impl<'a> Gen<'a> {
 
     /// Enters a held body in the plan. A name and descriptor already in the plan refuse the class.
     fn enter_plan(&mut self, held: HeldMethod) {
-        if self.plan.has_method(held.method.name(), &held.desc) {
-            self.unsupported(&format!("internal error: a second {} {}{} in the class", held.what, held.method.name(), held.desc));
-            return;
+        if self.enter_method(&held.method, &held.desc, held.what) {
+            self.held_methods.push(held);
+            self.entries.push(Entry::Held);
         }
-        self.plan.methods.push(held.method.clone());
-        self.held_methods.push(held);
-        self.entries.push(Entry::Held);
     }
 
     /// The planned method held with the code its maker has just lowered: the method, its context and its tree's
@@ -1409,10 +1406,8 @@ impl<'a> Gen<'a> {
             None if info.mods & mods::INLINE != 0 => {}
             None => {
                 if self.is_interface || self.abstract_class {
-                    if !self.plan.has_method(&m.name, &m.desc) {
-                        let site = MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_member(fun.sym, &m.name), ..MethodSite::default() };
-                        self.abstract_method_site(MethodFlags::ABSTRACT, &m.name, &m.desc, site);
-                    }
+                    let site = MethodSite { at: Some((info.file, info.span)), dotty: self.dotty_member(fun.sym, &m.name), ..MethodSite::default() };
+                    self.abstract_method_site(MethodFlags::ABSTRACT, &m.name, &m.desc, site);
                 }
             }
         }

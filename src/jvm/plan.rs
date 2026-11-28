@@ -120,6 +120,16 @@ impl<'a> Gen<'a> {
         self.plan.fields.insert(0, field);
     }
 
+    /// Enters a method in the class plan unless its name and descriptor already occur.
+    pub(super) fn enter_method(&mut self, method: &MethodDef, desc: &str, what: &str) -> bool {
+        if self.plan.has_method(method.name(), desc) {
+            self.unsupported(&format!("internal error: a second {} {}{} in the class", what, method.name(), desc));
+            return false;
+        }
+        self.plan.methods.push(method.clone());
+        true
+    }
+
     /// A method the class declares without a body.
     pub fn abstract_method(&mut self, flags: MethodFlags, name: &str, desc: &str) {
         self.abstract_method_at(flags, name, desc, None);
@@ -134,8 +144,9 @@ impl<'a> Gen<'a> {
     pub fn abstract_method_site(&mut self, flags: MethodFlags, name: &str, desc: &str, site: super::classes::MethodSite) {
         let m = method_def(flags, name, desc);
         self.check_method(&m, &site);
-        self.plan.methods.push(m.clone());
-        self.entries.push(super::classes::Entry::Abstract(m, desc.to_string()));
+        if self.enter_method(&m, desc, "method") {
+            self.entries.push(super::classes::Entry::Abstract(m, desc.to_string()));
+        }
     }
 
     /// The class file of the class being written, which is the plan's class, as the class's walk writes it from the
