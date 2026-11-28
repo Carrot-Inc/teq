@@ -1,14 +1,15 @@
 #!/bin/bash
 # getclass-receiver.sh <base teq> <empty out dir> [<head teq>]
 # Compile the scalac batch, then build and run each cell separately on its applicable teq legs.
+# TEQ=/path/to/teq getclass-receiver.sh --record|--check|--update [<empty output directory>]
 set -eu
-base=$(realpath "${1:?base teq}")
-out=$(realpath -m "${2:?empty out dir}")
-head=${3:+$(realpath "$3")}
-here=$(cd "$(dirname "$0")" && pwd)
+if [[ ${1:-} == --check || ${1:-} == --update ]] && ! command -v javap >/dev/null; then
+  echo "getclass-receiver: no javap: the 12 signature legs cannot be checked" >&2
+  exit 2
+fi
+. "$(dirname "$0")/recorded-table.sh"
 py=$here/getclass_receiver.py
-mkdir -p "$out"
-[[ -z $(ls -A "$out") ]] || { echo "output directory must be empty: $out" >&2; exit 2; }
+if [[ $table_mode != compare ]]; then table_judge selftest; fi
 for bin in "$base" ${head:+"$head"}; do
   [[ -x $bin && -f $bin ]] || { echo "no executable at $bin" >&2; exit 2; }
 done
@@ -18,11 +19,15 @@ cd "$here/../.."
 . tests/support/jars.sh
 sl=$(jar_of scala-library)
 [[ -f $sl ]] || { echo "missing $sl" >&2; exit 2; }
-S=$HOME/.sbt/boot/scala-3.8.4
-sbts=("$S"/org.scala-sbt/sbt/*/)
-[[ -d ${sbts[0]} && -f $S/lib/scala3-compiler_3-3.8.4.jar ]] || { echo "missing scalac 3.8.4 in sbt boot" >&2; exit 2; }
-lib=$S/lib/scala-library.jar:$S/lib/scala3-library_3-3.8.4.jar
-scalac_cp=$S/lib/*:${sbts[0]}*
+if [[ $table_mode == compare ]]; then
+  S=$HOME/.sbt/boot/scala-3.8.4
+  sbts=("$S"/org.scala-sbt/sbt/*/)
+  [[ -d ${sbts[0]} && -f $S/lib/scala3-compiler_3-3.8.4.jar ]] || { echo "missing scalac 3.8.4 in sbt boot" >&2; exit 2; }
+  lib=$S/lib/scala-library.jar:$S/lib/scala3-library_3-3.8.4.jar
+  scalac_cp=$S/lib/*:${sbts[0]}*
+else
+  lib=$sl
+fi
 
 record() {
   local prefix=$1 seconds=$2 rc=0
@@ -33,6 +38,10 @@ record() {
 scalac_build() {
   local prefix=$1 seconds=$2
   shift 2
+  if [[ $table_mode == record ]]; then
+    record "$prefix" "$seconds" scala-cli compile -S 3.8.4 --server=false --jvm system "$@"
+    return
+  fi
   record "$prefix" "$seconds" java -XX:-UsePerfData -cp "$scalac_cp" dotty.tools.dotc.Main -color:never "$@"
 }
 checked() {
@@ -48,7 +57,8 @@ checked gen 60 python3 -I "$py" gen "$out"
 echo base > binaries
 if [[ -n $head ]]; then echo head >> binaries; fi
 mapfile -t cells < <(awk -F '\t' 'NR>1 {print $1}' cells.tsv)
-pending=("${cells[@]}")
+pending=()
+if [[ $table_mode == compare || $table_mode == record ]]; then pending=("${cells[@]}"); fi
 attempt=0
 while (( ${#pending[@]} )); do
   attempt=$((attempt + 1))
@@ -65,6 +75,10 @@ done
 
 jvm_cell() {
   local source=$1 cp=$2 caller=$r/x.jar
+  if [[ $call == reflection && $table_mode != compare ]]; then
+    record "$r/run" 60 javap -J-XX:-UsePerfData -s -classpath "$cp" "$cell.M$"
+    return
+  fi
   if [[ $call == reflection ]]; then
     caller=$r/caller
     mkdir -p "$caller"
@@ -79,9 +93,14 @@ jvm_cell() {
 run_cell() {
   set -eu
   local cell=$1 call=$2 ref=$out/runs/scalac/$1 bin side r
+  if [[ $call == reflection && $table_mode == record ]] && ! command -v javap >/dev/null; then return 0; fi
   cd "$out/$cell"
-  if [[ $(< "$ref/build.exit") == 0 ]]; then
-    record "$ref/run" 60 java -XX:-UsePerfData -Xverify:all -cp "$classes:$lib" "$cell.Main"
+  if [[ -f $ref/build.exit && $(< "$ref/build.exit") == 0 ]]; then
+    if [[ $call == reflection && $table_mode == record ]]; then
+      record "$ref/run" 60 javap -J-XX:-UsePerfData -s -classpath "$classes" "$cell.M$"
+    else
+      record "$ref/run" 60 java -XX:-UsePerfData -Xverify:all -cp "$classes:$lib" "$cell.Main"
+    fi
   fi
   local source=Main.scala
   if [[ -f Lib.scala ]]; then source=.; fi
@@ -125,7 +144,11 @@ run_cell() {
     record "$r/run" 120 "$bin" interp "$source"
   done < "$out/binaries"
 }
-export py out classes lib base head sl scalac_cp
+export py out classes lib base head sl scalac_cp table_mode
 export -f record scalac_build jvm_cell run_cell
 awk -F '\t' 'NR>1 {print $1, $5}' cells.tsv | xargs -P 8 -n 2 bash -c 'run_cell "$1" "$2"' _
-checked judge 60 python3 -I "$py" judge "$out"
+if [[ $table_mode == compare ]]; then
+  checked judge 60 python3 -I "$py" judge "$out"
+else
+  table_judge "$table_mode"
+fi

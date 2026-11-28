@@ -81,6 +81,14 @@ right-assoc-readers 1
 # products.py --check 26 s) by the kinds' ratios to that host, 1.63 and 0.79
 qualified-super 52
 qualified-super@16 25
+# measured: box-ancestry, getclass-receiver and inline-placeholder's --check on a remote machine of eight CPUs and on
+# one of sixteen, two runs each, the slower rounded up (eight: 23.3, 15.2 and 8.2 s; sixteen: 21.7, 13.4 and 7.7 s)
+box-ancestry 24
+box-ancestry@16 22
+getclass-receiver 16
+getclass-receiver@16 14
+inline-placeholder 9
+inline-placeholder@16 8
 # estimated: default-getters on eight CPUs and on sixteen, from its 49 s at --jobs 6 and 27 s at --jobs 16 on the agent host
 default-getters 56
 tasty-exec 74
@@ -270,6 +278,10 @@ head-wait@guest 205
 # without --record then builds those caches on the kind's machines, and the next gate with --record writes the rows.
 classfile@guest -1
 init-view@guest -1
+# These rows keep the three recorded table checks off the kind guest.
+box-ancestry@guest -1
+getclass-receiver@guest -1
+inline-placeholder@guest -1
 board-run@guest 86
 fix@guest 235
 fold@guest 2

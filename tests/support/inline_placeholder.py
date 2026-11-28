@@ -83,7 +83,7 @@ def gen(root):
     print(f"inline-placeholder: {len(list(cells()))} source cells")
 
 
-def read(directory, phases):
+def read(directory, phases, diagnostics=False):
     for phase in phases:
         path = directory / phase
         try:
@@ -99,7 +99,10 @@ def read(directory, phases):
         if code:
             diagnostic = any(line.startswith(b"error:") or b": error:" in line for line in err.splitlines())
             refuses = phase in ("build", "upstream") or (phase == "interp" and diagnostic)
-            return ("refuses" if refuses else "throws"), f"{phase} exit {code}, stdout {out!r}"
+            detail = f"{phase} exit {code}, stdout {out!r}"
+            if diagnostics:
+                detail += "\n" + err.decode()
+            return ("refuses" if refuses else "throws"), detail
     return "ok", out
 
 
@@ -119,7 +122,7 @@ def phases(leg):
     return ("build", "run")
 
 
-def inventory(root, names, sides):
+def inventory(root, names, sides, oracle=True, diagnostics=False):
     problems = []
     manifest = root / "cells.tsv"
     if not manifest.is_file():
@@ -135,11 +138,11 @@ def inventory(root, names, sides):
 
     runs = root / "runs"
     records = {}
-    for side in ("scalac", *sides):
+    for side in (("scalac", *sides) if oracle else sides):
         for leg in (("jvm-whole", "jvm-split") if side == "scalac" else LEGS):
             for name in sorted(names):
                 cell = Path(side, leg, name)
-                records[cell] = read(runs / cell, phases(leg))
+                records[cell] = read(runs / cell, phases(leg), diagnostics)
                 status, detail = records[cell]
                 if status == "not valid":
                     problems.append(f"{cell}: {detail}")
@@ -189,15 +192,55 @@ def judge(root, sides, probes=None):
         for (before, after), n in sorted(changes.items()):
             print(f"fence {leg}: {before} -> {after}: {n}")
     for side, count in totals.items():
-        print(f"inline-placeholder {side}: {sum(count.values())} legs; " + ", ".join(f"{count[v]} {v}" for v in VERDICTS))
+        verdicts = ", ".join(f"{count[v]} {v}" for v in VERDICTS)
+        print(f"inline-placeholder {side}: {sum(count.values())} legs; {verdicts}, 0 skipped")
     return int(failed)
 
 
-def selftest():
+def recorded(root, recording, expected, skipped):
+    probes = list(cells())
+    records, problems = inventory(root, {c[0] for c in probes}, ["base"], oracle=recording, diagnostics=True)
+    if problems:
+        raise ValueError("\n".join(problems))
+
+    def observation(result):
+        status, value = result
+        if status == "timeout":
+            raise ValueError(str(result))
+        return status, value.decode() if isinstance(value, bytes) else value
+
+    for name, _, typ, _, form, _ in probes:
+        for leg in LEGS:
+            refleg = "jvm-split" if leg == "jvm-split" else "jvm-whole"
+            if recording:
+                ref = records[Path("scalac", refleg, name)]
+            else:
+                key = name, leg
+                if key not in expected:
+                    raise ValueError(f"missing expected leg {key}")
+                status, output = expected[key]
+                ref = status, output.encode()
+            actual = records[Path("base", leg, name)]
+            v = verdict(ref, actual)
+            if v == "not valid":
+                raise ValueError(f"{name} {leg}: invalid oracle or observation: {ref}, {actual}")
+            row = ""
+            if v == "refuses" and leg == "jvm-split" and form == "unapply":
+                row = "a Boolean unapply in an inline body is withheld from the products"
+            elif leg in ("js-whole", "interp-whole"):
+                if typ in ("java.lang.constant.Constable", "java.lang.constant.ConstantDesc") and (
+                        v == "wrong value" or (leg == "js-whole" and v == "refuses")):
+                    row = "Constable and ConstantDesc are not modelled on JavaScript or in the interpreter"
+                elif typ == "scala.collection.immutable.ArraySeq[?]" and form == "classOf" and v == "wrong value":
+                    row = "classOf[ArraySeq[?]].getName gives scala.ArraySeq on JavaScript and in the interpreter"
+            yield name, leg, observation(ref), observation(actual), row
+
+
+def selftest(scratch=None):
     from contextlib import redirect_stdout
     from io import StringIO
 
-    with TemporaryDirectory(dir=sys.argv[2] if len(sys.argv) > 2 else None) as scratch:
+    with TemporaryDirectory(dir=scratch) as scratch:
         root = Path(scratch)
 
         def put(phase, code=0, stdout=b"", stderr=b"", directory=root):
@@ -255,7 +298,7 @@ def selftest():
 
 if __name__ == "__main__":
     if sys.argv[1] == "selftest":
-        selftest()
+        selftest(sys.argv[2] if len(sys.argv) > 2 else None)
     elif sys.argv[1] == "gen":
         gen(Path(sys.argv[2]))
     elif sys.argv[1] == "judge":

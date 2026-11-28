@@ -26,7 +26,7 @@ VERDICTS = ("as scalac", "refuses", "throws", "wrong value", "timeout", "not val
 
 @cache
 def declaration(name):
-    result = subprocess.check_output(["javap", "-public", name], text=True, timeout=60)
+    result = subprocess.check_output(["javap", "-J-XX:-UsePerfData", "-public", name], text=True, timeout=60)
     header = next(line for line in result.splitlines() if line.endswith(" {"))
     # Remove type arguments before splitting the extends and implements lists.
     erased = header
@@ -49,7 +49,7 @@ def ancestors(box):
 
 
 def cells():
-    version = subprocess.check_output(["java", "-version"], stderr=subprocess.STDOUT, text=True, timeout=60)
+    version = subprocess.check_output(["java", "-XX:-UsePerfData", "-version"], stderr=subprocess.STDOUT, text=True, timeout=60)
     jdk = next(line for line in version.splitlines() if ' version "' in line)
     for box in BOXES:
         parents = ancestors(box)
@@ -249,7 +249,7 @@ def watch(root, binary, sl):
                 fresh.check_returncode()
                 for label, directory in (("watch", d / "classes"), ("fresh", r / "classes")):
                     (r / (label + ".json")).write_text(json.dumps(class_hashes(directory), sort_keys=True))
-                run = subprocess.run(["java", "-Xverify:all", "-cp", f"{d}/classes:{sl}", "B"],
+                run = subprocess.run(["java", "-XX:-UsePerfData", "-Xverify:all", "-cp", f"{d}/classes:{sl}", "B"],
                                      capture_output=True, timeout=60)
                 (r / "run.exit").write_text(str(run.returncode))
                 (r / "run.out").write_bytes(run.stdout)
@@ -320,20 +320,26 @@ def compare_patterns(root, sides, rows, lines):
     if "head" in sides:
         lines.append(f"pattern test sites the writer asked with no record: {counts['head', 'missing']}")
         bad |= bool(counts["head", "missing"] or counts["head", "moved"])
-        d = root / "watch"
-        reported = count_lines((d / "watch.err").read_text())
-        if len(reported) != 4:
-            raise ValueError(f"watch: expected four count lines, found {len(reported)}")
-        for i in range(4):
-            r = d / str(i)
-            reply = json.loads((r / "reply.json").read_text())
-            seed = ("alone", "beside")[i % 2]
-            name = pattern_name(("bounded", TARGETS[0], "whole", seed))
-            v = verdict(result(runs / "scalac" / name, "jvm"), result(r, "jvm"))
-            moved = watch_mismatch(r)
-            n = reported[i] + missing_records(r, "whole")
-            lines.append(f"watch step {i + 1} {seed}: {v}, class files differ from fresh: {int(moved)}, missing: {n}")
-            bad |= v != "as scalac" or moved or n != 0 or not reply["ok"] or (i > 0 and not reply["incremental"])
+        bad |= check_watch(root, lambda name: result(runs / "scalac" / name, "jvm"), lines)
+    return bad
+
+
+def check_watch(root, reference, lines):
+    bad = False
+    d = root / "watch"
+    reported = count_lines((d / "watch.err").read_text())
+    if len(reported) != 4:
+        raise ValueError(f"watch: expected four count lines, found {len(reported)}")
+    for i in range(4):
+        r = d / str(i)
+        reply = json.loads((r / "reply.json").read_text())
+        seed = ("alone", "beside")[i % 2]
+        name = pattern_name(("bounded", TARGETS[0], "whole", seed))
+        v = verdict(reference(name), result(r, "jvm"))
+        moved = watch_mismatch(r)
+        n = reported[i] + missing_records(r, "whole")
+        lines.append(f"watch step {i + 1} {seed}: {v}, class files differ from fresh: {int(moved)}, missing: {n}")
+        bad |= v != "as scalac" or moved or n != 0 or not reply["ok"] or (i > 0 and not reply["incremental"])
     return bad
 
 
@@ -507,6 +513,76 @@ def selftest(root):
     print("box-ancestry selftest: wrong value, refusal, throw, missing status, timeout, missing, duplicated and stray cells, nonzero and absent counts, moved bytes and watch mismatch found")
 
 
+def recorded(root, recording, expected, skipped):
+    from recorded_table import check_names
+
+    rows = list(cells())
+    patterns = list(pattern_cells())
+    for file, want in (("cells.tsv", rows), ("patterns.tsv", [(pattern_name(p), *p) for p in patterns])):
+        errors = manifest_errors(read_manifest(root / file), want)
+        if errors:
+            raise ValueError("\n".join(errors))
+    runs = root / "runs"
+    base = runs / "base"
+    check_names((p.name for p in base.iterdir()), LEGS, "base legs")
+    names = [r[0] for r in rows]
+    schedules = [run for row in rows for run, *_ in jvm_runs(row)]
+    pattern_names = [pattern_name(p) for p in patterns]
+    directories = {base / "jvm": schedules, base / "js": names, base / "interp": names,
+                   runs / "patterns/base": pattern_names}
+    if recording:
+        directories.update({runs / "scalac": names, runs / "scalac-split": [r[0] for r in rows if r[3].startswith("inline_")],
+                            runs / "patterns/scalac": pattern_names})
+    for path, wanted in directories.items():
+        check_names((p.name for p in path.iterdir()), wanted, path)
+
+    for row in rows:
+        name, _, target, *_ = row
+        for leg in LEGS:
+            variants = jvm_runs(row) if leg == "jvm" else [(name, "whole", "-", "-")]
+            for run, mode, *_ in variants:
+                split = mode == "split"
+                path = base / leg / run
+                if leg == "jvm" and missing_records(path, mode):
+                    raise ValueError(f"{run}: test sites the writer asked with no record")
+                actual = result(path, leg, split)
+                oracle = None
+                if recording:
+                    oracle = result(runs / ("scalac-split" if split else "scalac") / name, "scalac", split)
+                    if oracle[0] != "ok":
+                        raise ValueError(f"{run}: scalac {oracle}")
+                row_fact = ""
+                if (leg in ("js", "interp") and actual[0] == "refuses" and
+                        target in (CONSTABLE, "java.lang.constant.ConstantDesc")):
+                    row_fact = "Constable and ConstantDesc are not modelled on JavaScript or in the interpreter"
+                yield run, leg, oracle, actual, row_fact
+
+    references = {}
+    for row in patterns:
+        shape, target, mode, seed = row
+        name = pattern_name(row)
+        path = runs / "patterns/base" / name
+        actual = result(path, "jvm", mode == "split")
+        if missing_records(path, mode):
+            raise ValueError(f"{name}: test sites the writer asked with no record")
+        if seed == "beside":
+            alone = path.with_name(pattern_name((shape, target, mode, "alone")))
+            if moved_bytes(alone, path):
+                raise ValueError(f"{name}: unchanged class bytes moved")
+        key = name, "pattern-jvm"
+        oracle = result(runs / "patterns/scalac" / name, "jvm", mode == "split") if recording else expected.get(key)
+        if recording and oracle[0] != "ok":
+            raise ValueError(f"{name}: scalac {oracle}")
+        if oracle is None:
+            raise ValueError(f"missing expected leg {key}")
+        references[name] = oracle
+        yield name, "pattern-jvm", oracle, actual, ""
+    lines = []
+    if check_watch(root, references.__getitem__, lines):
+        raise ValueError("\n".join(lines))
+    print(*lines, sep="\n")
+
+
 def judge_plant(root):
     rows = list(cells())
     errors = manifest_errors(read_manifest(root / "cells.tsv"), rows)
@@ -547,6 +623,7 @@ def judge(root):
     sides = (root / "binaries").read_text().splitlines()
     if compare_patterns(root, sides, list(pattern_cells()), lines):
         status = 1
+    lines[-1] += ", 0 skipped"
     with (root / "summary.txt").open("a") as summary:
         print(*lines, sep="\n", file=summary)
     print((root / "summary.txt").read_text(), end="")

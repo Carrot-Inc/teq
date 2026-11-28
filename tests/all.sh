@@ -115,6 +115,9 @@ suite modules       ./tests/modules.sh
 suite right-assoc   ./tests/right-assoc/run.sh
 suite right-assoc-readers python3 tests/right-assoc/readers.py
 suite qualified-super ./tests/qualified-super/check.sh
+suite box-ancestry ./tests/support/box-ancestry.sh --check
+suite getclass-receiver ./tests/support/getclass-receiver.sh --check
+suite inline-placeholder ./tests/support/inline-placeholder.sh --check
 suite tasty-exec    ./teq interp tests/tasty-exec.scala
 suite analysis-bytes ./tests/analysis-bytes.sh
 suite classfile     ./teq interp tests/classfile.scala

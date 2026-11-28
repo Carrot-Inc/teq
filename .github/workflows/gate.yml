@@ -121,6 +121,18 @@ jobs:
             suites: qualified-super
             minutes: 15
             jars: true
+          - group: box-ancestry
+            suites: box-ancestry
+            minutes: 15
+            jars: true
+          - group: getclass-receiver
+            suites: getclass-receiver
+            minutes: 15
+            jars: true
+          - group: inline-placeholder
+            suites: inline-placeholder
+            minutes: 15
+            jars: true
           # The modules suite as four pieces (tests/all.sh's `modules.1/4`): whole it is up to 47 minutes of a slow
           # runner, a piece about twelve, each job planned under twenty by the slowest of the last runs' times.
           - group: modules-1

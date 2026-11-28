@@ -2,14 +2,13 @@
 # inline-placeholder.sh <base teq> <empty out dir> [<head teq>]
 # Each teq caller has its own compilation. Scalac can compile distinct packages in a batch.
 # Run the self-test first. Exit 1 on a difference on the last binary or an invalid record.
+# TEQ=/path/to/teq inline-placeholder.sh --record|--check|--update [<empty output directory>]
 set -eu
-base=$(realpath "${1:?base teq}") out=$(realpath -m "${2:?out dir}") head=${3:+$(realpath "$3")}
-here=$(cd "$(dirname "$0")" && pwd)
+. "$(dirname "$0")/recorded-table.sh"
 py=$here/inline_placeholder.py
+if [[ $table_mode != compare ]]; then table_judge selftest; fi
 cd "$here/../.."
-mkdir -p "$out"
-python3 -I "$py" selftest "$out"
-[[ -z $(ls -A "$out") ]] || { echo "inline-placeholder: output directory must be empty" >&2; exit 2; }
+if [[ $table_mode == compare ]]; then python3 -I "$py" selftest "$out"; fi
 sides=(base)
 if [[ -n $head ]]; then sides+=(head); fi
 for bin in "$base" ${head:+"$head"}; do
@@ -36,11 +35,12 @@ record() {
 S=$HOME/.sbt/boot/scala-3.8.4
 boots=("$S"/org.scala-sbt/sbt/*/)
 lib=$sl
-if [[ -d ${boots[0]} && -f $S/lib/scala3-compiler_3-3.8.4.jar ]]; then
+if [[ $table_mode == compare && -d ${boots[0]} && -f $S/lib/scala3-compiler_3-3.8.4.jar ]]; then
   lib=$S/lib/scala-library.jar:$S/lib/scala3-library_3-3.8.4.jar
   scalac=(java -cp "$S/lib/*:${boots[0]}*" dotty.tools.dotc.Main)
 else
   scalac=(scala-cli compile -S 3.8.4 --server=false)
+  if [[ $table_mode == record ]]; then scalac+=(--jvm system); fi
 fi
 
 # If one source invalidates a batch, compile each cell on its own to attribute the refusal.
@@ -75,7 +75,9 @@ oracle_build() {
     echo "$dir/classes:$cp" > "$r/classpath"
   done
 }
-for leg in jvm-whole jvm-split; do oracle_build "$out/scalac/$leg" "$leg" "${cells[@]}"; done
+if [[ $table_mode == compare || $table_mode == record ]]; then
+  for leg in jvm-whole jvm-split; do oracle_build "$out/scalac/$leg" "$leg" "${cells[@]}"; done
+fi
 
 run_cell() {
   set -eu
@@ -85,7 +87,7 @@ run_cell() {
   for leg in jvm-whole jvm-split; do
     r=$out/runs/scalac/$leg/$cell
     if [[ -f $r/build.exit && $(< "$r/build.exit") == 0 ]]; then
-      record "$r/run" 60 java -Xverify:all -cp "$(< "$r/classpath")" "$cell.Main"
+      record "$r/run" 60 java -XX:-UsePerfData -Xverify:all -cp "$(< "$r/classpath")" "$cell.Main"
     fi
   done
   for side in base ${head:+head}; do
@@ -108,7 +110,7 @@ run_cell() {
       case $leg in
         jvm-*)
           record "$r/build" 120 "$bin" "${compiler[@]}" build "${sources[@]}" --target jvm --std=scala-library --classpath "$cp" -o "$r/x.jar"
-          if [[ $(< "$r/build.exit") == 0 ]]; then record "$r/run" 60 java -Xverify:all -cp "$r/x.jar:$cp" "$cell.Main"; fi ;;
+          if [[ $(< "$r/build.exit") == 0 ]]; then record "$r/run" 60 java -XX:-UsePerfData -Xverify:all -cp "$r/x.jar:$cp" "$cell.Main"; fi ;;
         js-whole)
           record "$r/build" 120 "$bin" "${compiler[@]}" build "${sources[@]}" --target js --classpath "$sl" -o "$r/x.js"
           if [[ $(< "$r/build.exit") == 0 ]]; then record "$r/run" 60 node "$r/x.js"; fi ;;
@@ -122,4 +124,8 @@ export out sl base head
 export -f record run_cell compiler_words interp_words _new_spelling
 export _spellings_nl
 printf '%s\n' "${cells[@]}" | xargs -P 4 -n 1 bash -c 'run_cell "$1"' _
-python3 -I "$py" judge "$out" "${sides[@]}"
+if [[ $table_mode == compare ]]; then
+  python3 -I "$py" judge "$out" "${sides[@]}"
+else
+  table_judge "$table_mode"
+fi

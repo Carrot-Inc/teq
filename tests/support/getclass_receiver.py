@@ -47,6 +47,25 @@ class Cell(NamedTuple):
             return "js-representation"
         return ""
 
+    def pending_row(self, leg):
+        if leg == "js" and self.js_repr == "yes":
+            return "on JavaScript a boxed primitive's runtime class follows the JavaScript value, not the static type"
+        row = self.held_row(leg)
+        if row == "js-representation":
+            if self.kind == "array":
+                return ("on JavaScript Array[Int](1) has the runtime class of Object[]" if leg == "js" else
+                        "in the interpreter Array[Int](1) has the runtime class of java.util.ArrayList")
+            return {
+                "binder_Serializable": "on JavaScript a Unit value does not match a Serializable pattern binder",
+                "array_tag": "on JavaScript the ClassTag of Array[Unit] & Array[Any] gives Object[] instead of BoxedUnit[]",
+            }[self.kind]
+        return {
+            "": "",
+            "unit-alias-representation": "an alias of Unit, or Unit & Matchable, resolves to plain Unit",
+            "unit-intersection-result-descriptor":
+                "a method's result of Unit & AnyVal or Unit & Matchable is written void where scalac writes BoxedUnit",
+        }[row]
+
     def held_legs(self):
         marks = []
         for leg in self.legs():
@@ -395,7 +414,7 @@ def compare(cell, side, leg, ref, base, actual, invalid=""):
     return Row(cell, side, leg, held, oracle, verdict, ref.output, expected.output, actual.output, detail)
 
 
-def collect(d, manifest):
+def manifest_inventory(d, manifest):
     problems = {}
     with (d / "cells.tsv").open(newline="") as stream:
         reader = csv.reader(stream, delimiter="\t")
@@ -425,6 +444,11 @@ def collect(d, manifest):
         elif expected[name] != by_name[name]:
             problems[name] = "incorrect axes"
 
+    return problems, by_name, expected, sides
+
+
+def collect(d, manifest):
+    problems, by_name, expected, sides = manifest_inventory(d, manifest)
     runs = d / "runs"
     rows = []
     for name, cell in (by_name | expected).items():
@@ -446,6 +470,47 @@ def collect(d, manifest):
                         for binary in sides if side == "scalac" else (side,):
                             rows.append(Row(stray, binary, target, "", "scalac", "not valid", "", "", "", "stray run"))
     return rows
+
+
+def descriptor(path, build):
+    for stage in (build, "run"):
+        if int((path / f"{stage}.exit").read_text()) != 0:
+            raise ValueError(f"{path}: {stage} failed: {(path / (stage + '.err')).read_text()}")
+    listing = (path / "run.out").read_text()
+    method, = re.findall(r" f\([^\n]*\);\n\s+descriptor: (\S+)", listing)
+    return "descriptor", method
+
+
+def recorded(root, recording, expected, skipped):
+    from recorded_table import check_names
+
+    manifest = list(cells())
+    problems, _, _, _ = manifest_inventory(root, manifest)
+    if problems:
+        raise ValueError(str(problems))
+    runs = root / "runs"
+    check_names((p.name for p in (runs / "base").iterdir()), LEGS, "base legs")
+    for leg in LEGS:
+        check_names((p.name for p in (runs / "base" / leg).iterdir()),
+                    [c.name for c in manifest if leg in c.legs() and (c.name, leg) not in skipped], leg)
+    if recording:
+        check_names((p.name for p in (runs / "scalac").iterdir()), [c.name for c in manifest], "scalac")
+
+    def observation(path, leg, cell):
+        if cell.call == "reflection":
+            return descriptor(path, "build" if leg == "scalac" else "upstream")
+        obs = observe(path, leg, cell)
+        if obs.status in ("not valid", "timeout") or (leg == "scalac" and obs.status not in ("value", "throws")):
+            raise ValueError(f"{cell.name} {leg}: {obs}")
+        return obs.status, obs.output + obs.detail
+
+    for cell in manifest:
+        if (cell.name, "jvm") in skipped:
+            continue
+        oracle = observation(runs / "scalac" / cell.name, "scalac", cell) if recording else None
+        for leg in cell.legs():
+            actual = observation(runs / "base" / leg / cell.name, leg, cell)
+            yield cell.name, leg, oracle, actual, cell.pending_row(leg)
 
 
 def summarize(rows, sides):
@@ -485,7 +550,7 @@ def summarize(rows, sides):
             regressions.extend(lost)
     differences = Counter(r.binary for r in rows if r.verdict not in ("as scalac", "held"))
     for side in sides:
-        lines.append(f"getclass-receiver: {differences[side]} {side} cell/leg differences outside held rows")
+        lines.append(f"getclass-receiver: {differences[side]} {side} cell/leg differences outside held rows, 0 skipped")
     failed = differences[sides[-1]] or regressions or any(r.verdict == "not valid" for r in rows)
     return "\n".join(lines) + "\n", bool(failed)
 
@@ -504,6 +569,11 @@ def judge(d):
 
 def selftest(d):
     d.mkdir(parents=True, exist_ok=True)
+    probe = subprocess.run([str(Path(__file__).with_name("getclass-receiver.sh")), "--check", str(d)],
+                           env={"PATH": str(d / "no-javap")}, capture_output=True, text=True, timeout=60)
+    want_error = "getclass-receiver: no javap: the 12 signature legs cannot be checked"
+    if (probe.returncode, probe.stderr.strip()) != (2, want_error):
+        raise ValueError(f"selftest missing javap: exit {probe.returncode}, {probe.stderr!r}")
     names = ("ok", "wrong", "refusal", "throwing", "no_status", "slow", "missing", "duplicate", "invalid", "repr")
     manifest = [Cell(n, "plain", "Int", "local", "direct", "yes" if n == "ok" else "no",
                      "yes" if n == "repr" else "no") for n in names]
@@ -576,6 +646,7 @@ def selftest(d):
                       ("js", "1\n  repr: wrong value"), ("interp", "0")):
         if f"{leg}: cells right on the base and not right on the head: {loss}\n" not in summary:
             raise ValueError(f"selftest fence: {leg}")
+    print("getclass-receiver selftest: --check without javap exited 2")
     print("getclass-receiver selftest: wrong value, refusal, throw, missing status, timeout, missing, duplicate,"
           " stray and scalac-refused cells found; base JS fence passed; held base and scalac values passed, third value failed")
 
