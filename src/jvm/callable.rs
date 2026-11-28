@@ -1278,10 +1278,15 @@ impl<'a> Gen<'a> {
         }
         if cx.is_case_class(c) {
             let x = cx.input.syms.class(c).ctor.first().and_then(|cl| cl.params.first()).map(|p| self.sym_type(p.sym)).unwrap_or_else(|| u.clone());
+            // An extension copy the class holds already (the user's copy's, a typed `_1`'s) is the class's.
             for (name, params, answered) in [("copy$extension", vec![u.clone(), x.clone()], 1), ("copy$default$1$extension", vec![u.clone()], 0), ("_1$extension", vec![u.clone()], 0)] {
+                let desc = method_desc(&params, &u);
+                if self.plan.has_method(name, &desc) {
+                    continue;
+                }
                 let typed: Vec<(Option<SymId>, ErasedType)> = params.iter().map(|t| (None, t.clone())).collect();
                 let flags = MethodFlags { is_final: true, ..MethodFlags::PUBLIC };
-                self.hold_member(flags, name, &method_desc(&params, &u), &typed, u.clone(), &[], super::classes::MethodSite::default(), "value class's extension copy", |g| {
+                self.hold_member(flags, name, &desc, &typed, u.clone(), &[], super::classes::MethodSite::default(), "value class's extension copy", |g| {
                     let value = g.param(answered);
                     g.lir.ret(value)
                 });
@@ -1424,8 +1429,9 @@ impl<'a> Gen<'a> {
         if cx.vc_on_companion(c) {
             self.extension_bodies(c);
         }
-        // The `toString` `Desugar.classDef` gives the companion it makes.
-        if object.map_or(true, |o| syms.class(o).synthetic_companion) {
+        // The `toString` `Desugar.classDef` gives the companion it makes, where the
+        // typer's member of it is not the class's already.
+        if object.map_or(true, |o| syms.class(o).synthetic_companion) && !self.plan.has_method("toString", "()Ljava/lang/String;") {
             let string = ErasedType::L(Rc::from(STRING));
             let shown: Rc<str> = Rc::from(cx.input.interner.get(syms.class(c).name));
             self.hold_member(MethodFlags::PUBLIC, "toString", "()Ljava/lang/String;", &[], string.clone(), &[], super::classes::MethodSite::default(), "companion's member", |g| {
@@ -1594,8 +1600,7 @@ impl<'a> Gen<'a> {
                 let copy = g.lower_adapt(copied, &object_type, &array);
                 g.lir.ret(copy)
             });
-        }
-        if !written("values") {
+        } else if !written("values") {
             let array = ErasedType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
             self.hold_member(MethodFlags::PUBLIC, "values", &method_desc(&[], &array), &[], array.clone(), &[], super::classes::MethodSite::default(), "enum companion's member", |g| {
                 let mut items = Vec::with_capacity(values.len());
@@ -1844,10 +1849,16 @@ impl<'a> Gen<'a> {
             });
         }
         let first = cx.input.syms.class(c).ctor.first().map_or(0, |cl| cl.params.len());
+        // A default getter of copy's the class holds already (the user's copy's own) is the class's (Namer.invalidateIfClashingSynthetic).
         for (i, &p) in tc.ctor_params[k..].iter().enumerate().take(first) {
             let t = types[i].clone();
+            let name = format!("copy$default${}", i + 1);
+            let desc = method_desc(&[], &t);
+            if self.plan.has_method(&name, &desc) {
+                continue;
+            }
             let field = self.field_name(p);
-            self.hold_member(MethodFlags::PUBLIC, &format!("copy$default${}", i + 1), &method_desc(&[], &t), &[], t.clone(), &[], super::classes::MethodSite::default(), "case class's copy", |g| {
+            self.hold_member(MethodFlags::PUBLIC, &name, &desc, &[], t.clone(), &[], super::classes::MethodSite::default(), "case class's copy", |g| {
                 let instance = g.lir.this(this.clone());
                 let read = g.lir.field(instance, &owner, &field, t);
                 g.lir.ret(read)
@@ -1899,25 +1910,32 @@ impl<'a> Gen<'a> {
     }
 
     /// scalac's `Mirror.Singleton` of a case object, in its module class being written:
-    /// `fromProduct(Product)` answering the object, and the bridge to it.
+    /// `fromProduct(Product)` answering the object, and the bridge to it. Where the object
+    /// writes its own `fromProduct`, it and the bridges erasure makes for it are the object's
+    /// (SyntheticMembers.addMirrorSupport).
     pub fn singleton_mirror_members(&mut self) {
         let this = ErasedType::L(self.this_name.clone());
         let product = ErasedType::L(Rc::from(PRODUCT));
         let singleton = ErasedType::L(Rc::from(MIRROR_SINGLETON));
         let object = ErasedType::object();
         let desc = method_desc(&[product.clone()], &singleton);
-        self.hold_member(MethodFlags::PUBLIC, "fromProduct", &desc, &[(None, product.clone())], singleton.clone(), &[], super::classes::MethodSite::default(), "case object's mirror member", |g| {
-            let instance = g.lir.this(this.clone());
-            let mirror = g.lower_adapt(instance, &this, &singleton);
-            g.lir.ret(mirror)
-        });
-        let from_product = method_ref(Invoke::Virtual, &self.this_name, false, "fromProduct", &[product.clone()], &singleton);
-        self.hold_member(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, "fromProduct", &method_desc(&[product.clone()], &object), &[(None, product.clone())], object.clone(), &[], super::classes::MethodSite::default(), "case object's mirror member", |g| {
-            let instance = g.lir.this(this);
-            let elements = g.param(0);
-            let made = g.lir.call(&from_product, instance, &[elements]);
-            g.lir.ret(made)
-        });
+        if !self.plan.has_method("fromProduct", &desc) {
+            self.hold_member(MethodFlags::PUBLIC, "fromProduct", &desc, &[(None, product.clone())], singleton.clone(), &[], super::classes::MethodSite::default(), "case object's mirror member", |g| {
+                let instance = g.lir.this(this.clone());
+                let mirror = g.lower_adapt(instance, &this, &singleton);
+                g.lir.ret(mirror)
+            });
+        }
+        let bridge_desc = method_desc(&[product.clone()], &object);
+        if !self.plan.has_method("fromProduct", &bridge_desc) {
+            let from_product = method_ref(Invoke::Virtual, &self.this_name, false, "fromProduct", &[product.clone()], &singleton);
+            self.hold_member(MethodFlags { synthetic: true, bridge: true, ..MethodFlags::PUBLIC }, "fromProduct", &bridge_desc, &[(None, product.clone())], object.clone(), &[], super::classes::MethodSite::default(), "case object's mirror member", |g| {
+                let instance = g.lir.this(this);
+                let elements = g.param(0);
+                let made = g.lir.call(&from_product, instance, &[elements]);
+                g.lir.ret(made)
+            });
+        }
     }
 
     /// The erased parameters and result of an export forwarder of member `s` whose signature the
