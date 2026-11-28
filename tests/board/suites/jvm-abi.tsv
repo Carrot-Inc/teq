@@ -28,6 +28,7 @@ member_meet	fail	-	not in scalac's layout: < meetmin/Api threeResult(Lmeetmin/A;
 mirror_forwarders	pass	-	
 nested_objects	pass	-	
 object_forwarders	pass	-	
+own_synthetic_members	fail	-	not in scalac's layout: < own_synthetic_members/Lone fromProduct(Lscala/Product;)Lscala/deriving/Mirror$Singleton; public,static,synthetic
 private_params	pass	-	
 selectors	pass	-	
 super_accessors	pass	-	

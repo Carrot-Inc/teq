@@ -266,12 +266,14 @@ case_companion_value	pass	-
 case_companion_written_or_not	pass	-	
 case_copy_clauses	pass	-	
 case_copy_nested	pass	-	
+case_copy_own_default	pass	-	
 case_empty_body	pass	-	
 case_guard_indentation	pass	-	
 case_lambda_parameter	pass	-	
 case_lambda_pinned_constructor	pass	-	
 case_lambda_tuples	pass	-	
 case_object_equals_from_superclass_trait	pass	-	
+case_object_from_product_own	pass	-	
 cases_at_keyword_width	pass	-	
 cases_then_match_after_do	pass	-	
 cases_then_match_after_else	pass	-	
@@ -3545,6 +3547,8 @@ val_refinement_subst	pass	-
 value_class_argument_returns_in_branch	pass	-	
 value_class_array_store	pass	-	
 value_class_can_equal	pass	-	
+value_class_copy_own	pass	-	
+value_class_copy_own_default	pass	-	
 value_class_default_getter_owners	pass	-	
 value_class_extension_order	pass	-	
 value_class_field_constant_if	pass	-	

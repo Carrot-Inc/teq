@@ -1,0 +1,16 @@
+own_synthetic_members/Boxed copy$default$1$extension(I)I public,static
+own_synthetic_members/Boxed copy$default$1()I public
+own_synthetic_members/Boxed copy$extension(II)I public,static
+own_synthetic_members/Boxed copy(I)I public
+own_synthetic_members/Boxed$ copy$default$1$extension(I)I public,final
+own_synthetic_members/Boxed$ copy$extension(II)I public,final
+own_synthetic_members/Bump copy$default$1()I public
+own_synthetic_members/Bump copy(I)Lown_synthetic_members/Bump; public
+own_synthetic_members/Bump fromProduct(Lscala/Product;)Lown_synthetic_members/Bump; public,static
+own_synthetic_members/Bump$ fromProduct(Lscala/Product;)Ljava/lang/Object; public,bridge,synthetic
+own_synthetic_members/Bump$ fromProduct(Lscala/Product;)Lown_synthetic_members/Bump; public
+own_synthetic_members/Lone fromProduct(Lscala/Product;)Lown_synthetic_members/Lone$; public,static
+own_synthetic_members/Lone fromProduct(Lscala/Product;)Lscala/deriving/Mirror$Singleton; public,static,synthetic
+own_synthetic_members/Lone$ fromProduct(Lscala/Product;)Ljava/lang/Object; public,bridge,synthetic
+own_synthetic_members/Lone$ fromProduct(Lscala/Product;)Lown_synthetic_members/Lone$; public
+own_synthetic_members/Lone$ fromProduct(Lscala/Product;)Lscala/deriving/Mirror$Singleton; public,bridge,synthetic

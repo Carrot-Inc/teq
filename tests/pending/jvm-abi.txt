@@ -10,4 +10,5 @@ lifted_pure_closure_return	not in scalac's layout: < Main$ <clinit>()V public,st
 lifted_pure_closure_var_box	not in scalac's layout: < Main$ <clinit>()V public,static
 lifted_written_dollar_names	not in scalac's layout: < Main$ <clinit>()V public,static
 member_meet	not in scalac's layout: < meetmin/Api threeResult(Lmeetmin/A;Ljava/lang/String;)Ljava/lang/String; public,static
+own_synthetic_members	not in scalac's layout: < own_synthetic_members/Lone fromProduct(Lscala/Product;)Lscala/deriving/Mirror$Singleton; public,static,synthetic
 target_name_units	not in scalac's layout: < targetnameunits/TN $uD83D()I public
