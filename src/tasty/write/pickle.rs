@@ -2459,7 +2459,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let ctor_span = self.ctor_span.take();
         let outer = std::mem::replace(&mut self.source_params, true);
-        self.clauses(&ctor, Some(&syms), None);
+        self.clauses(&ctor, Some(&syms), true);
         self.source_params = outer;
         let unit = self.w.b.t_unit;
         // `makeConstructor`'s result type tree has no span of its own: the envelope puts it after the child before
@@ -2679,7 +2679,7 @@ impl<'w, 'a> P<'w, 'a> {
             let si = self.sym_info(s);
             let source = self.note_method_param_annotations(&si, &sig);
             let outer = std::mem::replace(&mut self.source_params, source);
-            self.clauses(&sig.clauses, None, None);
+            self.clauses(&sig.clauses, None, true);
             self.source_params = outer;
             let unit = self.w.b.t_unit;
             let layout = self.secondary_layout(s);
@@ -2761,7 +2761,9 @@ impl<'w, 'a> P<'w, 'a> {
         Some(term::SecondaryLayout { rhs, block, init_at })
     }
 
-    fn clauses(&mut self, clauses: &[ClauseSig], syms: Option<&[Vec<SymId>]>, _owner: Option<SymId>) {
+    /// `own`: the parameters are the definition's own, not the copies a getter takes of the clauses before its
+    /// parameter's (`getter_params`).
+    fn clauses(&mut self, clauses: &[ClauseSig], syms: Option<&[Vec<SymId>]>, own: bool) {
         let mut prev_terms = false;
         for (ci, clause) in clauses.iter().enumerate() {
             if clause.params.is_empty() {
@@ -2774,13 +2776,13 @@ impl<'w, 'a> P<'w, 'a> {
             }
             for (pi, p) in clause.params.iter().enumerate() {
                 let sym = syms.and_then(|s| s.get(ci)).and_then(|cl| cl.get(pi)).copied().or(Some(p.sym));
-                self.method_param(p, clause, sym);
+                self.method_param(p, clause, sym, own);
             }
             prev_terms = true;
         }
     }
 
-    fn method_param(&mut self, p: &ParamSig, clause: &ClauseSig, sym: Option<SymId>) {
+    fn method_param(&mut self, p: &ParamSig, clause: &ClauseSig, sym: Option<SymId>, own: bool) {
         let addr = self.buf.addr();
         if p.by_name {
             for s in std::iter::once(p.sym).chain(sym) {
@@ -2839,10 +2841,12 @@ impl<'w, 'a> P<'w, 'a> {
         } else if clause.is_using {
             flags.push(GIVEN);
         }
-        if p.has_default {
+        // A getter's copy keeps only what `toMethParam`'s mask does (`GivenOrImplicit | Erased | Tracked`): no
+        // default, and not `inline`.
+        if own && p.has_default {
             flags.push(HASDEFAULT);
         }
-        if inline {
+        if own && inline {
             flags.push(INLINE);
         }
         self.write_flags(&flags);
@@ -3222,7 +3226,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.nat(n as u64);
         let tmark = self.tparams.len();
         let pmark = self.params.len();
-        self.def_params(&sig.tparams, &declared[..pos], None);
+        self.getter_params(&sig.tparams, &declared[..pos]);
         self.mark_tree();
         self.unchecked_variance(ty);
         self.tparams.truncate(tmark);
@@ -3804,36 +3808,24 @@ impl<'w, 'a> P<'w, 'a> {
         let (et, ec) = (et.min(tparams.len()), ec.min(clauses.len()));
         if ext.is_none() || et == tparams.len() && ec == 0 {
             self.write_bound_tparams(tparams, &ids, false);
-            self.clauses(clauses, None, None);
+            self.clauses(clauses, None, true);
             return;
         }
         self.write_bound_tparams(&tparams[..et], &ids[..et], false);
-        self.clauses(&clauses[..ec], None, None);
+        self.clauses(&clauses[..ec], None, true);
         if et < tparams.len() {
             self.write_bound_tparams(&tparams[et..], &ids[et..], false);
         } else if ec > 0 && clauses[ec..].first().map_or(false, |c| !c.params.is_empty()) && !clauses[ec - 1].params.is_empty() {
             self.buf.byte(SPLITCLAUSE);
         }
-        self.clauses_from(clauses, ec);
+        self.clauses(&clauses[ec..], None, true);
     }
 
-    /// The clauses from the `from`-th on.
-    fn clauses_from(&mut self, clauses: &[ClauseSig], from: usize) {
-        let mut prev_terms = false;
-        for clause in clauses.iter().skip(from) {
-            if clause.params.is_empty() {
-                self.buf.byte(EMPTYCLAUSE);
-                prev_terms = false;
-                continue;
-            }
-            if prev_terms {
-                self.buf.byte(SPLITCLAUSE);
-            }
-            for p in &clause.params {
-                self.method_param(p, clause, Some(p.sym));
-            }
-            prev_terms = true;
-        }
+    /// Earlier clauses copied by `Desugar.getterParamss`, their parameters' flags masked as `toMethParam` masks them.
+    fn getter_params(&mut self, tparams: &[TParamId], before: &[ClauseSig]) {
+        let ids = self.bind_tparams(tparams);
+        self.write_bound_tparams(tparams, &ids, false);
+        self.clauses(before, None, false);
     }
 
     /// A right-hand side this stage leaves `ELIDED`, counted under its producer's reason.
@@ -4330,22 +4322,21 @@ impl<'w, 'a> P<'w, 'a> {
     /// package or class it names, and a private top-level definition's `private[p]`, which
     /// `member_flags` leaves out.
     fn member_access_qualifier(&mut self, s: SymId, info: &SymInfo) {
-        let top_private = info.mods & mods::PRIVATE != 0 && !info.scoped_private && matches!(info.owner, Owner::Package(_));
-        if top_private {
-            if let Owner::Package(p) = info.owner {
-                self.buf.byte(PRIVATEQUALIFIED);
-                self.package_typeref(p);
-            }
-        }
-        if info.scoped_private || info.mods & mods::PROTECTED != 0 && self.has_access_scope(s) {
-            if let Some(q) = self.scoped_qualifier(s) {
-                self.buf.byte(if info.scoped_private { PRIVATEQUALIFIED } else { PROTECTEDQUALIFIED });
-                match q {
-                    Qualifier::Pkg(p) => self.package_typeref(p),
-                    Qualifier::Class(c) => self.class_typeref(c),
-                }
-            }
-        }
+        let access = self.member_access_copied(s, info);
+        self.write_access_qualifier(access.scope.map(|q| (access.protected, q)));
+    }
+
+    fn member_access_copied(&self, s: SymId, info: &SymInfo) -> CopiedAccess {
+        let private = info.mods & mods::PRIVATE != 0;
+        let protected = info.mods & mods::PROTECTED != 0;
+        let scope = if info.scoped_private || protected && self.has_access_scope(s) {
+            self.scoped_qualifier(s)
+        } else if let Owner::Package(p) = info.owner {
+            private.then_some(Qualifier::Pkg(p))
+        } else {
+            None
+        };
+        CopiedAccess { private, protected, scope }
     }
 
     fn has_access_scope(&self, s: SymId) -> bool {
@@ -4448,6 +4439,7 @@ impl<'w, 'a> P<'w, 'a> {
         }).collect();
         // A forwarder's getters forward the member's (`Exported | Final`, dotty's `exportForwarders`).
         let exported = self.w.syms.is_forwarder(s);
+        let access = self.member_access_copied(s, info);
         let mut index = 0u32;
         for (pos, &ci) in order.iter().enumerate() {
             for (k, p) in sig.clauses[ci].params.iter().enumerate() {
@@ -4458,7 +4450,7 @@ impl<'w, 'a> P<'w, 'a> {
                     // The getter's type as its completion gave it (`inferredResultType`), the
                     // parameter's where nothing refers to the method's type parameters.
                     let gty = crate::typer::getters::getter_type(&self.w.getters, &self.w.syms, crate::tir::DefaultOf::Method(s), starts[ci] + k).unwrap_or(p.ty);
-                    self.default_getter(&name, index, &sig.tparams, &declared[..pos], gty, self.canonical(gty) == self.canonical(p.ty), info.mods & mods::PRIVATE != 0, false, exported, inline, producer, default);
+                    self.default_getter(&name, index, &sig.tparams, &declared[..pos], gty, self.canonical(gty) == self.canonical(p.ty), access, info.synthetic, exported, inline, producer, default);
                 }
                 index += 1;
             }
@@ -4466,7 +4458,7 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn default_getter(&mut self, method: &str, index: u32, tparams: &[TParamId], before: &[ClauseSig], ty: TypeId, unchecked: bool, private: bool, synthetic: bool, exported: bool, inline: bool, producer: Producer, default: Option<crate::tir::TExprId>) {
+    fn default_getter(&mut self, method: &str, index: u32, tparams: &[TParamId], before: &[ClauseSig], ty: TypeId, unchecked: bool, access: CopiedAccess, synthetic: bool, exported: bool, inline: bool, producer: Producer, default: Option<crate::tir::TExprId>) {
         let addr = self.buf.addr();
         // At its default as written: `Desugar.defaultGetters`' `withSpan(vparam.rhs.span)`, its trees without a
         // span of their own at its start.
@@ -4481,7 +4473,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.nat(n as u64);
         let tmark = self.tparams.len();
         let pmark = self.params.len();
-        self.def_params(tparams, before, None);
+        self.getter_params(tparams, before);
         // A by-name parameter's default is the value, not the thunk the typer passes.
         let default = default.map(|e| match self.w.prog.expr(e) {
             crate::tir::TExpr::Lambda(ps, body) if ps.len == 0 && self.w.as_function(ty).is_none() => body,
@@ -4514,9 +4506,6 @@ impl<'w, 'a> P<'w, 'a> {
         self.tparams.truncate(tmark);
         self.params.truncate(pmark);
         let mut flags = Vec::new();
-        if private {
-            flags.push(PRIVATE);
-        }
         if synthetic {
             flags.push(SYNTHETIC);
         }
@@ -4526,7 +4515,7 @@ impl<'w, 'a> P<'w, 'a> {
         if inline {
             flags.push(INLINE);
         }
-        self.write_flags(&flags);
+        self.write_copied_access(access, flags);
         match at {
             Some(sp) => self.push_pos(Pos { addr, file: self.src_ctx, span: sp, point: Some(sp.start), def: false, switch: false, origin: None }),
             None => self.synthetic_position(addr),
@@ -5338,6 +5327,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let tparams: Vec<TParamId> = info.tparams.to_vec();
         let clauses = info.ctor.clone();
+        let access = self.ctor_access_copied(k, &info);
         // The typed defaults after the captures, parallel to the constructor's parameters.
         let typed: Vec<Option<crate::tir::TExprId>> = self.index.tclasses.get(&k).map(|&i| {
             let tc = &self.w.prog.classes[i as usize];
@@ -5349,7 +5339,7 @@ impl<'w, 'a> P<'w, 'a> {
                 if p.has_default {
                     let default = typed.get(index as usize).copied().flatten();
                     let gty = crate::typer::getters::getter_type(&self.w.getters, &self.w.syms, crate::tir::DefaultOf::Ctor(k), index as usize).unwrap_or(p.ty);
-                    self.default_getter("<init>", index, &tparams, &clauses[..ci], gty, self.canonical(gty) == self.canonical(p.ty), false, false, false, false, Producer::Default, default);
+                    self.default_getter("<init>", index, &tparams, &clauses[..ci], gty, self.canonical(gty) == self.canonical(p.ty), access, false, false, false, Producer::Default, default);
                 }
                 index += 1;
             }
@@ -5362,6 +5352,7 @@ impl<'w, 'a> P<'w, 'a> {
             if !sig.clauses.iter().any(|cl| cl.params.iter().any(|p| p.has_default)) {
                 continue;
             }
+            let access = self.member_access_copied(s, &self.w.syms.sym(s));
             let typed: Vec<Option<crate::tir::TExprId>> = self.w.fun_of_sym.get(&s).map(|&f| self.w.prog.funs[f.idx()].defaults.clone()).unwrap_or_default();
             let mut index = 0u32;
             for (ci, clause) in sig.clauses.iter().enumerate() {
@@ -5369,7 +5360,7 @@ impl<'w, 'a> P<'w, 'a> {
                     if p.has_default {
                         let default = typed.get(index as usize).copied().flatten();
                         let gty = crate::typer::getters::getter_type(&self.w.getters, &self.w.syms, crate::tir::DefaultOf::Method(s), index as usize).unwrap_or(p.ty);
-                        self.default_getter("<init>", index, &tparams, &sig.clauses[..ci], gty, self.canonical(gty) == self.canonical(p.ty), false, false, false, false, Producer::Default, default);
+                        self.default_getter("<init>", index, &tparams, &sig.clauses[..ci], gty, self.canonical(gty) == self.canonical(p.ty), access, false, false, false, Producer::Default, default);
                     }
                     index += 1;
                 }
@@ -5956,7 +5947,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
-    fn default_getter_with(&mut self, method: &str, index: u32, tparams: &[TParamId], ty: TypeId, access: CtorAccess, annotated: bool, body: Synth) {
+    fn default_getter_with(&mut self, method: &str, index: u32, tparams: &[TParamId], ty: TypeId, access: CopiedAccess, annotated: bool, body: Synth) {
         let addr = self.buf.addr();
         self.buf.byte(DEFDEF);
         let len = self.buf.begin_length();
@@ -5975,7 +5966,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.tpt(ty);
         }
         self.synth_rhs("copy default getter", ty, body, &[]);
-        self.write_copied_access(access);
+        self.write_copied_access(access, vec![SYNTHETIC]);
         self.synthetic_position(addr);
         self.buf.end_length(len);
     }
@@ -5985,20 +5976,19 @@ impl<'w, 'a> P<'w, 'a> {
     /// `copyMeths`: `constr1.mods.flags & copiedAccessFlags`), and a default getter its method's (`defaultGetters`).
     /// The qualifier is the one the constructor is written with (`class C private[q] (..)`, filed under the end of
     /// the class's name).
-    fn ctor_access_copied(&self, c: ClassId, info: &ClassInfo) -> CtorAccess {
+    fn ctor_access_copied(&self, c: ClassId, info: &ClassInfo) -> CopiedAccess {
         let (private, protected) = (info.mods & mods::PRIVATE_CTOR != 0, info.mods & mods::PROTECTED_CTOR != 0);
         let scope = (private || protected)
             .then(|| info.def.and_then(|_| self.w.ast(info.file).access_scopes.iter().find(|&&(at, _)| at == info.span.end).map(|&(_, n)| n)))
             .flatten()
             .and_then(|q| self.enclosing_named(Owner::Class(c), q));
-        CtorAccess { private, protected, scope }
+        CopiedAccess { private, protected, scope }
     }
 
-    /// The modifiers of a synthetic member that copies the primary constructor's access (`ctor_access_copied`),
+    /// The modifiers of a member that copies another declaration's access,
     /// written as a member's are (`member_flags`, `member_access_qualifier`): a plain private one `private[this]`,
     /// a plain protected one `protected`, a qualified one by its qualifier alone.
-    fn write_copied_access(&mut self, access: CtorAccess) {
-        let mut flags = Vec::new();
+    fn write_copied_access(&mut self, access: CopiedAccess, mut flags: Vec<u8>) {
         if access.private && access.scope.is_none() {
             flags.push(PRIVATE);
             flags.push(LOCAL);
@@ -6006,18 +5996,11 @@ impl<'w, 'a> P<'w, 'a> {
         if access.protected && access.scope.is_none() {
             flags.push(PROTECTED);
         }
-        flags.push(SYNTHETIC);
         self.write_flags(&flags);
-        if let Some(q) = access.scope {
-            self.buf.byte(if access.private { PRIVATEQUALIFIED } else { PROTECTEDQUALIFIED });
-            match q {
-                Qualifier::Pkg(p) => self.package_typeref(p),
-                Qualifier::Class(k) => self.class_typeref(k),
-            }
-        }
+        self.write_access_qualifier(access.scope.map(|q| (access.protected, q)));
     }
 
-    fn copy_method(&mut self, c: ClassId, info: &ClassInfo, access: CtorAccess) {
+    fn copy_method(&mut self, c: ClassId, info: &ClassInfo, access: CopiedAccess) {
         // `Desugar.classDef`'s `copy`, placed as the companion's `apply` (`case_member_layout`).
         let members = self.case_member_layout(c);
         let saved_synth = self.synth_span;
@@ -6047,7 +6030,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.synth_rhs("copy", self_ty, Synth::New(c), &addrs);
         self.tparams.truncate(tmark);
         self.params.truncate(pmark);
-        self.write_copied_access(access);
+        self.write_copied_access(access, vec![SYNTHETIC]);
         match members {
             Some((t, _)) => self.push_pos(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
             None => self.synthetic_position(addr),
@@ -6094,7 +6077,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.synth_rhs("companion apply", self_ty, Synth::New(c), &addrs);
             self.tparams.truncate(tmark);
             self.params.truncate(pmark);
-            self.write_copied_access(access);
+            self.write_copied_access(access, vec![SYNTHETIC]);
             match members {
                 Some((t, _)) => self.push_pos(Pos { addr, file: self.src_ctx, span: t, point: Some(t.start), def: false, switch: false, origin: None }),
                 None => self.synthetic_position(addr),
@@ -8235,9 +8218,9 @@ enum Qualifier {
     Class(ClassId),
 }
 
-/// The primary constructor's access that a case class's synthetic members copy (`P::ctor_access_copied`).
+/// The access flags and `privateWithin` copied by desugaring.
 #[derive(Clone, Copy)]
-struct CtorAccess {
+struct CopiedAccess {
     private: bool,
     protected: bool,
     scope: Option<Qualifier>,

@@ -3694,34 +3694,57 @@ fn is_scala_any(f: &TastyFile, t: &TType) -> bool {
     is_scala_named(f, t, "Any")
 }
 
-/// A name as scalac's `Name.toString` gives it.
-fn write_name(f: &TastyFile, n: NameRef, out: &mut String) {
+/// A prefix or suffix name kind's `qualToString`: a qualified name joined, then sanitized (`str.sanitize`).
+fn sanitize_qualified(out: &mut String, start: usize, last: usize) {
+    if last > start && out[start..].contains(['<', '>']) {
+        let sanitized = out[start..].replace(['<', '>'], "$");
+        out.replace_range(start.., &sanitized);
+    }
+}
+
+/// Append the API name and return where its last component starts (`Names.split`).
+fn write_name(f: &TastyFile, n: NameRef, out: &mut String) -> usize {
+    let start = out.len();
     match f.names.get(n as usize) {
+        Some(name @ (TName::Qualified(a, b) | TName::Expanded(a, b) | TName::ExpandPrefix(a, b))) => {
+            write_name(f, *a, out);
+            out.push_str(match name { TName::Qualified(..) => ".", TName::Expanded(..) => "$$", _ => "$" });
+            let last = out.len();
+            write_name(f, *b, out);
+            last
+        }
         Some(TName::DefaultGetter(u, index)) => {
-            let mut under = String::new();
-            write_name(f, *u, &mut under);
-            if under == "<init>" {
-                out.push_str("$lessinit$greater");
-            } else {
-                out.push_str(&under);
+            let last = write_name(f, *u, out);
+            if &out[start..] == "<init>" {
+                out.replace_range(start.., "$lessinit$greater");
             }
             out.push_str("$default$");
             out.push_str(&(index + 1).to_string());
+            last
         }
         Some(TName::Signed { original, .. }) => write_name(f, *original, out),
-        // scalac names a trait's super accessor `T$$super$m`, the expansion outside.
-        Some(TName::SuperAccessor(u)) => match f.names.get(*u as usize) {
-            Some(TName::Expanded(prefix, name)) => {
-                write_name(f, *prefix, out);
-                out.push_str("$$super$");
-                write_name(f, *name, out);
-            }
-            _ => {
-                out.push_str("super$");
-                write_name(f, *u, out);
-            }
-        },
-        _ => f.write_name(n, out),
+        Some(name @ (TName::SuperAccessor(u) | TName::InlineAccessor(u))) => {
+            let last = write_name(f, *u, out);
+            out.insert_str(last, if matches!(name, TName::SuperAccessor(_)) { "super$" } else { "inline$" });
+            sanitize_qualified(out, start, last);
+            last
+        }
+        Some(name @ (TName::ObjectClass(u) | TName::BodyRetainer(u))) => {
+            let last = write_name(f, *u, out);
+            out.push_str(if matches!(name, TName::ObjectClass(_)) { "$" } else { "$retainedBody" });
+            sanitize_qualified(out, start, last);
+            last
+        }
+        Some(TName::Unique { separator, num, underlying }) => {
+            let last = underlying.map_or(start, |u| write_name(f, u, out));
+            f.write_name(*separator, out);
+            out.push_str(&num.to_string());
+            last
+        }
+        _ => {
+            f.write_name(n, out);
+            start
+        }
     }
 }
 

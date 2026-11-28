@@ -12,9 +12,7 @@ abstractmirror_b binaryDependency amb.Use$package scala.deriving.Mirror pending 
 abstractmirror_b usedName amb.Use$package MirroredMonoType pending scalac Default
 abstractmirror_b usedName amb.Use$package Nothing pending scalac Default
 abstractvar_b usedName avu.Use avu;Use$;_$_$$anon;init; pending scalac Default
-accessorbyname_a abn.Lib abn$Lib$$inline$x pending
 accessorbyname_a abn.Lib f pending
-accessorbyname_a abn.Lib inline$abn$Lib$$x pending
 accessorbyname_a abn.Lib x pending
 accessorbyname_a usedName abn.Lib abn$Lib$$inline$x pending scalac Default
 accessorbyname_a usedName abn.Lib inline$abn$Lib$$x pending teq Default
@@ -22,13 +20,7 @@ accessorbyname_a usedName abn.Lib x pending scalac Default
 accessorbyname_b usedName abu.Use Lib_this pending scalac Default
 accessorbyname_b usedName abu.Use abn$Lib$$inline$x pending scalac Default
 accessorbyname_b usedName abu.Use inline$abn$Lib$$x pending teq Default
-accessorcompanion_a acm.C acm$C$$inline$hidden pending
-accessorcompanion_a acm.C acm$C$$inline$total pending
-accessorcompanion_a acm.C acm$C$$inline$total_= pending
 accessorcompanion_a acm.C add pending
-accessorcompanion_a acm.C inline$acm$C$$hidden pending
-accessorcompanion_a acm.C inline$acm$C$$total pending
-accessorcompanion_a acm.C inline$acm$C$$total_= pending
 accessorcompanion_a acm.C peek pending
 accessorcompanion_a usedName acm.C acm$C$$inline$hidden pending scalac Default
 accessorcompanion_a usedName acm.C acm$C$$inline$total pending scalac Default
@@ -45,24 +37,10 @@ accessorcompanion_b usedName acu2.Use acm$C$$inline$total_= pending scalac Defau
 accessorcompanion_b usedName acu2.Use inline$acm$C$$hidden pending teq Default
 accessorcompanion_b usedName acu2.Use inline$acm$C$$total pending teq Default
 accessorinherited_a ain.Fin g pending
-accessorinherited_a ain.Gen ain$Gen$$inline$held pending
-accessorinherited_a ain.Gen ain$Gen$$inline$reads pending
-accessorinherited_a ain.Gen ain$Gen$$inline$reads_= pending
 accessorinherited_a ain.Gen get pending
-accessorinherited_a ain.Gen inline$ain$Gen$$held pending
-accessorinherited_a ain.Gen inline$ain$Gen$$reads pending
-accessorinherited_a ain.Gen inline$ain$Gen$$reads_= pending
-accessorinherited_a ain.Holder ain$Holder$$inline$x pending
-accessorinherited_a ain.Holder inline$ain$Holder$$x pending
 accessorinherited_a ain.Holder n pending
-accessorinherited_a ain.Lib ain$Lib$$inline$count pending
-accessorinherited_a ain.Lib ain$Lib$$inline$count_= pending
-accessorinherited_a ain.Lib ain$Lib$$inline$secret pending
 accessorinherited_a ain.Lib bump pending
 accessorinherited_a ain.Lib f pending
-accessorinherited_a ain.Lib inline$ain$Lib$$count pending
-accessorinherited_a ain.Lib inline$ain$Lib$$count_= pending
-accessorinherited_a ain.Lib inline$ain$Lib$$secret pending
 accessorinherited_a usedName ain.Fin Fin pending scalac Default
 accessorinherited_a usedName ain.Fin secret pending scalac Default
 accessorinherited_a usedName ain.Gen ain$Gen$$inline$held pending scalac Default
@@ -84,15 +62,7 @@ accessorinherited_a usedName ain.Lib inline$ain$Lib$$count pending teq Default
 accessorinherited_a usedName ain.Lib inline$ain$Lib$$secret pending teq Default
 accessorinherited_a usedName ain.Lib secret pending scalac Default
 accessorinherited_a usedName ain.Lib x$0 pending scalac Default
-accessorinherited_b aib.GenSub ain$Gen$$inline$held pending
-accessorinherited_b aib.GenSub ain$Gen$$inline$reads pending
-accessorinherited_b aib.GenSub ain$Gen$$inline$reads_= pending
 accessorinherited_b aib.GenSub get pending
-accessorinherited_b aib.GenSub inline$ain$Gen$$held pending
-accessorinherited_b aib.GenSub inline$ain$Gen$$reads pending
-accessorinherited_b aib.GenSub inline$ain$Gen$$reads_= pending
-accessorinherited_b aib.Sub ain$Holder$$inline$x pending
-accessorinherited_b aib.Sub inline$ain$Holder$$x pending
 accessorinherited_b aib.Sub n pending
 accessorinherited_b binaryDependency aib.Use ain.Parent pending teq products:accessorinherited_a/ain/Parent.class,Use.scala,DependencyByMemberRef
 accessorinherited_b usedName aib.Use A pending teq Default
@@ -117,10 +87,6 @@ accessorinherited_b usedName aib.Use inline$ain$Holder$$x pending teq Default
 accessorinherited_b usedName aib.Use inline$secret pending scalac Default
 accessorinherited_b usedName aib.Use secret pending teq Default
 accessornames_a names.Api bump pending
-accessornames_a names.Api inline$names$Api$$count pending
-accessornames_a names.Api inline$names$Api$$count_= pending
-accessornames_a names.Api names$Api$$inline$count pending
-accessornames_a names.Api names$Api$$inline$count_= pending
 accessornames_a usedName names.Api count pending scalac Default
 accessornames_a usedName names.Api inline$names$Api$$count pending teq Default
 accessornames_a usedName names.Api names$Api$$inline$count pending scalac Default
@@ -130,14 +96,6 @@ accessornames_b usedName names.Main Api_this pending scalac Default
 accessornames_b usedName names.Main inline$names$Api$$count pending teq Default
 accessornames_b usedName names.Main names$Api$$inline$count pending scalac Default
 accessornames_b usedName names.Main names$Api$$inline$count_= pending scalac Default
-accessors_a acl.Counter acl$Counter$$inline$bump pending
-accessors_a acl.Counter acl$Counter$$inline$count pending
-accessors_a acl.Counter acl$Counter$$inline$scoped pending
-accessors_a acl.Counter acl$Counter$$inline$step pending
-accessors_a acl.Counter inline$acl$Counter$$bump pending
-accessors_a acl.Counter inline$acl$Counter$$count pending
-accessors_a acl.Counter inline$acl$Counter$$scoped pending
-accessors_a acl.Counter inline$acl$Counter$$step pending
 accessors_a acl.Counter tick pending
 accessors_a acl.Holder add pending
 accessors_a acl.Holder peek pending
@@ -641,10 +599,6 @@ companionvalue_b cvb.Use$package run pending
 companionvalue_b usedName cvb.Use$package K$ pending teq Default
 companionvalue_b usedName cvb.Use$package f pending scalac Default
 compoundlift_a cla.Meter add pending
-compoundlift_a cla.Meter cla$Meter$$inline$sum pending
-compoundlift_a cla.Meter cla$Meter$$inline$sum_= pending
-compoundlift_a cla.Meter inline$cla$Meter$$sum pending
-compoundlift_a cla.Meter inline$cla$Meter$$sum_= pending
 compoundlift_a cla.Ops bumpField pending
 compoundlift_a cla.Ops bumpLazy pending
 compoundlift_a cla.Ops bumpMember pending
@@ -731,8 +685,6 @@ copyextractors_b usedName pb.Use <byname> pending teq Default
 copyextractors_b usedName pb.Use Some pending teq Default
 copyextractors_b usedName pb.Use pa;Item;init; pending teq Default
 ctordefaultclauses_a cdc.Holder$.In $lessinit$greater$default$2 pending
-ctordefaultclauses_a cdc.Top $lessinit$greater$default$2 pending
-ctordefaultclauses_a cdc.TopCase $lessinit$greater$default$3 pending
 ctordefaultclauses_a usedName cdc.Holder$.In AnyRef pending scalac Default
 ctordefaultclauses_a usedName cdc.TopCase AnyRef pending scalac Default
 ctordefaultclauses_b usedName cdc.Main x$1 pending scalac Default
@@ -764,9 +716,7 @@ defaultsgivenreceiver_b usedName dgivuse.Use$package a$1 pending scalac Default
 defaultsgivenreceiver_b usedName dgivuse.Use$package c$1 pending scalac Default
 defaultsgivenreceiver_b usedName dgivuse.Use$package d$1 pending scalac Default
 defaultsinline_a dinl.Api f pending
-defaultsinline_a dinl.Api f$default$2 pending
 defaultsinline_a dinl.Api g pending
-defaultsinline_a dinl.Api g$default$3 pending
 defaultsinline_a dinl.Api nested pending
 defaultsinline_a dinl.Api order pending
 defaultsinline_a dinl.Api simple pending
@@ -785,15 +735,14 @@ defaultsinline_b usedName dinluse.Use$package b$1 pending scalac Default
 defaultsinline_b usedName dinluse.Use$package b$proxy1 pending scalac Default
 defaultsinline_b usedName dinluse.Use$package b$proxy2 pending scalac Default
 defaultsinline_b usedName dinluse.Use$package c$1 pending scalac Default
-defaultslast_a dlast.Givens b$default$4 pending
-defaultslast_a dlast.Givens b$default$5 pending
+defaultsinlinecopy_a dinc.Inline f pending
+defaultsinlinecopy_a dinc.Inline f$default$1 pending
+defaultsinlinecopy_a dinc.Inline f$default$2 pending
+defaultsinlinecopy_b dincuse.Use$package main pending
+defaultsinlinecopy_b usedName dincuse.Use$package + pending teq Default
 defaultslast_a dlast.Layer dlast$Layer$$super$f pending
-defaultslast_a dlast.Layer dlast$Layer$$super$f$default$1 pending
-defaultslast_a dlast.Layer super$dlast$Layer$$f$default$1 pending
 defaultslast_b binaryDependency dlastuse.Use$package dlast.Parent pending scalac products:defaultslast_a/dlast/Parent.class,Use.scala,DependencyByMemberRef
 defaultslast_b dlastuse.Mixed dlast$Layer$$super$f pending
-defaultslast_b dlastuse.Mixed dlast$Layer$$super$f$default$1 pending
-defaultslast_b dlastuse.Mixed super$dlast$Layer$$f$default$1 pending
 defaultslast_b dlastuse.Use$package main pending
 defaultslast_b usedName dlastuse.Use$package $1$ pending scalac Default
 defaultslast_b usedName dlastuse.Use$package $2$ pending scalac Default
@@ -810,7 +759,6 @@ defaultslast_b usedName dlastuse.Use$package f$1 pending scalac Default
 defaultslast_b usedName dlastuse.Use$package g$1 pending scalac Default
 defaultsplan_a (relation) libraryClasses jar:scala-library pending teq scala.Int
 defaultsplan_a binaryDependency dplan.Api scala.Boolean pending scalac jar:scala-library,Api.scala,DependencyByMemberRef
-defaultsplan_a dplan.Api f$default$3 pending
 defaultsplan_a dplan.Api inlineClause pending
 defaultsplan_a dplan.Api inlineRepeated pending
 defaultsplan_a dplan.Api inlineRightAssoc pending
@@ -846,7 +794,6 @@ defaultsplan_b usedName dplanuse.Use$package u$1 pending scalac Default
 defaultsplan_b usedName dplanuse.Use$package u$2 pending scalac Default
 defaultsplan_b usedName dplanuse.Use$package xs$2 pending scalac Default
 defaultsplan_b usedName dplanuse.main ++: pending scalac Default
-defaultspurity_a dpur.Api f$default$3 pending
 defaultspurity_b dpuruse.Use$package main pending
 defaultspurity_b usedName dpuruse.Use$package a$1 pending scalac Default
 defaultspurity_b usedName dpuruse.Use$package a$2 pending scalac Default
@@ -5285,21 +5232,17 @@ nesteddefaults_b binaryDependency ndb.Use$package nda.O$K$$ pending teq products
 nesteddefaults_b ndb.Use$package run pending
 nesteddefaults_b usedName ndb.Use$package K$ pending teq Default
 nesteddefaultsbyname_a ndb2.Outer.Item $lessinit$greater$default$1 pending
-nesteddefaultsbyname_a ndb2.Outer.Item $lessinit$greater$default$2 pending
 nesteddefaultsbyname_a ndb2.Outer.Item a pending
 nesteddefaultsbyname_a ndb2.Outer.Pair $lessinit$greater$default$2 pending
-nesteddefaultsbyname_a ndb2.Outer.Pair $lessinit$greater$default$3 pending
 nesteddefaultsbyname_a ndb2.Outer.Pair y pending
 nesteddefaultsbyname_a usedName ndb2.Outer.Item AnyRef pending scalac Default
 nesteddefaultsbyname_b binaryDependency ndb2.Main ndb2.Outer$Pair$$ pending teq products:nesteddefaultsbyname_a/ndb2/Outer.class,Main.scala,DependencyByMemberRef
 nesteddefaultsbyname_b usedName ndb2.Main Pair$ pending teq Default
 nesteddefaultsbynamechain_a ndbc.Outer.Item $lessinit$greater$default$1 pending
 nesteddefaultsbynamechain_a ndbc.Outer.Item $lessinit$greater$default$2 pending
-nesteddefaultsbynamechain_a ndbc.Outer.Item $lessinit$greater$default$3 pending
 nesteddefaultsbynamechain_a ndbc.Outer.Item a pending
 nesteddefaultsbynamechain_a ndbc.Outer.Item b pending
 nesteddefaultsbynamechain_a usedName ndbc.Outer.Item AnyRef pending scalac Default
-nesteddefaultscurried_a ndc.Outer.Item $lessinit$greater$default$3 pending
 nesteddefaultscurried_a usedName ndc.Outer.Item b$1 pending scalac Default
 nesteddefaultscurried_b binaryDependency ndc.Main ndc.Outer$Item$$ pending teq products:nesteddefaultscurried_a/ndc/Outer.class,Main.scala,DependencyByMemberRef
 nesteddefaultscurried_b usedName ndc.Main $1$ pending scalac Default
@@ -5328,7 +5271,6 @@ nesteddefaultsparent_b usedName ndpa.Main Item$ pending teq Default
 nesteddefaultsparent_b usedName ndpa.Main Mixed$ pending teq Default
 nesteddefaultsparent_b usedName ndpa.Main ndpa$Outer$Item$$$$outer pending teq Default
 nesteddefaultsparent_b usedName ndpa.Main ndpa$Outer$Mixed$$$$outer pending teq Default
-nesteddefaultsplain_a ndp.Outer.K $lessinit$greater$default$3 pending
 nesteddefaultsplain_a usedName ndp.Outer.K AnyRef pending scalac Default
 nesteddefaultsplain_b binaryDependency ndp.Main ndp.Outer$W$$ pending teq products:nesteddefaultsplain_a/ndp/Outer.class,Main.scala,DependencyByMemberRef
 nesteddefaultsplain_b usedName ndp.Main W$ pending teq Default
@@ -5338,13 +5280,11 @@ nesteddefaultsreceiver_b binaryDependency ndr.Main ndr.Outer$Item$$ pending teq 
 nesteddefaultsreceiver_b usedName ndr.Main $1$ pending scalac Default
 nesteddefaultsreceiver_b usedName ndr.Main Item$ pending teq Default
 nesteddefaultsreceiver_b usedName ndr.Main ndr$Outer$Item$$$$outer pending teq Default
-nesteddefaultssecondary_a nds.Outer.Curried $lessinit$greater$default$3 pending
 nesteddefaultssecondary_a usedName nds.Outer.Const AnyRef pending scalac Default
 nesteddefaultssecondary_a usedName nds.Outer.Curried AnyRef pending scalac Default
 nesteddefaultssecondary_a usedName nds.Outer.Sec AnyRef pending scalac Default
 nesteddefaultssecondary_b usedName nds.Main k$1 pending scalac Default
 nesteddefaultstrait_a binaryDependency ndt.Trait.Made java.lang.String pending scalac jrt:/modules/java.base/java/lang/String.class,T.scala,DependencyByMemberRef
-nesteddefaultstrait_a ndt.Trait.Made $lessinit$greater$default$2 pending
 nesteddefaultstrait_a usedName ndt.Trait.Made AnyRef pending scalac Default
 nesteddefaultstrait_a usedName ndt.Trait.Made String pending scalac Default
 nesteddefaultstrait_b binaryDependency ndt.Main ndt.Trait$Item$$ pending teq products:nesteddefaultstrait_a/ndt/Trait.class,Main.scala,DependencyByMemberRef
@@ -5352,7 +5292,6 @@ nesteddefaultstrait_b binaryDependency ndt.Main ndt.Trait$Made$$ pending teq pro
 nesteddefaultstrait_b usedName ndt.Main Item$ pending teq Default
 nesteddefaultstrait_b usedName ndt.Main Made$ pending teq Default
 nesteddefaultstrait_b usedName ndt.Main y$1 pending scalac Default
-nesteddefaultstraitplain_a ndtp.T.Item $lessinit$greater$default$2 pending
 nesteddefaultstraitplain_a usedName ndtp.T.Item AnyRef pending scalac Default
 nesteddefaultstraitplain_b usedName ndtp.Main ndtp;Main$;_$$anon;init; pending teq Default
 nesteddefaultstraitplain_b usedName ndtp.Main ndtp;Main$;_$_$$anon;init; pending scalac Default
@@ -5962,6 +5901,9 @@ privatealias_a usedName privatealias.Derived Predef pending scalac Default
 privatealias_a usedName privatealias.Scope.Cmd AnyRef pending scalac Default
 privatealias_a usedName privatealias.Scope.Cmd Predef pending scalac Default
 privatealias_b usedName use.Use Scope pending teq Default
+privateother pother.C m pending
+privateother pother.C m$default$1 pending
+privateother pother.C v pending
 products_inline_match_case_block_a ibk.L first pending
 products_inline_match_case_block_b ibu.U$package run pending
 productshapes_a binaryDependency productshapes.C java.lang.String pending scalac jrt:/modules/java.base/java/lang/String.class,Model.scala,DependencyByMemberRef
@@ -6023,7 +5965,6 @@ productwiden_b usedName widenuse.Main toLong pending scalac Default
 productwiden_b usedName widenuse.Main toShort pending scalac Default
 protectedqualified_a binaryDependency lib.inner.K java.lang.String pending scalac jrt:/modules/java.base/java/lang/String.class,Decls.scala,DependencyByMemberRef
 protectedqualified_a binaryDependency lib.inner.O scala.Int pending scalac jar:scala-library,Decls.scala,DependencyByMemberRef
-protectedqualified_a lib.inner.D m$default$1 pending
 protectedqualified_a lib.inner.E <parents> pending
 protectedqualified_a lib.inner.E E pending
 protectedqualified_a lib.inner.E java;io;Serializable;init; pending
