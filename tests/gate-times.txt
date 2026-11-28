@@ -20,29 +20,29 @@
 # does (the builder builds the head, the others wait for its binary), by which the dealer starts their loads. It is
 # written from gates' lines (each shard's seconds less its suites'), --record keeping it as it is.
 cases 225
-cases@16 290
-errors 108
+cases@16 242
+errors 99
 # estimated: errors on sixteen CPUs, from its 115 s on eight by every measured line's ratio 0.89 (17 lines)
 errors@16 102
 parser 39
 parser@16 27
-interop 3
+interop 2
 # estimated: interop on sixteen CPUs, from its 2 s on eight by every measured line's ratio 0.89 (17 lines)
 interop@16 2
 dce 1
 # estimated: dce on sixteen CPUs, from its 0 s on eight by every measured line's ratio 0.89 (17 lines)
 dce@16 0
 split 288
-split.1/2 153
+split.1/2 130
 # estimated: split.1/2 on sixteen CPUs, from its 131 s on eight by every measured line's ratio 0.89 (17 lines)
 split.1/2@16 116
-split.2/2 166
+split.2/2 175
 # estimated: split.2/2 on sixteen CPUs, from its 166 s on eight by every measured line's ratio 0.89 (17 lines)
 split.2/2@16 148
-split-watch 573
+split-watch 674
 # estimated: split-watch on sixteen CPUs, from its 402 s on eight by every measured line's ratio 0.89 (17 lines)
 split-watch@16 357
-check-watch 27
+check-watch 19
 check-watch@16 28
 jvm-watch 329
 jvm-watch.1/2 202
@@ -60,40 +60,40 @@ lsp.2/4@16 268
 lsp.3/4 241
 # estimated: lsp.3/4 on sixteen CPUs, from its 241 s on eight by every measured line's ratio 0.89 (17 lines)
 lsp.3/4@16 214
-lsp.4/4 238
+lsp.4/4 244
 # estimated: lsp.4/4 on sixteen CPUs, from its 238 s on eight by every measured line's ratio 0.89 (17 lines)
 lsp.4/4@16 238
-tasty 112
+tasty 122
 # estimated: tasty on sixteen CPUs, from its 101 s on eight by every measured line's ratio 0.89 (17 lines)
 tasty@16 90
 init-view 35
 # estimated: init-view on sixteen CPUs, from its 30 s on eight by every measured line's ratio 0.89 (17 lines)
-init-view@16 27
+init-view@16 35
 modules 392
-modules.1/2 553
+modules.1/2 773
 # estimated: modules.1/2 on sixteen CPUs, from its 534 s on eight by its family modules's ratio 0.59 (1 lines)
 modules.1/2@16 316
 modules.2/2 642
-modules.2/2@16 310
-right-assoc 89
+modules.2/2@16 471
+right-assoc 110
 right-assoc-readers 1
 # estimated: default-getters on eight CPUs and on sixteen, from its 49 s at --jobs 6 and 27 s at --jobs 16 on the agent host
-default-getters 50
+default-getters 56
 tasty-exec 74
 # estimated: tasty-exec on sixteen CPUs, from its 57 s on eight by every measured line's ratio 0.89 (17 lines)
 tasty-exec@16 51
-analysis-bytes 225
+analysis-bytes 323
 # estimated: analysis-bytes on sixteen CPUs, from its 236 s on eight by every measured line's ratio 0.89 (17 lines)
 analysis-bytes@16 210
-classfile 46
+classfile 30
 # estimated: classfile on sixteen CPUs, from its 34 s on eight by every measured line's ratio 0.89 (17 lines)
 classfile@16 30
 classpath 150
 classpath@16 74
-stdlib 565
+stdlib 679
 # measured: stdlib on sixteen CPUs, in the gates of 25 Nov that preceded these rows
 stdlib@16 558
-app 22
+app 20
 # estimated: app on sixteen CPUs, from its 24 s on eight by every measured line's ratio 0.89 (17 lines)
 app@16 31
 jvm 187
@@ -104,27 +104,27 @@ jvm-21 147
 jvm-21@16 88
 # estimated: jvm-assertions, before a gate measured it: its two passes on sixteen CPUs at eight jobs (223 s by the
 # assertions binary, 40 s by the release, 25 Nov), and on eight CPUs the more for its build's minute beside them
-jvm-assertions 330
+jvm-assertions 379
 jvm-assertions@16 270
-java-sources 13
+java-sources 14
 # measured: java-sources on sixteen CPUs, in the gates of 25 Nov that preceded these rows
 java-sources@16 10
 java-reader 23
-java-reader@16 11
+java-reader@16 15
 interp 70
 interp@16 32
 fold 1
 # measured: fold on sixteen CPUs, in the gates of 25 Nov that preceded these rows
-fold@16 0
-workers 353
+fold@16 1
+workers 446
 # estimated: workers on sixteen CPUs, from its 384 s on eight by every measured line's ratio 0.89 (17 lines)
 workers@16 341
-split-determinism 62
+split-determinism 66
 # measured: split-determinism on sixteen CPUs, in the gates of 25 Nov that preceded these rows
 split-determinism@16 43
 scala3-run 12
 # measured: scala3-run on sixteen CPUs, in the gates of 25 Nov that preceded these rows
-scala3-run@16 9
+scala3-run@16 11
 planted 0
 # estimated: planted on sixteen CPUs, from its 1 s on eight by every measured line's ratio 0.89 (17 lines)
 planted@16 1
@@ -142,24 +142,24 @@ scala3-typing 22
 scala3-typing@16 17
 cargo-test 9
 cargo-test@16 8
-budget 181
-runtime 87
-sentinel 110
-rust-warnings 76
+budget 180
+runtime 91
+sentinel 107
+rust-warnings 46
 # measured: rust-warnings on sixteen CPUs, in the gates of 25 Nov that preceded these rows
 rust-warnings@16 86
 no-caps 2
-task 189
+task 192
 # estimated: task on sixteen CPUs, from its 191 s on eight by every measured line's ratio 0.89 (17 lines)
 task@16 170
-runner-classes 1
+runner-classes 0
 # estimated: runner-classes on sixteen CPUs, from its 1 s on eight by every measured line's ratio 0.89 (17 lines)
 runner-classes@16 1
 lila-test-verb 36
 lila-test-verb@16 42
-reference-test-verb 19
+reference-test-verb 15
 reference-test-verb@16 16
-mill-test-verb 22
+mill-test-verb 21
 # estimated: mill-test-verb on sixteen CPUs, from its 30 s on eight by every measured line's ratio 0.89 (17 lines)
 mill-test-verb@16 27
 std-entered 0
@@ -183,45 +183,45 @@ gate-scripts.2/3@guest 289
 gate-scripts.3/3 576
 gate-scripts.3/3@16 311
 gate-scripts.3/3@guest 289
-lila-export 26
-lila-compile 13
-lila-test 161
-lila-run 8
-airstream-export 5
-airstream-compile 1
+lila-export 30
+lila-compile 15
+lila-test 170
+lila-run 12
+airstream-export 9
+airstream-compile 2
 airstream-test 1
-laminar-export 5
-laminar-compile 1
+laminar-export 11
+laminar-compile 2
 laminar-test 1
-tyrian-export 11
-tyrian-compile 2
-tyrian-test 6
-tyrian-run 2
-indigo-export 34
-indigo-compile 8
+tyrian-export 22
+tyrian-compile 4
+tyrian-test 9
+tyrian-run 4
+indigo-export 66
+indigo-compile 9
 indigo-test 2
-indigo-run 1
-fix 179
+indigo-run 2
+fix 202
 fix@16 179
-interp-script 9
+interp-script 8
 # estimated: interp-script on sixteen CPUs, from its 10 s on eight by its family interp's ratio 0.64 (1 lines)
 interp-script@16 12
 std-kinds 4
 std-kinds@16 4
 java-lang-names 68
 # estimated: java-lang-names on sixteen CPUs, from its 53 s on eight by its family java's ratio 0.62 (1 lines)
-java-lang-names@16 33
+java-lang-names@16 39
 board-pos 91
 # estimated: board-pos on sixteen CPUs, from its 67 s on eight by its family board's ratio 0.89 (2 lines)
 board-pos@16 60
-board-run 77
+board-run 102
 board-run@16 77
-board-rest 45
+board-rest 43
 # measured: board-rest on sixteen CPUs, in the gates of 25 Nov that preceded these rows
 board-rest@16 44
-board-run-scalajs 61
+board-run-scalajs 65
 board-run-scalajs@16 58
-conversion-matrix 2
+conversion-matrix 3
 # estimated: conversion-matrix on sixteen CPUs, from its 5 s on eight by every measured line's ratio 0.89 (17 lines)
 conversion-matrix@16 4
 kept-body-cut 7
@@ -234,22 +234,22 @@ default-getters@16 30
 # by the ratio 3.3 of one run of it to one without it on one machine at load 24 (343 s, its two lowerings of a
 # listing and its classifier one after another, against 103 s); an upper bound, the suite since running them at once;
 # the next gate with --record writes the measured rows
-native-link 244
+native-link 86
 native-link@16 221
-nir 2
+nir 1
 # estimated: nir on sixteen CPUs, from its 1 s on eight by every measured line's ratio 0.89 (17 lines)
 nir@16 1
 pairs-twin 115
 # estimated: pairs-twin on sixteen CPUs, from its 70 s on eight by every measured line's ratio 0.89 (17 lines)
-pairs-twin@16 77
+pairs-twin@16 74
 constants 31
 head-wait 40
 # measured: native-build by tests/gate-shard.sh's own run under taskset, on eight cores (the median of nine runs, 274 to
 # 288 s) and on their sixteen threads, host load 51 to 88, not by a gate's --record (the next one writes its machine's)
 native-build 317
-native-build@16 209
+native-build@16 194
 # measured: idna on eight CPUs, in the gates of 25 Nov that preceded these rows
-idna 10
+idna 9
 idna@16 8
 # The kind guest: a machine whose look names it (GATE_KIND=guest in its own login environment), a sixteen-CPU
 # container of another host shared with other work. Its lines are charged their row of eight over its speed until a
@@ -271,44 +271,52 @@ fix@guest 235
 fold@guest 2
 idna@guest 12
 interop@guest 6
-interp@guest 35
+interp@guest 44
 java-sources@guest 28
 mill-test-verb@guest 41
 native-build@guest 237
 native-link@guest 323
-parser@guest 26
+parser@guest 24
 reference-test-verb@guest 20
 scala3-macros-interp@guest 2
 split-determinism@guest 107
 split.2/2@guest 147
 tasty@guest 150
-lsp.1/4@guest 271
+lsp.1/4@guest 267
 board-rest@guest 52
-scala3-typing@guest 9
+scala3-typing@guest 8
 kept-body-lists@guest 29
 conversion-matrix@guest 6
 # measured: the lines a guest ran in the two gates of 25 Nov that preceded these rows with no row of the kind, at their
 # seconds there (the later gate's where both ran one)
 dce@guest 1
-lsp.2/4@guest 302
+lsp.2/4@guest 300
 task@guest 244
 runner-classes@guest 1
 nir@guest 2
 app@guest 29
 std-entered@guest 0
-jvm@guest 104
-jvm-21@guest 72
+jvm@guest 89
+jvm-21@guest 80
 scala3-interp@guest 46
-kept-body-cut@guest 8
-board-pos@guest 53
+kept-body-cut@guest 9
+board-pos@guest 51
 gate-coverage@guest 0
 # measured: lines with no row of their machine's kind before, in the gates of 25 Nov that preceded these rows: the
 # latest gate's guests, and the products twin's pieces on eight CPUs in the gate that ran them
 errors@guest 330
 check-watch@guest 34
-tasty-exec@guest 56
+tasty-exec@guest 55
 interp-script@guest 19
-scala3-macros@guest 1
+scala3-macros@guest 2
 products-twin.1/3 235
 products-twin.2/3 216
 products-twin.3/3 192
+classpath@guest 94
+cargo-test@guest 15
+lsp.3/4@guest 245
+jvm-watch.1/2@guest 303
+constants@guest 31
+right-assoc-readers@guest 1
+jvm-watch.2/2@guest 337
+lila-test-verb@guest 55
