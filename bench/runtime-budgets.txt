@@ -1,6 +1,5 @@
 # machine: arm64 Apple M4 Max 16 cores
 # recorded: 2026-10-01, median wall and steady-state ms at the quick size, teq-dev under node and teq-jvm under java with teq run's flags; spread of a cell's runs 3.7% of its median, 17.0% at most
-# not judged: closures; recorded at quick K 6, bench/runtime.sh's sizes run 12 since: re-record on that machine
 adts teq-dev steady 16.15
 adts teq-dev wall 151.00
 adts teq-jvm steady 9.37

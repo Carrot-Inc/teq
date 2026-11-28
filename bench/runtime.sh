@@ -46,13 +46,19 @@ run_timeout=120
 sizes="
 adts          50 6   250 10
 boxing       120 6   600 10
-closures     100 12  500 10
+closures     100 6   500 10
 codec        200 6  1000 10
 collections  200 6  1000 10
 dispatch      80 6   400 10
 numeric      150 6   750 10
 strings      200 6  1000 10
 toplevel     360 6  1800 10
+"
+
+# pairs_k: the programs whose comparison (bench/pairs.py) runs another K than the quick size's; closures' steady time
+# at K 6 spreads too far for the comparison to decide.
+pairs_k="
+closures 12
 "
 
 runs=5

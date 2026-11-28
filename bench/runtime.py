@@ -308,21 +308,12 @@ def budget(args):
         print(f"runtime budget: recorded {len(measured)} numbers, {noise}")
         return 0
     limits = {}
-    not_judged = []
     for line in open(budgets_path):
-        directive = re.match(r"^# not judged:([^;]+);(.*)", line)
-        if directive:
-            not_judged = [p.strip() for p in directive[1].split(",")]
-            reason = directive[2].strip()
-            continue
         parts = line.split()
         if len(parts) == 4 and not line.startswith("#"):
             limits[(parts[0], parts[1], parts[2])] = float(parts[3])
-    failed = checked = skipped = 0
+    failed = checked = 0
     for key, (best, med) in sorted(measured.items()):
-        if key[0] in not_judged:
-            skipped += 1
-            continue
         limit = limits.get(key)
         if limit is None:
             print(f"note: {' '.join(key)} has no budget; re-record with RUNTIME_RECORD=1")
@@ -334,8 +325,7 @@ def budget(args):
             failed += 1
         elif (med - limit) / limit * 100 < -tolerance:
             print(f"note: {' '.join(key)} is {med:.2f} ms against a budget of {limit:.2f} ms ({(med - limit) / limit * 100:.0f}%); lower it with RUNTIME_RECORD=1")
-    suffix = f"; not judged: {', '.join(not_judged)} ({skipped} numbers: {reason})" if not_judged else ""
-    print(f"runtime budget: {checked - failed} of {checked} numbers within {tolerance:.0f}% of their budget, {noise}" + (f", {failed} failed" if failed else "") + suffix)
+    print(f"runtime budget: {checked - failed} of {checked} numbers within {tolerance:.0f}% of their budget, {noise}" + (f", {failed} failed" if failed else ""))
     return 1 if failed else 0
 
 

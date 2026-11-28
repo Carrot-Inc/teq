@@ -10,7 +10,7 @@ on a remote machine (tests/gate.sh, docs/DEVELOPING.md "The timing lines on a ma
       against scala-library and under java beside its jar, with bench/runtime.sh's flags), wall and steady-state time, the rows of
       bench/runtime-budgets.txt, every output checked against tests/cases; node and java are
       bench/runtime-machine.txt's, run by the paths it records whatever the PATH's order and checked
-      first to be there with its versions
+      first to be there with its versions; a program bench/runtime.sh's pairs_k names runs at the K given there
   api <master teq> <head teq> [options]
       the type phase of `teq compiler check --time` of an application's main modules, one row: the lists
       bench/app/app-lists.sh writes (APP_ROOT the checkout, APP_MODULES and APP_CLASSPATH files, APP_FLAGS the
@@ -490,7 +490,17 @@ def quick_sizes():
     block = re.search(r'^sizes="\n(.*?)^"$', text, re.M | re.S)
     if not block:
         fail_setup("pairs: no sizes table in bench/runtime.sh")
-    return {f[0]: (f[1], f[2]) for f in (l.split() for l in block.group(1).splitlines()) if len(f) == 5}
+    sizes = {f[0]: (f[1], f[2]) for f in (l.split() for l in block.group(1).splitlines()) if len(f) == 5}
+    overrides = re.search(r'^pairs_k="\n(.*?)^"$', text, re.M | re.S)
+    if not overrides:
+        fail_setup("pairs: no pairs_k table in bench/runtime.sh")
+    for line in overrides.group(1).splitlines():
+        if line.strip():
+            program, k = line.split()
+            if program not in sizes:
+                fail_setup(f"pairs: {program} in pairs_k is missing from sizes in bench/runtime.sh")
+            sizes[program] = (sizes[program][0], k)
+    return sizes
 
 
 def tool_identity(name, path=None):
