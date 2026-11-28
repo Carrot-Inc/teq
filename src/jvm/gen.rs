@@ -679,6 +679,9 @@ pub struct Gen<'a> {
     pub lifted_body: Option<(u32, u32)>,
     /// Set while the primary constructor is written.
     pub ctor_code: bool,
+    /// Whether the held method being written has a line of its own: its code starts at a line, or a node of it stands
+    /// in the class's file (`Gen::super_call_place`).
+    pub entry_lines: bool,
     pub this_name: Rc<str>,
     pub this_class: Option<ClassId>,
     pub is_interface: bool,
@@ -825,6 +828,7 @@ impl<'a> Gen<'a> {
             super_call_at: None,
             lifted_body: None,
             ctor_code: false,
+            entry_lines: false,
             this_name: Rc::from(""),
             this_class: None,
             is_interface: false,
@@ -3111,15 +3115,17 @@ impl<'a> Gen<'a> {
     /// (`BCodeSkelBuilder.gen`: the constructor, then the body), the field initialisers and the
     /// body's statements; then the other members by their place in the source; last the
     /// lifted bodies, which `LambdaLift.transformTemplate` appends to the class, an inner one
-    /// before the one around it: by the end of the body, the later start first. Inside one
-    /// body the calls stand by their line and then by the call's end: a call in another's
-    /// argument is written before it.
+    /// before the one around it: by the end of the body, the later start first. A body with no
+    /// line of its own (a forwarder, a super accessor) stands with the members made for the
+    /// class; inside any other body the calls stand by the call's end in the class's file
+    /// (none last), which orders them as their lines do: a call in another's argument ends,
+    /// and is written, first.
     fn super_call_place(&self) -> SuperPlace {
         let at = self.super_call_at.unwrap_or(u32::MAX);
-        match (self.lifted_body, self.code.current_line()) {
-            (Some((end, start)), _) => (3, end, u32::MAX - start, at),
-            (None, None) => (0, 0, 0, 0),
-            (None, Some(line)) => (if self.ctor_code { 1 } else { 2 }, u32::from(line), at, 0),
+        match self.lifted_body {
+            Some((end, start)) => (3, end, u32::MAX - start, at),
+            None if !self.entry_lines => (0, 0, 0, 0),
+            None => (if self.ctor_code { 1 } else { 2 }, at, 0, 0),
         }
     }
 

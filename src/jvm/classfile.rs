@@ -507,11 +507,6 @@ impl Code {
         self.bytes.len() as u32
     }
 
-    /// The source line the code being written is at, none before the first.
-    pub fn current_line(&self) -> Option<u16> {
-        self.lines.last().map(|&(_, line)| line)
-    }
-
     pub fn line(&mut self, line: u32) {
         self.writing();
         let pc = self.pc() as u16;
