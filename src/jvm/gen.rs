@@ -539,8 +539,6 @@ pub struct MethodCx {
     /// Where the method is defined, where the class writer knows it: the place of the refusals of its code
     /// (`Gen::end_method`), given with its context (`Gen::method_cx`).
     pub at: Option<(crate::source::FileId, crate::source::Span)>,
-    /// The jar method whose class file's attributes the method takes, written after its code (`MethodSite::attributes`).
-    pub attributes: Option<(ClassId, usize)>,
 }
 
 /// The state of a `try` that `Gen::open_try` began, for `Gen::close_try`.
@@ -594,7 +592,6 @@ impl Default for MethodCx {
             labels: FxMap::default(),
             try_exits: FxMap::default(),
             at: None,
-            attributes: None,
         }
     }
 }
@@ -724,6 +721,8 @@ pub struct Gen<'a> {
     /// The planned method whose code is being lowered, from its context's making (`Gen::held_context`,
     /// `Gen::lower_lifted`) until it is held (`Gen::hold_method`): what the lowering reads of its parameters' roles.
     pub(super) planned: Option<crate::lir::MethodDef>,
+    /// The jar method's attributes of the planned method (`Gen::held_context`), held with it (`Gen::hold_method`).
+    pub(super) planned_attributes: Option<Rc<super::classfile::JarAttributes>>,
     /// The key the keyed body being lowered makes (`Gen::lower_keyed_body`), its code's own key of non-local returns.
     pub(super) body_key: Option<crate::lir::TempId>,
     /// A method's code is being written, from `Gen::open_method` to `Gen::end_method`: no lowering runs then.
@@ -847,6 +846,7 @@ impl<'a> Gen<'a> {
             lir: crate::lir::Body::default(),
             lower_declared: FxMap::default(),
             planned: None,
+            planned_attributes: None,
             body_key: None,
             method_open: false,
             local_defs: Vec::new(),

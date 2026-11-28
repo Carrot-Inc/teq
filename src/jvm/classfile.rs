@@ -4,6 +4,7 @@
 //! at every branch target is known when the label is bound or first jumped to, and no dataflow
 //! analysis over the bytecode is needed.
 
+use crate::classfile::Annotation;
 use crate::intern::FxMap;
 
 pub const ACC_PUBLIC: u16 = 0x0001;
@@ -1094,6 +1095,25 @@ struct Member {
     attrs: Vec<(u16, Vec<u8>)>,
 }
 
+/// What a forwarder's class file takes of the jar method it forwards to (`ClassWriter::method_metadata`).
+pub struct JarAttributes {
+    pub exceptions: Vec<String>,
+    pub deprecated: bool,
+    pub kept_annotations: Option<Box<(Vec<Annotation>, Vec<Annotation>)>>,
+    pub kept_parameter_annotations: Option<Box<(Vec<Vec<Annotation>>, Vec<Vec<Annotation>>)>>,
+}
+
+impl JarAttributes {
+    pub fn of(m: &crate::classfile::Method) -> JarAttributes {
+        JarAttributes {
+            exceptions: m.exceptions.clone(),
+            deprecated: m.deprecated,
+            kept_annotations: m.kept_annotations.clone(),
+            kept_parameter_annotations: m.kept_parameter_annotations.clone(),
+        }
+    }
+}
+
 pub struct ClassWriter {
     pub cp: ConstPool,
     access: u16,
@@ -1181,7 +1201,7 @@ impl ClassWriter {
     /// its annotations and its parameters', runtime-visible and invisible, in ASM's order of the
     /// attributes. Each list in the reverse of the method's order, as `addAnnotations` prepends
     /// each annotation.
-    pub fn method_metadata(&mut self, name: &str, desc: &str, from: &crate::classfile::Method) {
+    pub fn method_metadata(&mut self, name: &str, desc: &str, from: &JarAttributes) {
         let (Some(&n), Some(&d)) = (self.cp.utf8.get(name), self.cp.utf8.get(desc)) else { return };
         let Some(at) = self.methods.iter().position(|m| m.name == n && m.desc == d) else { return };
         let mut attrs = Vec::new();

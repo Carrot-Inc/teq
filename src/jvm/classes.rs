@@ -154,6 +154,8 @@ pub(super) struct HeldMethod {
     method: MethodDef,
     /// Its signature as a class file spells it, made once at its hold.
     desc: String,
+    /// The jar method's attributes its class file takes after its code (`MethodSite::attributes`).
+    attributes: Option<Rc<JarAttributes>>,
     /// Whether the method entered its class's plan (`Gen::enter_plan`): not where the class holds one of its name and
     /// signature already, and its code is written all the same and dropped.
     entered: bool,
@@ -264,10 +266,10 @@ pub struct MethodSite {
     pub at: Option<(crate::source::FileId, crate::source::Span)>,
     pub dotty: Dotty,
     pub wider: Wider,
-    /// The jar method whose class file's attributes the method takes, by its class and its place among the class file's
-    /// methods: a trait default's forwarder of a jar trait's member takes its exceptions, deprecation and kept
+    /// The attributes of the jar method the method forwards to, copied where the forwarder is made: a trait default's
+    /// forwarder of a jar trait's member takes its exceptions, deprecation and kept
     /// annotations (`MixinOps.mkForwarderSym` copies the member's and its parameters' annotations).
-    pub attributes: Option<(ClassId, usize)>,
+    pub attributes: Option<Rc<JarAttributes>>,
 }
 
 /// Whether the method teq writes is the method dotty writes: in dotty's class, under the name dotty gives it, with
@@ -342,7 +344,7 @@ impl<'a> Gen<'a> {
     fn method_cx(&mut self, method: &MethodDef, site: MethodSite, params: &[MethodParam], ret: ErasedType, roots: &[TExprId]) -> MethodCx {
         self.check_method(method, &site);
         debug_assert!(crate::lir::repeated_role(params).is_none(), "two parameters of {}{} take one role", method.name(), method_desc(&method.param_types(), method.ret()));
-        let mut m = MethodCx { at: site.at, attributes: site.attributes, ..MethodCx::default() };
+        let mut m = MethodCx { at: site.at, ..MethodCx::default() };
         let mut slot = 0;
         if !method.flags().is_static {
             m.this_slot = Some(0);
@@ -461,11 +463,10 @@ impl<'a> Gen<'a> {
     /// instructions name, the interfaces its `super` calls go to
     /// (`super_targets`), the function arities it names and what it reports. It asks for no
     /// second writing of the class with wide jumps (`overflow`).
-    fn end_method(&mut self, m: MethodDef, desc: &str, entered: bool) -> bool {
+    fn end_method(&mut self, m: MethodDef, desc: &str, entered: bool, attributes: Option<Rc<JarAttributes>>) -> bool {
         self.method_open = false;
         let at = self.m.at;
         let code = std::mem::replace(&mut self.code, Code::new(Vec::new()));
-        let attributes = self.m.attributes.take();
         if code.underflow || code.misreserved {
             let line = code.last_line().map_or(String::new(), |l| format!(" at line {}", l));
             let fault = if code.underflow { "the operand stack model underflowed" } else { "internal error: a value stored in slots reserved for another width" };
@@ -477,9 +478,8 @@ impl<'a> Gen<'a> {
         }
         let reached = !self.cw.overflow;
         self.cw.method(method_access(m.flags()), m.name(), desc, Some(code));
-        if let Some((class, index)) = attributes {
-            let jar = &self.cx.class_files[&class].methods[index];
-            self.cw.method_metadata(m.name(), desc, jar);
+        if let Some(jar) = attributes {
+            self.cw.method_metadata(m.name(), desc, &jar);
         }
         if reached && self.cw.overflow {
             self.too_large_methods.push((self.plan.name.clone(), self.plan.place, m.name().to_string(), desc.to_string(), at));
@@ -756,11 +756,12 @@ impl<'a> Gen<'a> {
     /// with the lowering: the writer stores its own.
     fn hold_method(&mut self, what: &'static str, code: HeldCode) -> HeldMethod {
         let method = self.planned.take().expect("a planned method is held");
+        let attributes = self.planned_attributes.take();
         let desc = method_desc(&method.param_types(), method.ret());
         let (m, lir) = (std::mem::take(&mut self.m), self.lir.start);
         self.lower_declared.clear();
         let under = HeldUnder { context: self.context.clone(), ctor_code: self.ctor_code, lifted_body: self.lifted_body };
-        HeldMethod { method, desc, entered: false, what, first_line: None, under, m, lir, code }
+        HeldMethod { method, desc, attributes, entered: false, what, first_line: None, under, m, lir, code }
     }
 
     /// A member of the class whose body is the tree `compose` lowers, held where a writer would have begun it: its
@@ -780,6 +781,7 @@ impl<'a> Gen<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn held_context(&mut self, flags: MethodFlags, name: &str, desc: &str, params: &[MethodParam], ret: ErasedType, roots: &[TExprId], site: MethodSite) {
         let method = begun_method_def(flags, name, desc, params, &ret, None);
+        self.planned_attributes = site.attributes.clone();
         self.m = self.method_cx(&method, site, params, ret, roots);
         self.planned = Some(method);
         self.lir.begin_method();
@@ -891,7 +893,7 @@ impl<'a> Gen<'a> {
     /// (`Gen::open_method`), its body, ended (`Gen::end_method`). False where its code could not be written: the class
     /// is refused there.
     fn write_held(&mut self, held: HeldMethod) -> bool {
-        let HeldMethod { method, desc, entered, first_line, under, m, lir, code, .. } = held;
+        let HeldMethod { method, desc, attributes, entered, first_line, under, m, lir, code, .. } = held;
         let maker = self.enter_held_under(under);
         // An object's two methods are written from its one constructor tree, which the class's plan keeps.
         let mut tree = matches!(code, HeldCode::ModulePart(_)).then(|| self.module_tree.take().expect("an object's constructor tree in its class's plan"));
@@ -918,7 +920,7 @@ impl<'a> Gen<'a> {
                 self.write_module_part(part.root, part.init, &part.fields);
             }
         }
-        let written = self.end_method(method, &desc, entered);
+        let written = self.end_method(method, &desc, entered, attributes);
         if let Some(mut tree) = tree {
             std::mem::swap(&mut self.lir, &mut tree.lir);
             self.module_tree = Some(tree);
@@ -4568,7 +4570,7 @@ impl<'a> Gen<'a> {
         // With the selected method's metadata as its class file holds it, the exceptions it declares and its
         // parameters' annotations among them; a member teq compiles declares none (`@throws` changes nothing,
         // docs/COMPATIBILITY.md), alike whole and split.
-        let attributes = cx.class_files.get(&mixin).and_then(|cf| cf.methods.iter().position(|m| m.name == text && m.descriptor == im.desc && m.access & (ACC_STATIC | ACC_BRIDGE) == 0)).map(|at| (mixin, at));
+        let attributes = cx.class_files.get(&mixin).and_then(|cf| cf.methods.iter().find(|m| m.name == text && m.descriptor == im.desc && m.access & (ACC_STATIC | ACC_BRIDGE) == 0)).map(|m| Rc::new(JarAttributes::of(m)));
         self.default_forwarder(&im, &im, MethodFlags { is_final: fin, ..MethodFlags::PUBLIC }, MethodSite { attributes, ..MethodSite::default() });
         let overridden = declared.iter().filter(|d| d.0 != mixin).flat_map(|d| d.1.iter()).filter(|d| !d.private && d.matches(meth)).chain(std::iter::once(object).filter(|o| o.matches(meth)));
         let overridden: Vec<String> = overridden.map(|d| d.desc.clone()).collect();
