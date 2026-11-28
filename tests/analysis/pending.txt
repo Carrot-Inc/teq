@@ -751,8 +751,6 @@ custommirror_b binaryDependency cmb.Use$package scala.deriving.Mirror pending sc
 custommirror_b usedName cmb.Use$package MirroredMonoType pending scalac Default
 custommirror_b usedName cmb.Use$package Nothing pending scalac Default
 declaredsignature_b siguse.Use$package run pending
-defaultgetterslocal_a classDependency lib.Lib T pending teq LocalDependencyByInheritance
-defaultgetterslocal_a classDependency lib.Lib lib.Lib$._$T pending scalac LocalDependencyByInheritance
 defaultgetterslocal_a usedName lib.Lib $1$ pending scalac Default
 defaultgetterslocal_b usedName Main $1$ pending scalac Default
 defaultgetterslocal_b usedName Main $2$ pending scalac Default
@@ -983,11 +981,7 @@ dynamic_b app.Use$package run pending
 dynamic_b binaryDependency app.Use$package scala.Tuple2$ pending scalac jar:scala-library,Use.scala,DependencyByMemberRef
 dynamic_b usedName app.Use$package apply pending scalac Default
 dynamic_b usedName app.Use$package scala;Tuple2;init; pending teq Default
-efabstract_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efabstract_a classDependency Lib T pending teq LocalDependencyByInheritance
 efabstract_b B$package run pending
-efabstractmember_a classDependency esc.Lib T pending teq LocalDependencyByInheritance
-efabstractmember_a classDependency esc.Lib esc.Lib$._$T pending scalac LocalDependencyByInheritance
 efabstractmember_b usedName esc.Main $1$ pending scalac Default
 efcapturediamond_a (no-analysis) - pending
 efcapturediamond_b (no-analysis) - pending
@@ -1005,77 +999,37 @@ efdefaultonly_a (no-analysis) - pending
 efdefaultonly_b (no-analysis) - pending
 efextension_b B$package run pending
 efhandgetter_b B$package run pending
-efinherit_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efinherit_a classDependency Lib Lib$._$U pending scalac LocalDependencyByInheritance
-efinherit_a classDependency Lib T pending teq LocalDependencyByInheritance
-efinherit_a classDependency Lib U pending teq LocalDependencyByInheritance
 efinherit_b B$package run pending
-eflpescape_a classDependency lp_escape.Lib T pending teq LocalDependencyByInheritance
-eflpescape_a classDependency lp_escape.Lib lp_escape.Lib$._$T pending scalac LocalDependencyByInheritance
-eflpescapeprior_a classDependency lp_escapeprior.Lib T pending teq LocalDependencyByInheritance
-eflpescapeprior_a classDependency lp_escapeprior.Lib lp_escapeprior.Lib$._$T pending scalac LocalDependencyByInheritance
-efltlocalbodyoverrideanonclause2_a classDependency lt_local_body_override_anon_clause2.Lib T pending teq LocalDependencyByInheritance
-efltlocalbodyoverrideanonclause2_a classDependency lt_local_body_override_anon_clause2.Lib lt_local_body_override_anon_clause2.Lib$._$T pending scalac LocalDependencyByInheritance
 efltlocalbodyoverrideanonclause2_a usedName lt_local_body_override_anon_clause2.Lib $1$ pending scalac Default
 efltlocalbodyoverrideanonclause2_a usedName lt_local_body_override_anon_clause2.Lib lt_local_body_override_anon_clause2;Lib$;_$$anon;init; pending teq Default
 efltlocalbodyoverrideanonclause2_a usedName lt_local_body_override_anon_clause2.Lib lt_local_body_override_anon_clause2;Lib$;_$_$_$$anon;init; pending scalac Default
-efltlocalbodyoverrideanonfirst_a classDependency lt_local_body_override_anon_first.Lib T pending teq LocalDependencyByInheritance
-efltlocalbodyoverrideanonfirst_a classDependency lt_local_body_override_anon_first.Lib lt_local_body_override_anon_first.Lib$._$T pending scalac LocalDependencyByInheritance
 efltlocalbodyoverrideanonfirst_a usedName lt_local_body_override_anon_first.Lib $1$ pending scalac Default
 efltlocalbodyoverrideanonfirst_a usedName lt_local_body_override_anon_first.Lib lt_local_body_override_anon_first;Lib$;_$$anon;init; pending teq Default
 efltlocalbodyoverrideanonfirst_a usedName lt_local_body_override_anon_first.Lib lt_local_body_override_anon_first;Lib$;_$_$_$$anon;init; pending scalac Default
-efltlocalbodyoverrideanonlast_a classDependency lt_local_body_override_anon_last.Lib T pending teq LocalDependencyByInheritance
-efltlocalbodyoverrideanonlast_a classDependency lt_local_body_override_anon_last.Lib lt_local_body_override_anon_last.Lib$._$T pending scalac LocalDependencyByInheritance
 efltlocalbodyoverrideanonlast_a usedName lt_local_body_override_anon_last.Lib $1$ pending scalac Default
 efltlocalbodyoverrideanonlast_a usedName lt_local_body_override_anon_last.Lib lt_local_body_override_anon_last;Lib$;_$$anon;init; pending teq Default
 efltlocalbodyoverrideanonlast_a usedName lt_local_body_override_anon_last.Lib lt_local_body_override_anon_last;Lib$;_$_$_$$anon;init; pending scalac Default
-efltlocalbothoverrideanonclause2_a classDependency lt_local_both_override_anon_clause2.Lib T pending teq LocalDependencyByInheritance
-efltlocalbothoverrideanonclause2_a classDependency lt_local_both_override_anon_clause2.Lib lt_local_both_override_anon_clause2.Lib$._$T pending scalac LocalDependencyByInheritance
 efltlocalbothoverrideanonclause2_a usedName lt_local_both_override_anon_clause2.Lib $1$ pending scalac Default
 efltlocalbothoverrideanonclause2_a usedName lt_local_both_override_anon_clause2.Lib lt_local_both_override_anon_clause2;Lib$;_$$anon;init; pending teq Default
 efltlocalbothoverrideanonclause2_a usedName lt_local_both_override_anon_clause2.Lib lt_local_both_override_anon_clause2;Lib$;_$_$_$$anon;init; pending scalac Default
-efltlocalbothoverrideanonfirst_a classDependency lt_local_both_override_anon_first.Lib T pending teq LocalDependencyByInheritance
-efltlocalbothoverrideanonfirst_a classDependency lt_local_both_override_anon_first.Lib lt_local_both_override_anon_first.Lib$._$T pending scalac LocalDependencyByInheritance
 efltlocalbothoverrideanonfirst_a usedName lt_local_both_override_anon_first.Lib $1$ pending scalac Default
 efltlocalbothoverrideanonfirst_a usedName lt_local_both_override_anon_first.Lib lt_local_both_override_anon_first;Lib$;_$$anon;init; pending teq Default
 efltlocalbothoverrideanonfirst_a usedName lt_local_both_override_anon_first.Lib lt_local_both_override_anon_first;Lib$;_$_$_$$anon;init; pending scalac Default
-efltlocalbothoverrideanonlast_a classDependency lt_local_both_override_anon_last.Lib T pending teq LocalDependencyByInheritance
-efltlocalbothoverrideanonlast_a classDependency lt_local_both_override_anon_last.Lib lt_local_both_override_anon_last.Lib$._$T pending scalac LocalDependencyByInheritance
 efltlocalbothoverrideanonlast_a usedName lt_local_both_override_anon_last.Lib $1$ pending scalac Default
 efltlocalbothoverrideanonlast_a usedName lt_local_both_override_anon_last.Lib lt_local_both_override_anon_last;Lib$;_$$anon;init; pending teq Default
 efltlocalbothoverrideanonlast_a usedName lt_local_both_override_anon_last.Lib lt_local_both_override_anon_last;Lib$;_$_$_$$anon;init; pending scalac Default
-eflxescapebodyleft_a classDependency lx_escape_body_left.Lib T pending teq LocalDependencyByInheritance
-eflxescapebodyleft_a classDependency lx_escape_body_left.Lib lx_escape_body_left.Lib$._$T pending scalac LocalDependencyByInheritance
-eflxescapebothleft_a classDependency lx_escape_both_left.Lib T pending teq LocalDependencyByInheritance
-eflxescapebothleft_a classDependency lx_escape_both_left.Lib lx_escape_both_left.Lib$._$T pending scalac LocalDependencyByInheritance
-eflxescapedefaultleft_a classDependency lx_escape_default_left.Lib T pending teq LocalDependencyByInheritance
-eflxescapedefaultleft_a classDependency lx_escape_default_left.Lib lx_escape_default_left.Lib$._$T pending scalac LocalDependencyByInheritance
-eflxiobjanon_a classDependency lxi_obj_anon.Lib T pending teq LocalDependencyByInheritance
-eflxiobjanon_a classDependency lxi_obj_anon.Lib lxi_obj_anon.Lib$._$T pending scalac LocalDependencyByInheritance
 eflxiobjanon_a lxi_obj_anon.Lib inc pending
 eflxiobjanon_a usedName lxi_obj_anon.Lib lxi_obj_anon;Lib$;_$$anon;init; pending teq Default
 eflxiobjanon_a usedName lxi_obj_anon.Lib lxi_obj_anon;Lib$;_$_$$anon;init; pending scalac Default
-eflxiobjbothleft_a classDependency lxi_obj_both_left.Lib T pending teq LocalDependencyByInheritance
-eflxiobjbothleft_a classDependency lxi_obj_both_left.Lib lxi_obj_both_left.Lib$._$T pending scalac LocalDependencyByInheritance
 eflxiobjbothleft_a lxi_obj_both_left.Lib inc pending
 eflxiobjbothleft_a usedName lxi_obj_both_left.Lib $1$ pending scalac Default
-eflxiobjbothsuper_a classDependency lxi_obj_both_super.Lib T pending teq LocalDependencyByInheritance
-eflxiobjbothsuper_a classDependency lxi_obj_both_super.Lib lxi_obj_both_super.Lib$._$T pending scalac LocalDependencyByInheritance
 eflxiobjbothsuper_a lxi_obj_both_super.Lib inc pending
-eflxiobjbothwritten_a classDependency lxi_obj_both_written.Lib T pending teq LocalDependencyByInheritance
-eflxiobjbothwritten_a classDependency lxi_obj_both_written.Lib lxi_obj_both_written.Lib$._$T pending scalac LocalDependencyByInheritance
 eflxiobjbothwritten_a lxi_obj_both_written.Lib inc pending
 eflxiobjclause_a (no-analysis) - pending
 eflxiobjclause_b (no-analysis) - pending
-eflxiobjdefaultleft_a classDependency lxi_obj_default_left.Lib T pending teq LocalDependencyByInheritance
-eflxiobjdefaultleft_a classDependency lxi_obj_default_left.Lib lxi_obj_default_left.Lib$._$T pending scalac LocalDependencyByInheritance
 eflxiobjdefaultleft_a lxi_obj_default_left.Lib inc pending
 eflxiobjdefaultleft_a usedName lxi_obj_default_left.Lib $1$ pending scalac Default
-eflxiobjdefaultsuper_a classDependency lxi_obj_default_super.Lib T pending teq LocalDependencyByInheritance
-eflxiobjdefaultsuper_a classDependency lxi_obj_default_super.Lib lxi_obj_default_super.Lib$._$T pending scalac LocalDependencyByInheritance
 eflxiobjdefaultsuper_a lxi_obj_default_super.Lib inc pending
-eflxiobjdefaultwritten_a classDependency lxi_obj_default_written.Lib T pending teq LocalDependencyByInheritance
-eflxiobjdefaultwritten_a classDependency lxi_obj_default_written.Lib lxi_obj_default_written.Lib$._$T pending scalac LocalDependencyByInheritance
 eflxiobjdefaultwritten_a lxi_obj_default_written.Lib inc pending
 efnestedinit_a usedName esc.Lib O;_$C;init; pending teq Default
 efnestedinit_a usedName esc.Lib esc;Lib$;_$O;_$C;init; pending scalac Default
@@ -1095,21 +1049,13 @@ efnestedtwo_a usedName esc.Lib O;_$P;init; pending teq Default
 efnestedtwo_a usedName esc.Lib esc;Lib$;_$O;P;C;init; pending scalac Default
 efnestedtwo_a usedName esc.Lib esc;Lib$;_$O;P;init; pending scalac Default
 efnestedtwo_b usedName esc.Main $1$ pending scalac Default
-efoperator_a classDependency esc.Lib T pending teq LocalDependencyByInheritance
-efoperator_a classDependency esc.Lib esc.Lib$._$T pending scalac LocalDependencyByInheritance
 efoperator_b usedName esc.Main $1$ pending scalac Default
 efoperator_b usedName esc.Main $plus$plus$default$2 pending teq Default
 efoperator_b usedName esc.Main ++$default$2 pending scalac Default
 efouterscope_a (no-analysis) - pending
 efouterscope_b (no-analysis) - pending
-efoverloaded_a classDependency esc.Lib T pending teq LocalDependencyByInheritance
-efoverloaded_a classDependency esc.Lib esc.Lib$._$T pending scalac LocalDependencyByInheritance
 efoverloaded_b usedName esc.Main $1$ pending scalac Default
-efoverridelocalclass_a classDependency esc.Lib T pending teq LocalDependencyByInheritance
-efoverridelocalclass_a classDependency esc.Lib esc.Lib$._$T pending scalac LocalDependencyByInheritance
 efoverridelocalclass_b usedName esc.Main $1$ pending scalac Default
-efpanon_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpanon_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpanon_a usedName Lib $1$ pending scalac Default
 efpanon_a usedName Lib $2$ pending scalac Default
 efpanon_a usedName Lib $3$ pending scalac Default
@@ -1125,13 +1071,7 @@ efpanon_a usedName Lib O;_$C;init; pending teq Default
 efpanon_a usedName Lib x$1 pending scalac Default
 efpanon_b B$package run pending
 efpanon_b usedName B$package $1$ pending scalac Default
-efparentonly_a classDependency esc.Lib T pending teq LocalDependencyByInheritance
-efparentonly_a classDependency esc.Lib U pending teq LocalDependencyByInheritance
-efparentonly_a classDependency esc.Lib esc.Lib$._$T pending scalac LocalDependencyByInheritance
-efparentonly_a classDependency esc.Lib esc.Lib$._$U pending scalac LocalDependencyByInheritance
 efparentonly_b usedName esc.Main $1$ pending scalac Default
-efpbind_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpbind_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpbind_a usedName Lib $1$ pending scalac Default
 efpbind_a usedName Lib $2$ pending scalac Default
 efpbind_a usedName Lib $3$ pending scalac Default
@@ -1146,8 +1086,6 @@ efpbind_a usedName Lib Lib$;_$O;_$C;init; pending scalac Default
 efpbind_a usedName Lib O;_$C;init; pending teq Default
 efpbind_a usedName Lib x$1 pending scalac Default
 efpbind_b B$package run pending
-efpblock_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpblock_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpblock_a usedName Lib $1$ pending scalac Default
 efpblock_a usedName Lib $2$ pending scalac Default
 efpblock_a usedName Lib $3$ pending scalac Default
@@ -1162,8 +1100,6 @@ efpblock_a usedName Lib Lib$;_$O;_$C;init; pending scalac Default
 efpblock_a usedName Lib O;_$C;init; pending teq Default
 efpblock_a usedName Lib x$1 pending scalac Default
 efpblock_b B$package run pending
-efpbyname_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpbyname_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpbyname_a usedName Lib $1$ pending scalac Default
 efpbyname_a usedName Lib $2$ pending scalac Default
 efpbyname_a usedName Lib $3$ pending scalac Default
@@ -1178,12 +1114,8 @@ efpbyname_a usedName Lib Lib$;_$O;_$C;init; pending scalac Default
 efpbyname_a usedName Lib O;_$C;init; pending teq Default
 efpbyname_a usedName Lib x$1 pending scalac Default
 efpbyname_b B$package run pending
-efpclassown_a classDependency CO CO$._$T pending scalac LocalDependencyByInheritance
-efpclassown_a classDependency CO T pending teq LocalDependencyByInheritance
 efpclassown_b B$package run pending
 efpclassown_b usedName B$package $1$ pending scalac Default
-efpcontextual_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpcontextual_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpcontextual_a usedName Lib $1$ pending scalac Default
 efpcontextual_a usedName Lib $2$ pending scalac Default
 efpcontextual_a usedName Lib $3$ pending scalac Default
@@ -1198,8 +1130,6 @@ efpcontextual_a usedName Lib Lib$;_$O;_$C;init; pending scalac Default
 efpcontextual_a usedName Lib O;_$C;init; pending teq Default
 efpcontextual_a usedName Lib x$1 pending scalac Default
 efpcontextual_b B$package run pending
-efpcopy_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpcopy_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpcopy_a usedName Lib $1$ pending scalac Default
 efpcopy_a usedName Lib $2$ pending scalac Default
 efpcopy_a usedName Lib $3$ pending scalac Default
@@ -1214,8 +1144,6 @@ efpcopy_a usedName Lib Lib$;_$O;_$C;init; pending scalac Default
 efpcopy_a usedName Lib O;_$C;init; pending teq Default
 efpcopy_a usedName Lib x$1 pending scalac Default
 efpcopy_b B$package run pending
-efpctor_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpctor_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpctor_a usedName Lib $1$ pending scalac Default
 efpctor_a usedName Lib $2$ pending scalac Default
 efpctor_a usedName Lib $3$ pending scalac Default
@@ -1232,8 +1160,6 @@ efpctor_a usedName Lib x$1 pending scalac Default
 efpctor_b B$package run pending
 efpctorprior_a usedName CP AnyRef pending scalac Default
 efpctorprior_b B$package run pending
-efpextension_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpextension_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpextension_a usedName Lib $1$ pending scalac Default
 efpextension_a usedName Lib $2$ pending scalac Default
 efpextension_a usedName Lib $3$ pending scalac Default
@@ -1249,8 +1175,6 @@ efpextension_a usedName Lib O;_$C;init; pending teq Default
 efpextension_a usedName Lib x$1 pending scalac Default
 efpextension_b B$package run pending
 efpextoverride_b B$package run pending
-efpinherited_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpinherited_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpinherited_a usedName Lib $1$ pending scalac Default
 efpinherited_a usedName Lib $2$ pending scalac Default
 efpinherited_a usedName Lib $3$ pending scalac Default
@@ -1282,8 +1206,6 @@ efpinline_c usedName End$package End$package$;_$C$1rshle_236;init; pending teq D
 efpinline_c usedName End$package End$package$;_$C;init; pending scalac Default
 efpnarrow_a usedName Narrow $1$ pending scalac Default
 efpnarrow_b B$package run pending
-efpnone_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpnone_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpnone_a usedName Lib $1$ pending scalac Default
 efpnone_a usedName Lib $2$ pending scalac Default
 efpnone_a usedName Lib $3$ pending scalac Default
@@ -1299,8 +1221,6 @@ efpnone_a usedName Lib O;_$C;init; pending teq Default
 efpnone_a usedName Lib x$1 pending scalac Default
 efpnone_b B$package run pending
 efpnone_b usedName B$package $1$ pending scalac Default
-efpobj_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpobj_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpobj_a usedName Lib $1$ pending scalac Default
 efpobj_a usedName Lib $2$ pending scalac Default
 efpobj_a usedName Lib $3$ pending scalac Default
@@ -1315,8 +1235,6 @@ efpobj_a usedName Lib Lib$;_$O;_$C;init; pending scalac Default
 efpobj_a usedName Lib O;_$C;init; pending teq Default
 efpobj_a usedName Lib x$1 pending scalac Default
 efpobj_b B$package run pending
-efpouter_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpouter_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpouter_a usedName Lib $1$ pending scalac Default
 efpouter_a usedName Lib $2$ pending scalac Default
 efpouter_a usedName Lib $3$ pending scalac Default
@@ -1331,8 +1249,6 @@ efpouter_a usedName Lib Lib$;_$O;_$C;init; pending scalac Default
 efpouter_a usedName Lib O;_$C;init; pending teq Default
 efpouter_a usedName Lib x$1 pending scalac Default
 efpouter_b B$package run pending
-efpoverloaded_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpoverloaded_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpoverloaded_a usedName Lib $1$ pending scalac Default
 efpoverloaded_a usedName Lib $2$ pending scalac Default
 efpoverloaded_a usedName Lib $3$ pending scalac Default
@@ -1349,8 +1265,6 @@ efpoverloaded_a usedName Lib x$1 pending scalac Default
 efpoverloaded_b B$package run pending
 efpoverloadescape_b B$package run pending
 efpoverloadescape_b usedName B$package $1$ pending scalac Default
-efpown_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpown_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpown_a usedName Lib $1$ pending scalac Default
 efpown_a usedName Lib $2$ pending scalac Default
 efpown_a usedName Lib $3$ pending scalac Default
@@ -1366,8 +1280,6 @@ efpown_a usedName Lib O;_$C;init; pending teq Default
 efpown_a usedName Lib x$1 pending scalac Default
 efpown_b B$package run pending
 efpown_b usedName B$package $1$ pending scalac Default
-efppoly_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efppoly_a classDependency Lib T pending teq LocalDependencyByInheritance
 efppoly_a usedName Lib $1$ pending scalac Default
 efppoly_a usedName Lib $2$ pending scalac Default
 efppoly_a usedName Lib $3$ pending scalac Default
@@ -1386,8 +1298,6 @@ efppriorbyname_a usedName Prior $1$ pending scalac Default
 efppriorbyname_b B$package run pending
 efpsameclause_a usedName SC $1$ pending scalac Default
 efpsameclause_b B$package run pending
-efpself_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpself_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpself_a usedName Lib $1$ pending scalac Default
 efpself_a usedName Lib $2$ pending scalac Default
 efpself_a usedName Lib $3$ pending scalac Default
@@ -1402,8 +1312,6 @@ efpself_a usedName Lib Lib$;_$O;_$C;init; pending scalac Default
 efpself_a usedName Lib O;_$C;init; pending teq Default
 efpself_a usedName Lib x$1 pending scalac Default
 efpself_b B$package run pending
-efpthreads_a classDependency Lib Lib$._$T pending scalac LocalDependencyByInheritance
-efpthreads_a classDependency Lib T pending teq LocalDependencyByInheritance
 efpthreads_a usedName Lib $1$ pending scalac Default
 efpthreads_a usedName Lib $2$ pending scalac Default
 efpthreads_a usedName Lib $3$ pending scalac Default
@@ -1426,13 +1334,7 @@ efpthreads_b usedName Use4 $1$ pending scalac Default
 efpthreads_b usedName Use5 $1$ pending scalac Default
 efpthreads_b usedName Use6 $1$ pending scalac Default
 efpthreads_b usedName Use7 $1$ pending scalac Default
-efpure_a classDependency esc.Lib T pending teq LocalDependencyByInheritance
-efpure_a classDependency esc.Lib esc.Lib$._$T pending scalac LocalDependencyByInheritance
 efpure_b usedName esc.Main $1$ pending scalac Default
-efsecondtrait_a classDependency esc.Lib T pending teq LocalDependencyByInheritance
-efsecondtrait_a classDependency esc.Lib T2 pending teq LocalDependencyByInheritance
-efsecondtrait_a classDependency esc.Lib esc.Lib$._$T pending scalac LocalDependencyByInheritance
-efsecondtrait_a classDependency esc.Lib esc.Lib$._$T2 pending scalac LocalDependencyByInheritance
 efsecondtrait_b usedName esc.Main $1$ pending scalac Default
 enum_a (stale-mapping) na.Opt$.Some copy$default$1 default-getter-type pending
 enum_a (stale-mapping) na.Planet $new enum-new pending
@@ -2940,8 +2842,6 @@ fpinlinelocaldefaults_a a2.Api mk pending
 fpinlinelocaldefaults_a a2.Api sub pending
 fpinlinelocaldefaults_a binaryDependency a2.Api java.lang.Object pending teq jrt:/modules/java.base/java/lang/Object.class,A.scala,LocalDependencyByInheritance
 fpinlinelocaldefaults_a binaryDependency a2.Api scala.Int pending scalac jar:scala-library,A.scala,DependencyByMemberRef
-fpinlinelocaldefaults_a classDependency a2.Api L pending teq LocalDependencyByInheritance
-fpinlinelocaldefaults_a classDependency a2.Api a2.Api$._$L pending scalac LocalDependencyByInheritance
 fpinlinelocaldefaults_a classDependency a2.Api a2.C pending scalac LocalDependencyByInheritance
 fpinlinelocaldefaults_a usedName a2.Api $lessinit$greater$default$1 pending scalac Default
 fpinlinelocaldefaults_a usedName a2.Api C pending scalac Default
@@ -2973,8 +2873,6 @@ fpinlinelocalgeneric_a binaryDependency a2.Api java.lang.Object pending teq jrt:
 fpinlinelocalgeneric_a binaryDependency a2.Api scala.Int pending scalac jar:scala-library,A.scala,DependencyByMemberRef
 fpinlinelocalgeneric_a binaryDependency a2.Api scala.None$ pending scalac jar:scala-library,A.scala,DependencyByMemberRef
 fpinlinelocalgeneric_a binaryDependency a2.Api scala.Option pending scalac jar:scala-library,A.scala,DependencyByMemberRef
-fpinlinelocalgeneric_a classDependency a2.Api L pending teq LocalDependencyByInheritance
-fpinlinelocalgeneric_a classDependency a2.Api a2.Api$._$L pending scalac LocalDependencyByInheritance
 fpinlinelocalgeneric_a classDependency a2.Api a2.C pending scalac LocalDependencyByInheritance
 fpinlinelocalgeneric_a usedName a2.Api $lessinit$greater$default$1 pending scalac Default
 fpinlinelocalgeneric_a usedName a2.Api Any pending scalac Default
@@ -3011,8 +2909,6 @@ fpinlinelocalgeneric_b usedName Run a2;C;init; pending scalac Default
 fpinlinelocalnoparams_a a2.Api mk pending
 fpinlinelocalnoparams_a a2.Api sub pending
 fpinlinelocalnoparams_a binaryDependency a2.Api java.lang.Object pending teq jrt:/modules/java.base/java/lang/Object.class,A.scala,LocalDependencyByInheritance
-fpinlinelocalnoparams_a classDependency a2.Api L pending teq LocalDependencyByInheritance
-fpinlinelocalnoparams_a classDependency a2.Api a2.Api$._$L pending scalac LocalDependencyByInheritance
 fpinlinelocalnoparams_a classDependency a2.Api a2.C pending scalac LocalDependencyByInheritance
 fpinlinelocalnoparams_a usedName a2.Api C pending scalac Default
 fpinlinelocalnoparams_a usedName a2.Api _$L;init; pending teq Default
@@ -4339,10 +4235,6 @@ localcaseapply_a usedName lca.Mac lca;Mac$;_$Part;init; pending scalac Default
 localcaseapply_a usedName lca.Mac x$1 pending scalac Default
 localcaseapply_a usedName lca.Mac x$2 pending scalac Default
 localclass_b (stale-mapping) lcb.Use$package run annotation-tree pending
-localclasstrait_a classDependency lct.Host O.T pending teq LocalDependencyByInheritance
-localclasstrait_a classDependency lct.Host lct.Host._$O.T pending scalac LocalDependencyByInheritance
-localclasstrait_a classDependency lct.Lib O.T pending teq LocalDependencyByInheritance
-localclasstrait_a classDependency lct.Lib lct.Lib$._$O.T pending scalac LocalDependencyByInheritance
 localclasstrait_a usedName lct.Host $thisn1im7s_1217$proxy pending teq Default
 localclasstrait_a usedName lct.Host O$T$$$outer pending teq Default
 localclasstrait_a usedName lct.Host O;_$$anon;init; pending teq Default
@@ -4376,8 +4268,6 @@ localcompanion_a binaryDependency lca.Lib scala.reflect.ClassTag pending scalac 
 localcompanion_a binaryDependency lca.Lib scala.reflect.ClassTag$ pending scalac jar:scala-library,Lib.scala,DependencyByMemberRef
 localcompanion_a binaryDependency lca.Lib scala.runtime.EnumValue pending scalac jar:scala-library,Lib.scala,DependencyByMemberRef
 localcompanion_a binaryDependency lca.Lib scala.runtime.EnumValue pending scalac jar:scala-library,Lib.scala,LocalDependencyByInheritance
-localcompanion_a classDependency lca.Lib E pending teq LocalDependencyByInheritance
-localcompanion_a classDependency lca.Lib lca.Lib$._$E pending scalac LocalDependencyByInheritance
 localcompanion_a usedName lca.Lib $name pending scalac Default
 localcompanion_a usedName lca.Lib $new pending scalac Default
 localcompanion_a usedName lca.Lib $values pending scalac Default
@@ -4407,10 +4297,6 @@ localcompanion_a usedName lca.Lib throw pending scalac Default
 localcompanion_a usedName lca.Lib toString pending scalac Default
 localcompanion_a usedName lca.Lib x$1 pending scalac Default
 localcompanion_b lcb.Use$package run pending
-localdispatch_a classDependency lda.Lib T pending teq LocalDependencyByInheritance
-localdispatch_a classDependency lda.Lib U pending teq LocalDependencyByInheritance
-localdispatch_a classDependency lda.Lib lda.Lib$._$T pending scalac LocalDependencyByInheritance
-localdispatch_a classDependency lda.Lib lda.Lib$._$U pending scalac LocalDependencyByInheritance
 localdispatch_a usedName lda.Lib T;A;_$B;init; pending teq Default
 localdispatch_a usedName lda.Lib T;_$A;init; pending teq Default
 localdispatch_a usedName lda.Lib lda;Lib$;_$T;A;B;init; pending scalac Default
@@ -4431,8 +4317,6 @@ localenum_a binaryDependency lea.Lib scala.reflect.ClassTag pending scalac jar:s
 localenum_a binaryDependency lea.Lib scala.reflect.ClassTag$ pending scalac jar:scala-library,Lib.scala,DependencyByMemberRef
 localenum_a binaryDependency lea.Lib scala.runtime.EnumValue pending scalac jar:scala-library,Lib.scala,DependencyByMemberRef
 localenum_a binaryDependency lea.Lib scala.runtime.EnumValue pending scalac jar:scala-library,Lib.scala,LocalDependencyByInheritance
-localenum_a classDependency lea.Lib E pending teq LocalDependencyByInheritance
-localenum_a classDependency lea.Lib lea.Lib$._$E pending scalac LocalDependencyByInheritance
 localenum_a lea.Lib ordinal pending
 localenum_a usedName lea.Lib $name pending scalac Default
 localenum_a usedName lea.Lib $new pending scalac Default
@@ -4528,16 +4412,6 @@ localobject_a loa.Loc pairsInline pending
 localobject_a usedName loa.Loc ImpureFunction1 pending scalac Default
 localobject_a usedName loa.Loc x$1 pending scalac Default
 localobject_b usedName lob.Use$package xs$proxy1 pending scalac Default
-localsecondarydefault_a classDependency lsd.Lib LC.C pending teq LocalDependencyByInheritance
-localsecondarydefault_a classDependency lsd.Lib LC.T pending teq LocalDependencyByInheritance
-localsecondarydefault_a classDependency lsd.Lib LO$.C pending teq LocalDependencyByInheritance
-localsecondarydefault_a classDependency lsd.Lib LO$.T pending teq LocalDependencyByInheritance
-localsecondarydefault_a classDependency lsd.Lib LO$.U pending teq LocalDependencyByInheritance
-localsecondarydefault_a classDependency lsd.Lib lsd.Lib$._$LC.C pending scalac LocalDependencyByInheritance
-localsecondarydefault_a classDependency lsd.Lib lsd.Lib$._$LC.T pending scalac LocalDependencyByInheritance
-localsecondarydefault_a classDependency lsd.Lib lsd.Lib$._$LO$.C pending scalac LocalDependencyByInheritance
-localsecondarydefault_a classDependency lsd.Lib lsd.Lib$._$LO$.T pending scalac LocalDependencyByInheritance
-localsecondarydefault_a classDependency lsd.Lib lsd.Lib$._$LO$.U pending scalac LocalDependencyByInheritance
 localsecondarydefault_a usedName lsd.Lib AnyRef pending scalac Default
 localsecondarydefault_a usedName lsd.Lib LC;C;_$C;init; pending teq Default
 localsecondarydefault_a usedName lsd.Lib LC;_$$anon;init; pending teq Default
@@ -4548,8 +4422,6 @@ localsecondarydefault_a usedName lsd.Lib lsd;Lib$;_$LC;_$$anon;init; pending sca
 localsecondarydefault_a usedName lsd.Lib lsd;Lib$;_$LO$;C;init; pending scalac Default
 localsecondarydefault_a usedName lsd.Lib lsd;Lib$;_$LO$;_$$anon;init; pending scalac Default
 localsecondarydefault_b lsdu.Use$package run pending
-localtrait_a classDependency lta.Lib T pending teq LocalDependencyByInheritance
-localtrait_a classDependency lta.Lib lta.Lib$._$T pending scalac LocalDependencyByInheritance
 localtrait_a lta.Lib twice pending
 localtrait_a usedName lta.Lib * pending scalac Default
 localtrait_a usedName lta.Lib _$C;init; pending teq Default
@@ -5808,8 +5680,6 @@ overloadexpand_b usedName oeb.Use length pending teq Default
 overloadexpand_b usedName oeb.Use pre pending teq Default
 overloadexpand_b usedName oeb.Use toString pending teq Default
 overloadusing_b overload_use.Main$package run pending
-overrideparamlevels_a classDependency opl.Lib Loc pending teq LocalDependencyByInheritance
-overrideparamlevels_a classDependency opl.Lib opl.Lib$._$Loc pending scalac LocalDependencyByInheritance
 overrideparamlevels_a opl.AV2 <header> pending
 overrideparamlevels_a opl.AV2 AV2 pending
 overrideparamlevels_a opl.AV3 <header> pending
@@ -5854,8 +5724,6 @@ overrideparamlevels_b U3 <header> pending
 overrideparamlevels_b U3 U3 pending
 overrideparamlevels_b Use$package run pending
 overrideparamlevels_b binaryDependency Use$package opl.A1 pending scalac products:overrideparamlevels_a/opl/A1.class,Use.scala,LocalDependencyByInheritance
-overrideparamlevels_b classDependency Use$package Loc pending teq LocalDependencyByInheritance
-overrideparamlevels_b classDependency Use$package Use$package$._$_$Loc pending scalac LocalDependencyByInheritance
 overrideparamlevels_b run <header> pending
 overrideparamlevels_b run main pending
 overrideparamlevels_b run run pending

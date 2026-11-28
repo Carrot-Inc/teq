@@ -64,7 +64,7 @@ enum Ev {
     /// resolves to the original.
     Forwarder(ClassId, Name),
     /// A local class defined in the code typed, whether or not anything instantiates it.
-    LocalClass(ClassId),
+    LocalClass(ClassId, Option<(Owned, u32)>),
 }
 
 /// What an import's path reaches: a package, an object's class, a stable value.
@@ -191,7 +191,13 @@ impl Recorder {
                         n,
                     ),
                     Ev::Forwarder(k, n) => Ev::Forwarder(class(k), n),
-                    Ev::LocalClass(k) => Ev::LocalClass(class(k)),
+                    Ev::LocalClass(k, owner) => Ev::LocalClass(class(k), owner.map(|(o, terms)| {
+                        let o = match o {
+                            Owned::Class(c) => Owned::Class(class(c)),
+                            Owned::Package(f, p) => Owned::Package(f, pkg(p)),
+                        };
+                        (o, terms)
+                    })),
                 })
                 .collect();
             self.records.insert(comp(c), evs);
@@ -395,9 +401,38 @@ impl<'a> Worker<'a> {
     #[cold]
     #[inline(never)]
     pub(super) fn deps_local_class(&mut self, c: ClassId) {
+        let owner = self.local_class_owner();
         if let Some(d) = self.deps.as_mut() {
-            d.record(Ev::LocalClass(c));
+            d.record(Ev::LocalClass(c, owner));
         }
+    }
+
+    fn local_class_owner(&self) -> Option<(Owned, u32)> {
+        use super::site::SiteOwner;
+        let mut sites = self.sites.owners.as_slice();
+        let mut terms = 0;
+        while let Some((site, outer)) = sites.split_last() {
+            terms += 1;
+            sites = outer;
+            match *site {
+                SiteOwner::Dummy(c) => return Some((Owned::Class(c), terms)),
+                SiteOwner::Sym(s) => {
+                    let info = self.syms.sym(s);
+                    match info.owner {
+                        Owner::Class(c) => return Some((Owned::Class(c), terms)),
+                        Owner::Package(p) => return Some((Owned::Package(info.file, p), terms)),
+                        // A forward reference may have demanded this body inside another term.
+                        Owner::Local => {
+                            if let Some(depth) = self.binding_owner_depth(s) {
+                                sites = outer.get(..depth)?;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     /// A name of a written type that resolves to none of teq's symbols.
@@ -785,6 +820,8 @@ struct Collector<'c, 'a> {
     tree_seen: Seen,
     info_seen: Seen,
     targets: FxMap<ClassId, Target>,
+    /// The enclosing class and number of intervening term owners at a local class's definition.
+    local_owners: FxMap<ClassId, (Owned, u32)>,
     /// The Java enums of the class path one of whose constants a tree of the build names.
     enums_named: FxMap<ClassId, ()>,
     /// The class each type parameter of a class belongs to, and none for a method's.
@@ -869,6 +906,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             tree_seen: Seen::default(),
             info_seen: Seen::default(),
             targets: FxMap::default(),
+            local_owners: FxMap::default(),
             enums_named: FxMap::default(),
             tparam_class,
             tclass_of,
@@ -904,6 +942,12 @@ impl<'c, 'a> Collector<'c, 'a> {
     // ---- what is collected, owner by owner ----
 
     fn collect(&mut self, files: &FxMap<FileId, ()>) {
+        if let Some(rec) = &self.w.deps {
+            self.local_owners.extend(rec.records.values().flatten().filter_map(|ev| match *ev {
+                Ev::LocalClass(c, Some(owner)) => Some((c, owner)),
+                _ => None,
+            }));
+        }
         let mut wanted: Vec<FileId> = files.keys().copied().collect();
         wanted.sort();
         for f in 0..self.w.files.len() {
@@ -1394,7 +1438,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                     Ev::ImportPath(s) => self.term_node(s, None),
                     Ev::ImportSel(prefix, n) => self.import_selector(prefix, n),
                     Ev::Forwarder(c, n) => self.forwarder_ref(c, n),
-                    Ev::LocalClass(c) => {
+                    Ev::LocalClass(c, _) => {
                         // Its definition, where `this` is the class records go to.
                         let k = self.owner_class;
                         self.this.extend(k);
@@ -1571,7 +1615,17 @@ impl<'c, 'a> Collector<'c, 'a> {
                     format!("{}.{}", path, own)
                 }
             }
-            Owner::Local => own,
+            // SymDenotations.fullNameSeparated (3.8.4, 503-523): one `_$` per term owner.
+            Owner::Local => match self.local_owners.get(&c) {
+                Some(&(owner, terms)) => {
+                    let prefix = match owner {
+                        Owned::Class(k) => self.full_name(k),
+                        Owned::Package(f, p) => format!("{}$", self.package_object_binary(f, p)),
+                    };
+                    format!("{}.{}{}", prefix, "_$".repeat(terms as usize), own)
+                }
+                None => own,
+            },
         }
     }
 
@@ -1723,7 +1777,7 @@ impl<'c, 'a> Collector<'c, 'a> {
         let info = self.w.syms.class(c);
         let file = info.file;
         if self.w.program_file(file) && info.def.is_some() {
-            return Target::Source(self.zinc_name(self.outermost_nonlocal(c)), self.unit(file));
+            return Target::Source(self.zinc_name(c), self.unit(file));
         }
         let mut binary = self.binary_class_name(c);
         // The statics of a Java class that teq's std writes as an object: scalac's module of a
@@ -1738,11 +1792,6 @@ impl<'c, 'a> Collector<'c, 'a> {
         // A class of teq's own standard library (its builtin layer under `--std=scala-library`):
         // the class file scalac finds for it, the JDK's or the class path's.
         self.std_origin(c, &binary).map_or(Target::Nowhere, |entry| Target::Binary(entry, binary))
-    }
-
-    /// The class a local one belongs to for zinc: the closest non-local class around it.
-    fn outermost_nonlocal(&self, c: ClassId) -> ClassId {
-        c
     }
 
     /// The binary name of a class (`p.Outer$Inner`, `p.Obj$`).
@@ -2800,7 +2849,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             match ev {
                 Ev::Alias(a) => self.named_alias(a),
                 Ev::Forwarder(c, n) => self.forwarder_ref(c, n),
-                Ev::Pkg(_) | Ev::Name(_) | Ev::ImportPath(_) | Ev::ImportSel(..) | Ev::LocalClass(_) => {}
+                Ev::Pkg(_) | Ev::Name(_) | Ev::ImportPath(_) | Ev::ImportSel(..) | Ev::LocalClass(..) => {}
             }
         }
     }
@@ -3427,7 +3476,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                     Ev::Alias(a) => self.named_alias(a),
                     Ev::Pkg(p) => self.package_ref(p),
                     Ev::Name(n) => self.written_name(n),
-                    Ev::ImportPath(_) | Ev::ImportSel(..) | Ev::Forwarder(..) | Ev::LocalClass(_) => {}
+                    Ev::ImportPath(_) | Ev::ImportSel(..) | Ev::Forwarder(..) | Ev::LocalClass(..) => {}
                 }
             }
         }

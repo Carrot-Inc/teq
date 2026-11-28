@@ -5516,14 +5516,12 @@ impl<'a> Worker<'a> {
         ty
     }
 
-    /// Whether the local definition `sym`, whose body's typing starts with `owners` entries in the owner
-    /// chain, is typed where its statement stands: the scope that binds it opened at that depth.
-    fn at_own_statement(&self, sym: SymId, owners: usize) -> bool {
-        let bound = self.env.frames.iter().rev().find_map(|f| match f {
+    /// The depth of the lexical owner chain where the scope binding `sym` opened.
+    pub(super) fn binding_owner_depth(&self, sym: SymId) -> Option<usize> {
+        self.env.frames.iter().rev().find_map(|f| match f {
             Frame::Locals { names, owner, .. } if names.iter().any(|&(_, s)| s == sym) => Some(*owner as usize),
             _ => None,
-        });
-        bound == Some(owners)
+        })
     }
 
     fn type_body_in_now(&mut self, sym: SymId, sig: &MethodSig, expected: Option<TypeId>) -> TypeId {
@@ -5558,7 +5556,7 @@ impl<'a> Worker<'a> {
                     _ => false,
                 };
             self.plain_member = plain.then_some((c, owners_depth as u32));
-        } else if self.plain_member.is_some() && !self.at_own_statement(sym, owners_depth) {
+        } else if self.plain_member.is_some() && self.binding_owner_depth(sym) != Some(owners_depth) {
             self.plain_member = None;
         }
         // What the body's typing reports is its own (`Diagnostic::owner`).
