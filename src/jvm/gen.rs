@@ -468,11 +468,10 @@ pub enum ReturnTarget {
     Unknown,
 }
 
-/// A def whose self calls in tail position are jumps to the start of its code, as the lowering decides it: the
-/// writer binds the start (`MethodCx::tail_head`).
+/// A def whose self calls in tail position are jumps to the start of its code, as the lowering decides it (`Kind::TailLoop`).
 pub struct TailLoop {
     pub sym: SymId,
-    pub params: Vec<SymId>,
+    pub params: Rc<[SymId]>,
     /// The calls of the def by itself under its `return`s that go round the loop
     /// (`Program::tail_jumps`).
     pub jumps: Vec<TExprId>,
@@ -489,8 +488,6 @@ pub struct MethodCx {
     pub this_kept: Option<crate::lir::TempId>,
     pub ret: ErasedType,
     pub tail: Option<TailLoop>,
-    /// Where the code of a def that loops (`tail`) starts.
-    pub tail_head: Option<Label>,
     /// The locals of the method that live in a cell (`free::cells`).
     pub cells: Vec<SymId>,
     /// Set while the arguments of the super constructor are evaluated: `this` is not there
@@ -574,7 +571,6 @@ impl Default for MethodCx {
             this_kept: None,
             ret: ErasedType::V,
             tail: None,
-            tail_head: None,
             cells: Vec::new(),
             before_super: false,
             lambda: false,
@@ -676,6 +672,8 @@ pub struct Gen<'a> {
     pub line_file: FileId,
     /// Inside an argument the typer made, whose line holds through it (`Place::held`).
     pub line_hold: bool,
+    /// The head and declared parameters of the `Kind::TailLoop` whose body is being written.
+    pub(super) tail_loop: Option<(Label, Rc<[SymId]>)>,
     pub pending: Vec<Pending>,
     /// The default getters' bodies a hold asks for while a round of the class's lifted bodies is lowered
     /// (`Gen::drain_pending`, `Gen::prepare_held`): they belong to the next round, so that no round's set changes while it
@@ -815,6 +813,7 @@ impl<'a> Gen<'a> {
             abstract_class: false,
             line_file: FileId(u32::MAX),
             line_hold: false,
+            tail_loop: None,
             pending: Vec::new(),
             pending_next: Vec::new(),
             draining: false,

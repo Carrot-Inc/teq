@@ -316,11 +316,15 @@ pub enum Kind {
     Throw(LirId),
     /// The def's result: the value is returned.
     Return(LirId),
+    /// The def's body from where a self tail call starts it again, at the body's type and position.
+    /// After the receiver becomes `this`, the arguments become these declared parameters in order
+    /// (`Kind::Local`).
+    TailLoop { params: Rc<[SymId]>, body: LirId },
     /// The def called by itself where it loops, in return position or in a tail position of a
     /// `return`'s value: the receiver where another instance is called, then the arguments, in
-    /// order; they become `this` and the parameters, and the body starts again. Nothing follows
-    /// it: the node's type is the one its place wants, the operands under it dropped; as a
-    /// condition (`&&`'s or `||`'s right operand) nothing tests it.
+    /// order; they become `this` and the parameters, and the call jumps to its enclosing
+    /// `TailLoop`. Nothing follows it: the node's type is the one its place wants, the operands
+    /// under it dropped; as a condition (`&&`'s or `||`'s right operand) nothing tests it.
     SelfTailCall { receiver: Option<LirId>, args: List },
     /// A field of an instance assigned.
     FieldStore { receiver: LirId, owner: Rc<str>, name: Rc<str>, value: LirId },
@@ -678,6 +682,14 @@ impl Body {
         &self.node(id).ty
     }
 
+    /// The kind of code at `id`, looking through a def's loop head to the body it starts.
+    pub fn body_kind(&self, id: LirId) -> &Kind {
+        match &self.node(id).kind {
+            Kind::TailLoop { body, .. } => &self.node(*body).kind,
+            kind => kind,
+        }
+    }
+
     fn items(&self, list: List) -> impl Iterator<Item = LirId> + '_ {
         self.lists()[list.start as usize..(list.start + list.len) as usize].iter().copied()
     }
@@ -699,7 +711,7 @@ impl Body {
             Kind::Underlying { value } | Kind::Typed(value) | Kind::ArrayLength(value) | Kind::ArrayClone(value) | Kind::NewArray { length: value } => out.push(*value),
             Kind::Cast { value, .. } | Kind::StringOf { value } | Kind::Adapt { value, .. } | Kind::Is { value, .. } => out.push(*value),
             Kind::LazyCas { object, expected, new, .. } => out.extend([*object, *expected, *new]),
-            Kind::Labeled { body, .. } => out.push(*body),
+            Kind::TailLoop { body, .. } | Kind::Labeled { body, .. } => out.push(*body),
             Kind::Binary { left, right, .. } | Kind::Compare { left, right, .. } | Kind::And(left, right) | Kind::Or(left, right) => out.extend([*left, *right]),
             Kind::ArrayLoad { array, index } => out.extend([*array, *index]),
             Kind::ArrayStore { array, index, value } => out.extend([*array, *index, *value]),
@@ -763,7 +775,7 @@ impl Body {
     }
 
     pub fn returns_through(&self, id: LirId) -> bool {
-        match &self.node(id).kind {
+        match self.body_kind(id) {
             Kind::Try { body, catch, finalizer: Some(_), .. } => {
                 self.holds_return(*body) || catch.iter().flat_map(|c| c.handlers.iter()).any(|h| self.holds_return(h.body))
             }
@@ -929,6 +941,10 @@ impl Body {
     /// The labelled block `label` around `body`, which leaves no value.
     pub fn labeled(&mut self, label: LabelId, body: LirId) -> LirId {
         self.push(Kind::Labeled { label, body }, ErasedType::V)
+    }
+
+    pub fn tail_loop(&mut self, params: Rc<[SymId]>, body: LirId) -> LirId {
+        self.push(Kind::TailLoop { params, body }, self.ty(body).clone())
     }
 
     /// The labelled block `label` left with no value.

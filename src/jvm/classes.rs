@@ -1079,51 +1079,47 @@ impl<'a> Gen<'a> {
     fn lower_method_body(&mut self, sym: SymId, params: &[SymId], body: TExprId) -> BodyTree {
         let cx = self.cx;
         let (calls, _) = cx.input.prog.tail_self_calls(sym, params.len(), body);
-        let jumps = cx.input.prog.tail_jumps(cx.input.syms, sym, params.len(), body).calls;
+        let mut jumps = cx.input.prog.tail_jumps(cx.input.syms, sym, params.len(), body).calls;
         let looping = (calls > 0 || !jumps.is_empty()) && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell));
-        if !self.an.returns_through_closure(cx, body) {
-            if looping {
-                self.m.tail = Some(TailLoop { sym, params: params.to_vec(), jumps });
-            }
-            return BodyTree::Plain(self.lowering(|g| g.lower_tail(body)));
-        }
-        // The loop's jumps are lowered with the body, which is a value in the `try`: its calls in the tail positions
-        // `Program::tail_self_calls` counts are jumps as its `return`s' are.
+        let keyed = self.an.returns_through_closure(cx, body);
         if looping {
-            let mut jumps = jumps;
-            self.tail_position_calls(sym, params.len(), body, &mut jumps);
-            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), jumps });
+            // A keyed body is a value in the `try`: its tail-position calls are jumps as its `return`s' are.
+            if keyed {
+                self.tail_position_calls(sym, params.len(), body, &mut jumps);
+            }
+            self.m.tail = Some(TailLoop { sym, params: Rc::from(params), jumps });
         }
-        let (made, tree) = self.lowering(|g| g.lower_keyed_body(body));
-        BodyTree::Keyed { made, tree }
+        if keyed {
+            self.lowering(|g| {
+                let (made, tree) = g.lower_keyed_body(body);
+                BodyTree::Keyed { made, tree: g.loop_around(tree) }
+            })
+        } else {
+            self.lowering(|g| {
+                let tree = g.lower_tail(body);
+                BodyTree::Plain(g.loop_around(tree))
+            })
+        }
     }
 
-    /// Writes a def's body lowered by `Gen::lower_method_body`, from the loop's head where the def loops: a plain one
-    /// as the method's body, its root in return position; a keyed one's key first, then the `try` that holds the body
-    /// (the head inside it, after the key's local).
+    /// The loop around the tree where the def loops.
+    fn loop_around(&mut self, tree: LirId) -> LirId {
+        match &self.m.tail {
+            Some(tail) => self.lir.tail_loop(tail.params.clone(), tree),
+            None => tree,
+        }
+    }
+
+    /// Writes a def's body in return position, or its key and the `try` around its body.
     fn write_method_body(&mut self, body: BodyTree) {
         match body {
-            BodyTree::Plain(tree) => {
-                self.bind_loop_head();
-                self.write_body(tree);
-            }
+            BodyTree::Plain(tree) => self.write_body(tree),
             BodyTree::Keyed { made, tree } => {
                 self.write(made);
-                self.bind_loop_head();
                 self.write(tree);
             }
         }
         self.m.tail = None;
-        self.m.tail_head = None;
-    }
-
-    /// Binds the start of the loop where the def loops (`MethodCx::tail_head`).
-    fn bind_loop_head(&mut self) {
-        if self.m.tail.is_some() {
-            let head = self.code.new_label();
-            self.code.bind(head);
-            self.m.tail_head = Some(head);
-        }
     }
 
     /// The calls of the def by itself in the tail positions of `e` that `Program::tail_self_calls` counts.

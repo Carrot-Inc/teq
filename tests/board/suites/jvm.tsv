@@ -3286,6 +3286,12 @@ system_out_stream	pass	-
 system_properties	pass	-	
 tabulate_order	pass	-	
 tail_calls	pass	-	
+tail_loop_condition	pass	-	
+tail_loop_keyed_receiver	pass	-	
+tail_loop_keyed_swap	pass	-	
+tail_loop_receiver_swap	pass	-	
+tail_loop_value_class	pass	-	
+tail_loop_wide	pass	-	
 tailcalls	pass	-	
 tailcalls_std	pass	-	
 tailrec_inline_choose	pass	-	

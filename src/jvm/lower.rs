@@ -830,7 +830,7 @@ impl<'a> Gen<'a> {
         };
         let receiver = receiver.map(|r| self.lower_expr(r, &this_type));
         let mut nodes = Vec::new();
-        for (&a, p) in cx.input.prog.expr_list(args).iter().zip(&params) {
+        for (&a, p) in cx.input.prog.expr_list(args).iter().zip(params.iter()) {
             let t = self.m.locals[p].ty.clone();
             nodes.push(self.lower_expr(a, &t));
         }

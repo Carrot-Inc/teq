@@ -3216,6 +3216,12 @@ cases/system_out_stream	pass	-
 cases/system_properties	pass	-	
 cases/tabulate_order	pass	-	
 cases/tail_calls	pass	-	
+cases/tail_loop_condition	pass	-	
+cases/tail_loop_keyed_receiver	pass	-	
+cases/tail_loop_keyed_swap	pass	-	
+cases/tail_loop_receiver_swap	pass	-	
+cases/tail_loop_value_class	pass	-	
+cases/tail_loop_wide	pass	-	
 cases/tailcalls	pass	-	
 cases/tailcalls_std	pass	-	
 cases/tailrec_inline_choose	pass	-	

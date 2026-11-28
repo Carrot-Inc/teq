@@ -95,7 +95,7 @@ impl<'a> Gen<'a> {
                 let mark = self.code.locals_mark();
                 for i in 0..stmts.len {
                     let stmt = self.lir.lists()[(stmts.start + i) as usize];
-                    let at = falls || !matches!(self.lir.node(stmt).kind, Kind::Labeled { .. });
+                    let at = falls || !matches!(self.lir.body_kind(stmt), Kind::Labeled { .. });
                     self.write_at(stmt, at);
                 }
                 match self.lir.node(result).kind.clone() {
@@ -220,6 +220,13 @@ impl<'a> Gen<'a> {
                 let frame = self.m.finalizers.last().copied();
                 self.write(value);
                 self.leave_method(frame, &ty);
+            }
+            Kind::TailLoop { params, body } => {
+                let head = self.code.new_label();
+                self.code.bind(head);
+                let outer = self.tail_loop.replace((head, params));
+                self.write_at(body, falls);
+                self.tail_loop = outer;
             }
             Kind::SelfTailCall { receiver, args } => {
                 self.write_self_tail_call(receiver, args);
@@ -530,7 +537,7 @@ impl<'a> Gen<'a> {
     /// to (`generatedDest`, BCodeBodyBuilder.scala 324-503): not after a throw, a return, a jump of the tail loop, a
     /// break or a loop with no condition, nor after a block that ends in one or a conditional whose branches both do.
     fn falls_through(&self, id: LirId) -> bool {
-        match &self.lir.node(id).kind {
+        match self.lir.body_kind(id) {
             Kind::Throw(_) | Kind::Return(_) | Kind::SelfTailCall { .. } | Kind::Break { .. } | Kind::While { cond: None, .. } => false,
             Kind::Typed(value) => self.falls_through(*value),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| self.falls_through(self.lir.lists()[(stmts.start + i) as usize])) && self.falls_through(*result),
@@ -645,7 +652,7 @@ impl<'a> Gen<'a> {
     /// loop's jump, a `return` out of the def's own method, alone, as a block's result or in both
     /// branches of a conditional.
     fn branch_leaves(&self, id: LirId) -> bool {
-        match &self.lir.node(id).kind {
+        match self.lir.body_kind(id) {
             Kind::Return(_) | Kind::SelfTailCall { .. } => true,
             Kind::Typed(value) | Kind::Block { result: value, .. } => self.branch_leaves(*value),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.branch_leaves(*then) && self.branch_leaves(*otherwise),
@@ -662,14 +669,14 @@ impl<'a> Gen<'a> {
     /// jump to. After any other statement the block's code is written, though a statement that is
     /// the def's jump back (a match's case at `Unit`) leaves it dead.
     fn completes(&self, id: LirId) -> bool {
-        match &self.lir.node(id).kind {
+        match self.lir.body_kind(id) {
             Kind::Return(_) | Kind::SelfTailCall { .. } => false,
             Kind::Typed(value) => self.completes(*value),
             Kind::If { then, otherwise: Some(otherwise), .. } => self.completes(*then) || self.completes(*otherwise),
             Kind::Switch { cases, default, .. } => cases.iter().any(|c| self.completes(c.body)) || self.completes(*default),
             Kind::Block { stmts, result } => (0..stmts.len).all(|i| {
                 let stmt = self.lir.lists()[(stmts.start + i) as usize];
-                !matches!(self.lir.node(stmt).kind, Kind::Labeled { .. }) || self.completes(stmt)
+                !matches!(self.lir.body_kind(stmt), Kind::Labeled { .. }) || self.completes(stmt)
             }) && self.completes(*result),
             Kind::Labeled { body, .. } => self.completes(*body),
             _ => true,
@@ -730,9 +737,7 @@ impl<'a> Gen<'a> {
     /// the jump back. Where the call stands over operands (in a `return`'s value), they are
     /// dropped, dead as the jump leaves them, and stand under the dead code again.
     fn write_self_tail_call(&mut self, receiver: Option<LirId>, args: List) {
-        let tail = self.m.tail.as_ref().expect("a self tail call is lowered where the def loops");
-        let params = tail.params.clone();
-        let head = self.m.tail_head.expect("the start of a def that loops is bound before its code");
+        let (head, params) = self.tail_loop.clone().expect("a self tail call stands in a tail loop");
         let dropped = self.drop_stack();
         // The receiver, then the arguments, each into a temporary in the source's order, as
         // dotty's TailRec assigns them (TailRec.scala 350-372); then `this` and the parameters.
@@ -754,7 +759,7 @@ impl<'a> Gen<'a> {
             let slot = self.m.this_slot.unwrap_or(0);
             self.store(slot, &t);
         }
-        for ((slot, t), p) in temps.iter().zip(&params) {
+        for ((slot, t), p) in temps.iter().zip(params.iter()) {
             self.load(*slot, t);
             let target = self.m.locals[p].slot;
             self.store(target, t);
@@ -776,7 +781,7 @@ impl<'a> Gen<'a> {
         if stmts.len < 2 {
             return None;
         }
-        let Kind::Let { temp, init } = self.lir.node(self.lir.lists()[stmts.start as usize]).kind else { return None };
+        let Kind::Let { temp, init } = *self.lir.body_kind(self.lir.lists()[stmts.start as usize]) else { return None };
         let reads = (1..stmts.len).map(|i| self.lir.lists()[(stmts.start + i) as usize]).chain([result]);
         reads.into_iter().all(|id| self.first_read(id) == Some(temp)).then_some((temp, init))
     }
@@ -784,7 +789,7 @@ impl<'a> Gen<'a> {
     /// The temporary a node reads as the first value it evaluates, through a store's value, a
     /// call's receiver and an adaptation.
     fn first_read(&self, id: LirId) -> Option<TempId> {
-        match self.lir.node(id).kind {
+        match *self.lir.body_kind(id) {
             Kind::Temp(temp) => Some(temp),
             Kind::StaticFieldStore { value, .. } | Kind::Adapt { value, .. } => self.first_read(value),
             Kind::Call { receiver, .. } => self.first_read(receiver),
