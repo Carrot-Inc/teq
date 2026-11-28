@@ -743,6 +743,82 @@ impl<'a> Worker<'a> {
         Some(declared)
     }
 
+    fn jdk_entry_by_binary(&mut self, binary: &str) -> Option<u32> {
+        let (pkg, name) = split_binary(binary);
+        let p = self.java_source_pkg(pkg)?;
+        self.jdk_entry(p, name)
+    }
+
+    /// TypeTestsCasts.scala 234–258 compares the boxed class by derivation. ClassfileParser.scala
+    /// 370–391 reads the superclass and interfaces that establish it.
+    pub(crate) fn record_jdk_box_ancestry(&mut self) {
+        use crate::lir::ErasedType::{B, C, D, F, I, J, S, Z};
+        use crate::tir::TypeTest;
+
+        let mut targets: Vec<_> = self.prog.tests.iter().filter_map(|test| match *test {
+            TypeTest::Class(c) | TypeTest::Trait(c) => Some(c),
+            _ => None,
+        }).collect();
+        targets.sort_unstable();
+        targets.dedup();
+        self.with_loader_for(crate::measure::Hold::JarEntry, |w| {
+            for c in targets {
+                let Some(target) = w.tested_jdk_binary(c) else { continue };
+                let name = w.interner.intern(&target);
+                for prim in [I, J, S, B, C, Z, F, D] {
+                    let boxed = prim.box_class();
+                    let pair = (w.interner.intern(boxed), name);
+                    if !w.prog.jdk_box_ancestry.contains_key(&pair) {
+                        if let Some(derives) = w.jdk_derives_from(boxed, &target) {
+                            w.prog.jdk_box_ancestry.insert(pair, derives);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    fn tested_jdk_binary(&mut self, c: ClassId) -> Option<String> {
+        let binary = if let Some(class) = self.java().classes.get(&c) {
+            if !matches!(class.source, JSource::Jdk(_)) || class.companion_of.is_some() {
+                return None;
+            }
+            class.cf.name.clone()
+        } else if let Some(name) = self.std_jvm_class(c) {
+            name
+        } else if self.source(self.syms.class(c).file).is_std && self.jdk_rooted(self.package_of_class(c)) {
+            self.binary_name(c).replace('.', "/")
+        } else {
+            let (p, n) = self.java().placeholder(c)?;
+            if !self.jdk_rooted(p) || !self.open_jdk_for(None) {
+                return None;
+            }
+            let (JSource::Jdk(_), cf) = self.locate_java_class(p, &self.name_str(n), false)? else { return None };
+            return Some(cf.name.clone());
+        };
+        self.open_jdk_for(None).then_some(binary)
+    }
+
+    /// Derivation by JDK binary names under the loader lock, unknown if a class file is missing.
+    fn jdk_derives_from(&mut self, from: &str, target: &str) -> Option<bool> {
+        let tested = self.jdk_entry_by_binary(target)?;
+        let mut pending = vec![self.jdk_entry_by_binary(from)?];
+        let mut seen = Vec::new();
+        while let Some(entry) = pending.pop() {
+            if entry == tested {
+                return Some(true);
+            }
+            if !seen.contains(&entry) {
+                seen.push(entry);
+                let cf = self.jdk_class_file(entry)?;
+                for parent in cf.superclass.iter().chain(&cf.interfaces) {
+                    pending.push(self.jdk_entry_by_binary(parent)?);
+                }
+            }
+        }
+        Some(false)
+    }
+
     fn jdk_class_file(&mut self, entry: u32) -> Option<Arc<ClassFile>> {
         let start = Instant::now();
         let file = self.env.file;

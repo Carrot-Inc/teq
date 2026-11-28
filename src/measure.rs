@@ -13,6 +13,18 @@ use std::time::{Duration, Instant};
 /// their own cost). Off, a counted site is this load and a branch.
 static ON: AtomicBool = AtomicBool::new(false);
 
+static MISSING_BOX_TESTS: AtomicUsize = AtomicUsize::new(0);
+
+pub fn missing_box_test() {
+    MISSING_BOX_TESTS.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn report_missing_box_tests() {
+    if std::env::var_os("TEQ_BOX_TESTS").is_some_and(|v| v == "1") {
+        eprintln!("test sites the writer asked with no record: {}", MISSING_BOX_TESTS.swap(0, Ordering::Relaxed));
+    }
+}
+
 pub fn enable(on: bool) {
     let on = on && std::env::var_os("TEQ_WORKERS_TIME").map_or(true, |v| v != "0");
     if on {
@@ -1686,6 +1698,9 @@ pub fn parts_summed(pass: Pass) -> Vec<(&'static str, u32, usize, Option<Duratio
 /// rows `outside` names (the time of the pass's row the parts do not cover), the rounds' detail
 /// and the counts.
 pub fn report_parts(report: &mut crate::report::Report, pass: Pass, inside: Duration, outside: &[(&str, Duration)]) {
+    if pass == Pass::Emit {
+        report_missing_box_tests();
+    }
     if !parts_on() {
         return;
     }

@@ -4400,10 +4400,7 @@ impl<'c> Copier<'c> {
         match s {
             TStmt::Expr(x) => TStmt::Expr(self.expr(t, x)),
             TStmt::Val(v, x) => TStmt::Val(self.sym(v), self.expr(t, x)),
-            TStmt::Pat(p, x, form) => {
-                let p = self.pat(t, p);
-                TStmt::Pat(p, self.expr(t, x), form)
-            }
+            TStmt::Pat(p, x, form) => TStmt::Pat(self.pat(t, p), self.expr(t, x), form),
             TStmt::Fun(f) => {
                 let (sym, params, defaults, body, captures, lifted) = {
                     let fun = &t.prog.funs[f.idx()];

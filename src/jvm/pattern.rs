@@ -870,7 +870,7 @@ impl<'a> Gen<'a> {
                 let TPat::Test(_, tested, inner) = prog.pats[origin.idx()] else { unreachable!("a type test's pattern") };
                 // A primitive's box (`Integer` for `Int`) is never an instance of the class a test of no box's supertype
                 // names: the value never matches, as `ClassInstance::Never` decides for a class pattern.
-                if !ty.is_ref() && self.never_a_box(test, ty) {
+                if !ty.is_ref() && !self.vc_temps.contains_key(&temp) && self.never_a_box(test, ty) {
                     out.push(self.lir.push(Kind::Break { label: fail, value: None }, ErasedType::V));
                     return None;
                 }
@@ -963,12 +963,8 @@ impl<'a> Gen<'a> {
         Some(next)
     }
 
-    /// Whether a type test can never pass on the box of a primitive of the type `ty` (`Integer` for `Int`), a class of
-    /// the JDK's whose ancestors are all the JDK's (`java/...`): a test of a class or trait outside `java/` (a Scala
-    /// class's, trait's or value class's); one of a JDK class that is neither the box's class nor among its ancestors,
-    /// where the box's own record holds them (`Number`, `Comparable` and `Serializable` are an `Integer`'s); and
-    /// `String`'s, as no box is a `String`. Where the box's record is none of the program's classes, or was never
-    /// completed, a JDK class's test runs as before, and so does every test of a `Unit`'s box.
+    /// A primitive box has no ancestors outside `java/`. Within it, the typer records derivation
+    /// from the JDK class files (TypeTestsCasts.scala 234–258).
     fn never_a_box(&self, test: TestId, ty: &ErasedType) -> bool {
         let class = match self.cx.input.prog.tests[test.idx()] {
             TypeTest::Proven(inner, _) => return self.never_a_box(inner, ty),
@@ -982,10 +978,15 @@ impl<'a> Gen<'a> {
         if !self.cx.class_names[class.idx()].starts_with("java/") {
             return true;
         }
-        let Some(boxed) = self.cx.class_named(ty.box_class()) else { return false };
-        // Its ancestors, itself first; a record holding itself alone was never completed, and tells nothing.
-        let bases = &self.cx.input.syms.class(boxed).base_types;
-        bases.len() > 1 && !bases.iter().any(|&(b, _)| b == class)
+        let names = self.cx.input.interner;
+        let pair = names.lookup(ty.box_class()).zip(names.lookup(&self.cx.class_names[class.idx()]));
+        match pair.and_then(|p| self.cx.input.prog.jdk_box_ancestry.get(&p)) {
+            Some(derives) => !derives,
+            None => {
+                crate::measure::missing_box_test();
+                false
+            }
+        }
     }
 
     /// `case v` and `case null` against the value in `temp`: by identity, as numbers, or by runtime equality.
@@ -1078,7 +1079,12 @@ impl<'a> Gen<'a> {
             let read = self.lir.push(Kind::Call { method: m, at: None, receiver, args, order: None }, ft.clone());
             let held = self.lir.temp();
             out.push(self.lir.push(Kind::Let { temp: held, init: read }, ErasedType::V));
-            if !self.lower_steps(&then[j + 1..end], held, &ft, fail, out) {
+            if let Some(vc) = self.sym_value_class(field) {
+                self.vc_temps.insert(held, vc);
+            }
+            let may = self.lower_steps(&then[j + 1..end], held, &ft, fail, out);
+            self.vc_temps.remove(&held);
+            if !may {
                 return false;
             }
             j = end;

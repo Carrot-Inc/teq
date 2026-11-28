@@ -2681,6 +2681,7 @@ fn with_jvm_input<R>(
 ) -> R {
     // The writers' match plans, made from the patterns once reach and every other typing are done (`tir::matcher::prepare`).
     tir::matcher::prepare(&mut typer.prog);
+    typer.record_jdk_box_ancestry();
     let owned = owned_files(opts, all_sources);
     let stackable = stackable_overrides(typer, reach);
     let mut named: Vec<types::ClassId> = class_sites.iter().map(|&(_, c)| c).collect();

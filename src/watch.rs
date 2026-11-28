@@ -1442,6 +1442,7 @@ fn finish_jvm(
     let product_inits = t.loaded.as_ref().map(|l| l.get_mut().cp.product_inits.clone()).unwrap_or_default();
     // The writers' match plans, made from the patterns once reach and every other typing are done (`tir::matcher::prepare`).
     crate::tir::matcher::prepare(&mut t.prog);
+    t.record_jdk_box_ancestry();
     let before_emit = t_emit.elapsed();
     let output = crate::typer::thread::run(|| {
         let Worker { prog, syms, types, tvars, interner, file_pkgs, loaded, entry_points, jvm_volatile, jvm_thread_unsafe, getters, outer_this, .. } = &mut *t;
@@ -1481,6 +1482,7 @@ fn finish_jvm(
     });
     // The table released: the next build's pass makes it again, so a resident session holds no plan between builds.
     crate::tir::matcher::release(&mut t.prog);
+    crate::measure::report_missing_box_tests();
     report.ms.emit = t_emit.elapsed();
     crate::measure::part(crate::measure::Pass::Emit, "sources, overrides and inits", 0, before_emit);
     if let (Some(path), Some(_)) = (std::env::var_os("TEQ_KEPT_LOG"), scope) {

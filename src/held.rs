@@ -68,6 +68,7 @@ impl Program {
             aside_types,
             template_calls,
             get_class_units,
+            jdk_box_ancestry,
             local_enum_names,
             template_syms,
             class_bodies,
@@ -139,6 +140,7 @@ impl Program {
             + array(js_exports)
             + array(template_calls)
             + array(get_class_units)
+            + table(jdk_box_ancestry)
             + array(local_enum_names)
             + template_syms.held()
             + class_bodies.held()

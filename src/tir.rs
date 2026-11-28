@@ -1299,6 +1299,8 @@ pub struct Program {
     /// The files whose typing met a `getClass`, the caller's for one an inline expansion made:
     /// while there is one, every class carries its qualified name.
     pub get_class_units: Vec<FileId>,
+    /// Whether the primitive box derives from the tested JDK class, by JVM binary name.
+    pub jdk_box_ancestry: FxMap<(Name, Name), bool>,
     /// A local enum's name in its lookups' messages, dotty's `enumClass.fullName` under the class
     /// or file object whose body defines it (`Worker::enum_full_name`), which the JVM's companion
     /// members write too.
@@ -1785,6 +1787,7 @@ impl Program {
             aside_types: FxMap::default(),
             template_calls: Vec::new(),
             get_class_units: Vec::new(),
+            jdk_box_ancestry: FxMap::default(),
             local_enum_names: Vec::new(),
             shifts: 0,
             build_start: 0,
@@ -1916,6 +1919,7 @@ impl Default for Program {
             aside_types: FxMap::default(),
             template_calls: Vec::new(),
             get_class_units: Vec::new(),
+            jdk_box_ancestry: FxMap::default(),
             local_enum_names: Vec::new(),
             shifts: 0,
             build_start: 0,
