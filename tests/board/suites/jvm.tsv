@@ -214,6 +214,7 @@ capture_this	pass	-
 capture_u	pass	-	
 capture_w	pass	-	
 capture_x	pass	-	
+captured_local_in_initializer	pass	-	
 case_apply_bare_in_companion	pass	-	
 case_apply_beside_curried	pass	-	
 case_apply_primary_alone	pass	-	
@@ -269,6 +270,7 @@ case_copy_nested	pass	-
 case_copy_own_default	pass	-	
 case_empty_body	pass	-	
 case_guard_indentation	pass	-	
+case_hash_mixed_fields	pass	-	
 case_lambda_parameter	pass	-	
 case_lambda_pinned_constructor	pass	-	
 case_lambda_tuples	pass	-	
@@ -429,6 +431,8 @@ concat_order_long	pass	-
 concat_order_macro	pass	-	
 concat_order_transparent	pass	-	
 concat_reduced_condition_operand	pass	-	
+concat_template_empty_string	pass	-	
+concat_template_literal	pass	-	
 concurrent_hash_map_views	pass	-	
 condition_then_bracket_line	pass	-	
 conditional_precedence	pass	-	
@@ -763,8 +767,10 @@ enum_value_singleton_test	pass	-
 enumvalues	pass	-	
 equality_default	pass	-	
 equality_helper_initialization	pass	-	
+equality_return_operand	pass	-	
 equality_selection	pass	-	
 equality_selection_alternatives	pass	-	
+equality_try_operand	pass	-	
 equals_trait	pass	-	
 erased_primitive_bound_matrix	pass	-	
 erased_primitive_result	fail	-	output
@@ -1623,6 +1629,7 @@ interp_order	pass	-
 interpolate_forcing_boundaries	pass	-	
 interpolate_open_variables	pass	-	
 interpolation_dollar_quote	pass	-	
+interpolation_effectful_arguments	pass	-	
 interpolator_context_companion_apply	pass	-	
 interpolator_patterns	pass	-	
 interpolators	pass	-	
@@ -1933,6 +1940,7 @@ literal_overload_constant	pass	-
 literal_union_members	pass	-	
 local_alias_after_path	pass	-	
 local_alias_path	pass	-	
+local_assigned_across_branch	pass	-	
 local_case_class_equals_outer	pass	-	
 local_case_class_mirror	pass	-	
 local_case_classes	pass	-	
@@ -1998,6 +2006,7 @@ local_given_inner_class	pass	-
 local_imports	pass	-	
 local_imports_blocks	pass	-	
 local_imports_members	pass	-	
+local_initialized_by_try	pass	-	
 local_inline_check_caller_bounds	pass	-	
 local_inline_check_either_order	pass	-	
 local_inline_check_given_under_way	pass	-	
@@ -2539,6 +2548,7 @@ path_value_unstable_prefix	pass	-
 pattern_abstract_scrutinee	pass	-	
 pattern_array_gadt	pass	-	
 pattern_bind_tuple_type	pass	-	
+pattern_binding_initializer	pass	-	
 pattern_binding_irrefutable	pass	-	
 pattern_binding_lazy_components	pass	-	
 pattern_binding_runtime_checked_composed	pass	-	
@@ -3095,6 +3105,7 @@ self_type_given_through_this	pass	-
 self_type_member	pass	-	
 self_type_parent_conforms	pass	-	
 self_types	pass	-	
+sequence_pattern_equality	pass	-	
 sequence_patterns	pass	-	
 sequence_rest_unentered_members	pass	-	
 set_from_key_set	pass	-	
@@ -3296,6 +3307,8 @@ target_name_wildcard_dispatch	pass	-
 template_arguments_once	pass	-	
 template_arguments_throwing	pass	-	
 template_call_self_lookahead	pass	-	
+template_literal_across_argument	pass	-	
+template_null_comparison	pass	-	
 template_pattern_vals	pass	-	
 this_rooted_type_path	pass	-	
 this_type_intersection	pass	-	

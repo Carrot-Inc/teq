@@ -212,6 +212,7 @@ cases/capture_this	pass	-
 cases/capture_u	pass	-	
 cases/capture_w	pass	-	
 cases/capture_x	pass	-	
+cases/captured_local_in_initializer	pass	-	
 cases/case_apply_bare_in_companion	pass	-	
 cases/case_apply_beside_curried	pass	-	
 cases/case_apply_primary_alone	pass	-	
@@ -267,6 +268,7 @@ cases/case_copy_nested	pass	-
 cases/case_copy_own_default	pass	-	
 cases/case_empty_body	pass	-	
 cases/case_guard_indentation	pass	-	
+cases/case_hash_mixed_fields	pass	-	
 cases/case_lambda_parameter	pass	-	
 cases/case_lambda_pinned_constructor	pass	-	
 cases/case_lambda_tuples	pass	-	
@@ -423,6 +425,8 @@ cases/concat_order_long	pass	-
 cases/concat_order_macro	pass	-	
 cases/concat_order_transparent	pass	-	
 cases/concat_reduced_condition_operand	pass	-	
+cases/concat_template_empty_string	pass	-	
+cases/concat_template_literal	pass	-	
 cases/concurrent_hash_map_views	pass	-	
 cases/condition_then_bracket_line	pass	-	
 cases/conditional_precedence	pass	-	
@@ -755,8 +759,10 @@ cases/enum_value_singleton_test	pass	-
 cases/enumvalues	pass	-	
 cases/equality_default	pass	-	
 cases/equality_helper_initialization	pass	-	
+cases/equality_return_operand	pass	-	
 cases/equality_selection	pass	-	
 cases/equality_selection_alternatives	pass	-	
+cases/equality_try_operand	pass	-	
 cases/equals_trait	pass	-	
 cases/erased_primitive_bound_matrix	pass	-	
 cases/erased_primitive_result	pass	-	
@@ -1608,6 +1614,7 @@ cases/interp_order	pass	-
 cases/interpolate_forcing_boundaries	pass	-	
 cases/interpolate_open_variables	pass	-	
 cases/interpolation_dollar_quote	pass	-	
+cases/interpolation_effectful_arguments	pass	-	
 cases/interpolator_context_companion_apply	pass	-	
 cases/interpolator_patterns	pass	-	
 cases/interpolators	pass	-	
@@ -1898,6 +1905,7 @@ cases/literal_overload_constant	pass	-
 cases/literal_union_members	pass	-	
 cases/local_alias_after_path	pass	-	
 cases/local_alias_path	pass	-	
+cases/local_assigned_across_branch	pass	-	
 cases/local_case_class_equals_outer	pass	-	
 cases/local_case_class_mirror	pass	-	
 cases/local_case_classes	pass	-	
@@ -1963,6 +1971,7 @@ cases/local_given_inner_class	pass	-
 cases/local_imports	pass	-	
 cases/local_imports_blocks	pass	-	
 cases/local_imports_members	pass	-	
+cases/local_initialized_by_try	pass	-	
 cases/local_inline_check_caller_bounds	pass	-	
 cases/local_inline_check_either_order	pass	-	
 cases/local_inline_check_given_under_way	pass	-	
@@ -2482,6 +2491,7 @@ cases/path_value_unstable_prefix	pass	-
 cases/pattern_abstract_scrutinee	pass	-	
 cases/pattern_array_gadt	pass	-	
 cases/pattern_bind_tuple_type	pass	-	
+cases/pattern_binding_initializer	pass	-	
 cases/pattern_binding_irrefutable	pass	-	
 cases/pattern_binding_lazy_components	pass	-	
 cases/pattern_binding_runtime_checked_composed	pass	-	
@@ -3029,6 +3039,7 @@ cases/self_type_given_through_this	pass	-
 cases/self_type_member	pass	-	
 cases/self_type_parent_conforms	pass	-	
 cases/self_types	pass	-	
+cases/sequence_pattern_equality	pass	-	
 cases/sequence_patterns	pass	-	
 cases/sequence_rest_unentered_members	pass	-	
 cases/set_from_key_set	pass	-	
@@ -3226,6 +3237,8 @@ cases/target_name_wildcard_dispatch	pass	-
 cases/template_arguments_once	pass	-	
 cases/template_arguments_throwing	pass	-	
 cases/template_call_self_lookahead	pass	-	
+cases/template_literal_across_argument	pass	-	
+cases/template_null_comparison	pass	-	
 cases/template_pattern_vals	pass	-	
 cases/this_rooted_type_path	pass	-	
 cases/this_type_intersection	pass	-	
