@@ -2297,11 +2297,11 @@ impl<'a> Gen<'a> {
 
 /// The key of a held super call, by which a class's targets are ordered: the
 /// order in which scalac's back end writes a class's bodies and so fills `superCallTargets`.
-/// First the members made for the class, a trait's super accessor among them
-/// (`ResolveSuper.transformTemplate` and `Mixin.transformTemplate` put them before the
-/// class's own), in the order written; then the primary constructor's code
-/// (`BCodeSkelBuilder.gen`: the constructor, then the body), the field initialisers and the
-/// body's statements; then the other members by their place in the source; last the
+/// First the primary constructor's code (`BCodeSkelBuilder.gen`: the constructor, then the
+/// body), the field initialisers and the body's statements; then the members made for the
+/// class, the mixin forwarders and then the super accessors (`Mixin.transformTemplate` and
+/// `ResolveSuper.transformTemplate` put them at the body's head), in the order written;
+/// then the other members by their place in the source; last the
 /// lifted bodies, which `LambdaLift.transformTemplate` appends to the class, an inner one
 /// before the one around it: by the end of the body, the later start first. A body with no
 /// line of its own (a forwarder, a super accessor) stands with the members made for the
@@ -2311,8 +2311,8 @@ impl<'a> Gen<'a> {
 fn super_call_key(lifted: Option<(u32, u32)>, ctor_code: bool, lines: bool, at: u32) -> SuperPlace {
     match lifted {
         Some((end, start)) => (3, end, u32::MAX - start, at),
-        None if !lines => (0, 0, 0, 0),
-        None => (if ctor_code { 1 } else { 2 }, at, 0, 0),
+        None if !lines => (1, 0, 0, 0),
+        None => (if ctor_code { 0 } else { 2 }, at, 0, 0),
     }
 }
 
@@ -2328,7 +2328,7 @@ impl<'a> Gen<'a> {
             return None;
         }
         for (target, place) in recorded.iter_mut() {
-            if place.0 == 0 {
+            if place.0 == 1 {
                 if let Some(n) = step.accessors.iter().position(|t| t == &*target) {
                     place.1 = n as u32 + 1;
                 }
