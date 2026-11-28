@@ -428,7 +428,7 @@ pub enum Kind {
     /// written or, for a lazy val's, of the class declaring the val, and named as `LambdaLift` names
     /// it; the call passes the captured values as `Closure` has them, then the arguments as `Call`
     /// has them.
-    LiftedCall { method: Rc<MethodRef>, from: LiftedFrom, lifted: Rc<LiftedShape>, captures: List, args: List, order: Option<Rc<[usize]>> },
+    LiftedCall { method: Rc<MethodRef>, from: LiftedFrom, captures: List, args: List, order: Option<Rc<[usize]>> },
     /// The temporary declared with the value of `init`; it lives to the end of the block that
     /// holds this node. No value.
     Let { temp: TempId, init: LirId },

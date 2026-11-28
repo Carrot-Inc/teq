@@ -1,6 +1,6 @@
 //! Classes, traits, objects, enums and the module class of a file's top-level definitions.
 
-use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, FieldRole, Invoke, Kind, LiftedFrom, LiftedShape, LirId, MethodDef, MethodFlags, MethodParam, MethodRef, ParamRole, Refusal, Relation, TempId, Visibility};
+use crate::lir::{ClassFlags, Comparing, ErasedType, FieldFlags, FieldRole, Invoke, Kind, LiftedFrom, LirId, MethodDef, MethodFlags, MethodParam, MethodRef, ParamRole, Refusal, Relation, TempId, Visibility};
 use super::classfile::*;
 use super::free;
 use super::gen::*;
@@ -821,11 +821,11 @@ impl<'a> Gen<'a> {
         self.enter_plan(held);
     }
 
-    /// The lifted method a call names (`method`, lowered against the shape `lowered`), its body found by its name in
+    /// The lifted method a call names, its body found by its name in
     /// the class's table and queued where the class first asks for it, as a held tree is held (`Gen::ask_lifted`). The
     /// body of a local def's default getter is given back, to be queued once the call's operands are visited. A call
     /// the table cannot answer asks for no body: its class is refused.
-    pub(super) fn ask_lifted_call(&mut self, method: &MethodRef, from: LiftedFrom, lowered: &Rc<LiftedShape>) -> Option<Pending> {
+    pub(super) fn ask_lifted_call(&mut self, method: &MethodRef, from: LiftedFrom) -> Option<Pending> {
         let placed = match self.lifted_table.placed(&method.name, &method.desc) {
             Some(Some(placed)) => placed,
             // Refused where the second method of the name and descriptor was named (`Gen::lifted_entry`).
@@ -845,7 +845,7 @@ impl<'a> Gen<'a> {
                 return None;
             }
         };
-        debug_assert!(Rc::ptr_eq(&named.shape, lowered) && named.name == method.name && named.desc == method.desc, "the method named is the one the call was lowered against");
+        debug_assert!(named.name == method.name && named.desc == method.desc, "the method named is the one the call names");
         pending
     }
 
@@ -858,9 +858,9 @@ impl<'a> Gen<'a> {
         while let Some((id, operands_asked)) = stack.pop() {
             let kind = &self.lir.node(id).kind;
             if operands_asked {
-                let Kind::LiftedCall { method, from, lifted, .. } = kind else { unreachable!("a default getter's call, by the walk") };
-                let (method, from, lifted) = (method.clone(), *from, lifted.clone());
-                if let Some(p) = self.ask_lifted_call(&method, from, &lifted) {
+                let Kind::LiftedCall { method, from, .. } = kind else { unreachable!("a default getter's call, by the walk") };
+                let (method, from) = (method.clone(), *from);
+                if let Some(p) = self.ask_lifted_call(&method, from) {
                     if self.draining {
                         self.pending_next.push(p);
                     } else {
@@ -875,9 +875,9 @@ impl<'a> Gen<'a> {
                     self.lambda_method(&target);
                 }
                 Kind::LiftedCall { from: LiftedFrom::Default(_), .. } => stack.push((id, true)),
-                Kind::LiftedCall { method, from, lifted, .. } => {
-                    let (method, from, lifted) = (method.clone(), *from, lifted.clone());
-                    self.ask_lifted_call(&method, from, &lifted);
+                Kind::LiftedCall { method, from, .. } => {
+                    let (method, from) = (method.clone(), *from);
+                    self.ask_lifted_call(&method, from);
                 }
                 _ => {}
             }

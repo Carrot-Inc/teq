@@ -1919,7 +1919,7 @@ impl<'a> Gen<'a> {
         let args = self.lir.list(&args);
         let ret = lifted.ret.clone();
         let method = self.lifted_call_ref(Placed::Default(s, i), &lifted, (self.this_name.clone(), self.is_interface));
-        let call = self.lir.push(Kind::LiftedCall { method, from: LiftedFrom::Default(i as u32), lifted, captures, args, order: None }, ret);
+        let call = self.lir.push(Kind::LiftedCall { method, from: LiftedFrom::Default(i as u32), captures, args, order: None }, ret);
         if holds.is_empty() { call } else { self.lir.seq(&holds, call) }
     }
 
@@ -2253,7 +2253,7 @@ impl<'a> Gen<'a> {
         let captures = self.lir.list(&captures);
         let ret = lifted.ret.clone();
         let method = self.lifted_call_ref(Placed::Def(s), &lifted, (self.this_name.clone(), self.is_interface));
-        let call = self.lir.push(Kind::LiftedCall { method, from: LiftedFrom::Def, lifted, captures, args, order: None }, ret);
+        let call = self.lir.push(Kind::LiftedCall { method, from: LiftedFrom::Def, captures, args, order: None }, ret);
         if holds.is_empty() { call } else { self.lir.seq(&holds, call) }
     }
 
@@ -2275,7 +2275,7 @@ impl<'a> Gen<'a> {
         let ret = lifted.ret.clone();
         let owner = self.lazy_owner(s);
         let method = self.lifted_call_ref(placed, &lifted, owner);
-        self.lir.push(Kind::LiftedCall { method, from, lifted, captures, args, order: None }, ret)
+        self.lir.push(Kind::LiftedCall { method, from, captures, args, order: None }, ret)
     }
 
     /// The method a call of the lifted method of `placed` calls, of the class `owner` and of the shape `lifted` the
