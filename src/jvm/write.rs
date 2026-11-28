@@ -371,7 +371,6 @@ impl<'a> Gen<'a> {
                 let of = self.lir.ty(value).clone();
                 self.string_value_of(&of);
             }
-            Kind::Underlying { value } => self.write(value),
             Kind::Concat { parts, calls, operands } => self.write_concat(parts, &calls, &operands),
             Kind::Try { body, catch, finalizer } => {
                 let returns = self.lir.returns_through(id);

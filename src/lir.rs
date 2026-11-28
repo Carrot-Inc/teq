@@ -350,9 +350,6 @@ pub enum Kind {
     /// end of the call in its source file, which orders the interfaces a class file lists for
     /// the super calls of its code (the class's interface step, `super_call_key`); a NIR writer reads none.
     SuperCall { method: Rc<MethodRef>, receiver: LirId, args: List, order: Option<Rc<[usize]>>, place: Option<(FileId, u32)> },
-    /// A value class's underlying value selected on a value of the class: `value`, which the
-    /// lowering brought to the underlying type.
-    Underlying { value: LirId },
     /// A new instance of the class `ctor` is the constructor of, the constructor run on it over
     /// the arguments, each a value its parameter takes: at the parameter's type, or as the scope
     /// holds it (what a lifted class captures, an inner class's enclosing instance), at a type
@@ -708,7 +705,7 @@ impl Body {
             Kind::Val { init: value, .. } | Kind::Assign { value, .. } | Kind::StaticFieldStore { value, .. } | Kind::Let { init: value, .. } | Kind::SetTemp { value, .. } => out.push(*value),
             Kind::StaticFieldSet { value, .. } => out.push(*value),
             Kind::Field { receiver: value, .. } | Kind::Neg(value) | Kind::Not(value) | Kind::Throw(value) | Kind::Return(value) => out.push(*value),
-            Kind::Underlying { value } | Kind::Typed(value) | Kind::ArrayLength(value) | Kind::ArrayClone(value) | Kind::NewArray { length: value } => out.push(*value),
+            Kind::Typed(value) | Kind::ArrayLength(value) | Kind::ArrayClone(value) | Kind::NewArray { length: value } => out.push(*value),
             Kind::Cast { value, .. } | Kind::StringOf { value } | Kind::Adapt { value, .. } | Kind::Is { value, .. } => out.push(*value),
             Kind::LazyCas { object, expected, new, .. } => out.extend([*object, *expected, *new]),
             Kind::TailLoop { body, .. } | Kind::Labeled { body, .. } => out.push(*body),

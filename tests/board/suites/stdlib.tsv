@@ -3464,6 +3464,19 @@ unapply_seq_direct	pass	-
 unapply_seq_product	fail	-	output differs
 unchecked_variance_local	pass	-	
 underlying_line	pass	-	
+underlying_select_adapt	pass	-	
+underlying_select_branches	pass	-	
+underlying_select_by_name	pass	-	
+underlying_select_chain_argument	pass	-	
+underlying_select_concat	pass	-	
+underlying_select_condition	pass	-	
+underlying_select_exception	pass	-	
+underlying_select_generator	pass	-	
+underlying_select_inline_default	pass	-	
+underlying_select_lambda	pass	-	
+underlying_select_null_jvm	fail	-	TypeError: Cannot read properties of null (reading 'i')
+underlying_select_scrutinee	pass	-	
+underlying_select_throw_line_jvm	fail	-	TypeError: Cannot read properties of undefined (reading 'getLineNumber')
 union_erasure_bases	fail	-	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
 union_join_lower_bound	pass	-	
 union_joins	pass	-	

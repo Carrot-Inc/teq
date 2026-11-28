@@ -543,6 +543,8 @@ tuple_xxl	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that
 tuple_xxl_typed	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
 type_checks_nested_package_clauses	error: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
 unapply_seq_product	output differs
+underlying_select_null_jvm	TypeError: Cannot read properties of null (reading 'i')
+underlying_select_throw_line_jvm	TypeError: Cannot read properties of undefined (reading 'getLineNumber')
 union_erasure_bases	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
 unit_printed	output differs
 unused_params_constant_bodies	output differs

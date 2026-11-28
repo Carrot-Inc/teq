@@ -268,6 +268,7 @@ typer_state_landing_direct_warning	output
 typer_state_landing_given_warning	output
 typer_state_landing_paren_warning	output
 typer_state_macro_info	output
+underlying_select_throw_line_jvm	exception
 union_erasure_bases	compile
 unit_printed	output
 url_encoder	output

@@ -84,10 +84,11 @@ impl<'a> Gen<'a> {
 
     /// `e` brought to the type `want`.
     pub(super) fn lower_expr(&mut self, e: TExprId, want: &ErasedType) -> LirId {
-        let id = self.lower_marked(e, want);
+        let (id, forwarded) = self.lower_marked(e, want);
+        let node = self.lir.node(id);
         // A jump where a value is wanted takes its arguments' positions: the operands it drops
         // under it are its place's.
-        if !matches!(self.lir.node(id).kind, Kind::SelfTailCall { .. }) {
+        if !(forwarded && node.of.is_some()) && !matches!(node.kind, Kind::SelfTailCall { .. }) {
             self.place(id, e);
         }
         id
@@ -117,15 +118,15 @@ impl<'a> Gen<'a> {
         self.lir.push(Kind::Refused(refusal), ErasedType::V)
     }
 
-    fn lower_marked(&mut self, e: TExprId, want: &ErasedType) -> LirId {
+    fn lower_marked(&mut self, e: TExprId, want: &ErasedType) -> (LirId, bool) {
         let prog = self.cx.input.prog;
         if want.is_ref() {
             if let Some(wider) = self.widened_branches(e) {
                 let inner = self.lower_expr(e, &wider);
-                return self.lower_adapt(inner, &wider, want);
+                return (self.lower_adapt(inner, &wider, want), false);
             }
         }
-        match prog.expr(e) {
+        let id = match prog.expr(e) {
             TExpr::Block(stmts, res) => self.lower_block(stmts, res, want),
             TExpr::If(c, t, els) => self.lower_if(c, t, els, want),
             TExpr::Match(scrut, _) => {
@@ -173,18 +174,20 @@ impl<'a> Gen<'a> {
             | TExpr::ToStr(..) | TExpr::Js(..) | TExpr::TypeTest(..) | TExpr::Cast(..) | TExpr::ClassOf(..) | TExpr::SeqLit(_)
             | TExpr::ArrayLit(_) | TExpr::Index(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_)
             | TExpr::Spread(_) | TExpr::Splice(_) => {
-                let node = self.lower_node(e);
+                let (node, forwarded) = self.lower_node_with_place(e);
                 let t = self.lir.ty(node).clone();
-                match self.fit_lowered(e, &t, want) {
+                let adapted = match self.fit_lowered(e, &t, want) {
                     Fit::ValueClass(class, args, null_safe) => self.lower_value_class(node, &t, class, args, null_safe, want, Some(e)),
                     Fit::Through(s) => {
                         let through = self.lower_adapt(node, &t, &s);
                         self.lower_adapt(through, &s, want)
                     }
                     Fit::Direct => self.lower_adapt(node, &t, want),
-                }
+                };
+                return (adapted, forwarded && adapted == node);
             }
-        }
+        };
+        (id, false)
     }
 
     /// `Gen::fit` for a node the lowering made: besides, the underlying value of a class with an outer wanted as
@@ -207,8 +210,13 @@ impl<'a> Gen<'a> {
 
     /// One node of the typed IR at the type it leaves.
     pub(super) fn lower_node(&mut self, e: TExprId) -> LirId {
+        self.lower_node_with_place(e).0
+    }
+
+    /// The node and whether it forwards its qualifier's place (VCElideAllocations.scala 44-46 at 3.8.4).
+    fn lower_node_with_place(&mut self, e: TExprId) -> (LirId, bool) {
         let prog = self.cx.input.prog;
-        match prog.expr(e) {
+        let id = match prog.expr(e) {
             TExpr::Int(v) => {
                 // A literal the typer narrowed to the `Byte`, `Short` or `Char` expected keeps that
                 // type, so that boxing it gives the narrow class (`(1: Byte): Any` is a `java.lang.Byte`).
@@ -262,7 +270,11 @@ impl<'a> Gen<'a> {
             TExpr::StrConcat(items) => self.lower_str_concat(items),
             TExpr::This | TExpr::Super(_) => self.lower_instance(),
             TExpr::Static(s) => self.lower_static(s),
-            TExpr::Field(r, s) => self.lower_field_read(r, s),
+            TExpr::Field(r, s) => {
+                let route = self.field_route(r, s);
+                let forwarded = matches!(route, FieldRoute::Underlying(_));
+                return (self.lower_field_read(r, s, route), forwarded);
+            }
             TExpr::CallClosure(f, args) => {
                 let items: Vec<TExprId> = prog.expr_list(args).to_vec();
                 let ft = self.function_type(items.len());
@@ -302,7 +314,8 @@ impl<'a> Gen<'a> {
             TExpr::Return(v) => self.lower_return(e, v, &ErasedType::V),
             TExpr::If(..) | TExpr::Match(..) | TExpr::Block(..) | TExpr::Throw(..) | TExpr::Try(_) => unreachable!("lowered by `Gen::lower_marked`"),
             TExpr::Splice(_) => unreachable!("a stored inline body is lowered nowhere"),
-        }
+        };
+        (id, false)
     }
 
     /// An operation on two operands; an equality of references calls the runtime's `equal`, whose
@@ -2276,8 +2289,8 @@ impl<'a> Gen<'a> {
 
     /// A member read on a receiver: its field where this class's own code may name it, else its
     /// accessor's call.
-    fn lower_field_read(&mut self, r: TExprId, s: SymId) -> LirId {
-        match self.field_route(r, s) {
+    fn lower_field_read(&mut self, r: TExprId, s: SymId, route: FieldRoute) -> LirId {
+        match route {
             FieldRoute::Js => self.lower_refused(Refusal::JavaScriptMember),
             FieldRoute::Object(c) => self.lower_after_receiver(r, |g| g.lower_module(c)),
             FieldRoute::GivenObject { receiver_evaluated: true } => self.lower_after_receiver(r, |g| g.lower_given_object(s)),
@@ -2306,7 +2319,7 @@ impl<'a> Gen<'a> {
                 let outer = self.vc_select.replace(operand);
                 let value = self.lower_expr(r, &u);
                 self.vc_select = outer;
-                self.lir.push(Kind::Underlying { value }, u)
+                value
             }
             FieldRoute::Own => {
                 let ty = self.sym_type(s);

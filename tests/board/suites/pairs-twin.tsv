@@ -3461,6 +3461,19 @@ cases/unapply_seq_direct	pass	-
 cases/unapply_seq_product	pass	-	
 cases/unchecked_variance_local	pass	-	
 cases/underlying_line	pass	-	
+cases/underlying_select_adapt	pass	-	
+cases/underlying_select_branches	pass	-	
+cases/underlying_select_by_name	pass	-	
+cases/underlying_select_chain_argument	pass	-	
+cases/underlying_select_concat	pass	-	
+cases/underlying_select_condition	pass	-	
+cases/underlying_select_exception	pass	-	
+cases/underlying_select_generator	pass	-	
+cases/underlying_select_inline_default	pass	-	
+cases/underlying_select_lambda	pass	-	
+cases/underlying_select_null_jvm	pass	-	
+cases/underlying_select_scrutinee	pass	-	
+cases/underlying_select_throw_line_jvm	pass	-	
 cases/union_erasure_bases	cannot run	-	no leg builds
 cases/union_join_lower_bound	pass	-	
 cases/union_joins	pass	-	
