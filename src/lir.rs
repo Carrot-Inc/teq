@@ -243,7 +243,7 @@ pub struct Node {
 /// name, past its receiver); and whether it is a call, whose arguments the typer made, which
 /// have the call's span, take the line of its end. `held`: the node is such an argument of the
 /// call around it: its `point` is that call's end, and nothing under it takes a line of its own
-/// (`Gen::hold_lines`).
+/// (`Gen::prepare_held`).
 #[derive(Clone, Copy)]
 pub struct Place {
     pub expr: TExprId,

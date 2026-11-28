@@ -678,7 +678,7 @@ pub struct Gen<'a> {
     pub line_hold: bool,
     pub pending: Vec<Pending>,
     /// The default getters' bodies a hold asks for while a round of the class's lifted bodies is lowered
-    /// (`Gen::drain_pending`, `Gen::ask_lifted`): they belong to the next round, so that no round's set changes while it
+    /// (`Gen::drain_pending`, `Gen::prepare_held`): they belong to the next round, so that no round's set changes while it
     /// is popped.
     pub(super) pending_next: Vec<Pending>,
     /// Whether a round of `Gen::drain_pending` is lowering its bodies.
@@ -3609,7 +3609,7 @@ impl<'a> Gen<'a> {
     /// line of its point (`Place`), so that a chain of calls over several lines attributes each
     /// call to its own line. An expression of another file (an inlined body) keeps the line of
     /// the call around it; an argument the typer made (a given, a default) takes the line of the
-    /// call's end, which the node holds (`Place::held`, `Gen::hold_lines`), through its whole tree: a
+    /// call's end, which the node holds (`Place::held`, `Gen::prepare_held`), through its whole tree: a
     /// given's copy keeps the spans of the site that searched first, which a worker may have
     /// made at another line.
     pub(super) fn mark_line(&mut self, place: Place) {
@@ -5854,7 +5854,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The body of the closure whose lifted method is `target`, queued where the class's holds first meet the closure,
-    /// before any of its code is written (`ask_lifted`): the class's table's entry of that name, made where the closure
+    /// before any of its code is written (`prepare_held`): the class's table's entry of that name, made where the closure
     /// was lowered (`Gen::closure_entry`), one method however often the node is written. Where the table has no closure
     /// of that name, or two methods of it, the class is refused.
     pub(super) fn lambda_method(&mut self, target: &MethodRef) {

@@ -173,6 +173,22 @@ struct HeldUnder {
     context: String,
 }
 
+/// A node's visit in the walk of a held method's code (`Gen::prepare_held`): before its operands, with what decides
+/// its line, or after them, for a default getter's body to queue and an interface target to list.
+#[derive(Clone, Copy)]
+enum HeldVisit {
+    Before(HeldLines),
+    After { default_getter: bool, super_call: bool },
+}
+
+/// What decides a node's line in a held tree: the nearest call placed in the class's file around it, where there is
+/// one, or nothing more under an argument whose line is held.
+#[derive(Clone, Copy)]
+enum HeldLines {
+    Under(Option<(TExprId, crate::source::Span)>),
+    Held,
+}
+
 /// The interface targets of a held method's `invokespecial`s and what orders them among the class's
 /// (`super_call_key`): its calls in the order they are written, each with its call's end; the body's text where it is a
 /// lifted body (set where the class's rounds hold it); whether it is constructor code; whether it has a line of its own.
@@ -731,12 +747,7 @@ impl<'a> Gen<'a> {
                 }))
             }
         };
-        for r in self.held_roots(&code) {
-            self.ask_lifted(r);
-        }
-        let roots = self.held_roots(&code);
-        let lines = self.has_lines(&roots);
-        let super_calls = self.super_calls(&roots, lines);
+        let super_calls = self.prepare_held(&self.held_roots(&code), None);
         Box::new(self.hold_method(if lazy { "local lazy val's method" } else { "lifted method" }, code, super_calls))
     }
 
@@ -770,7 +781,7 @@ impl<'a> Gen<'a> {
     /// context made at the class file's gate (`Gen::method_cx`, `site` where the member is defined), the tree lowered
     /// while no method is open, then opened, written and ended by the class's walk (`Gen::write_held`). `what` names
     /// the member kind in a refusal. The closures and local defs its tree names are named by the class's lifted table
-    /// where they are lowered, and their bodies queued as it is held (`Gen::ask_lifted`), in the order the writer meets
+    /// where they are lowered, and their bodies queued as it is held (`Gen::prepare_held`), in the order the writer meets
     /// them.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn hold_member(&mut self, flags: MethodFlags, name: &str, desc: &str, params: &[(Option<SymId>, ErasedType)], ret: ErasedType, roots: &[TExprId], site: MethodSite, what: &'static str, compose: impl FnOnce(&mut Self) -> LirId) {
@@ -790,7 +801,7 @@ impl<'a> Gen<'a> {
         self.lower_declared.clear();
     }
 
-    /// The roots of a held method's code whose lifted bodies it asks for (`Gen::ask_lifted`), in the order they are
+    /// The roots of a held method's code whose lifted bodies it asks for (`Gen::prepare_held`), in the order they are
     /// written: an object's part its head's statements, then its own of the tree's (`Gen::module_statements`).
     fn held_roots(&self, code: &HeldCode) -> Vec<LirId> {
         match code {
@@ -804,65 +815,30 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Whether the code under `roots` has a line of its own: a node placed in the class's file (`Gen::mark_line` marks
-    /// only those).
-    fn has_lines(&self, roots: &[LirId]) -> bool {
-        let prog = self.cx.input.prog;
-        let mut stack: Vec<LirId> = roots.to_vec();
-        let mut buf = Vec::new();
-        while let Some(id) = stack.pop() {
-            if self.lir.node(id).of.is_some_and(|place| prog.span_of(place.expr).is_some_and(|(file, _)| file == self.line_file)) {
-                return true;
-            }
-            buf.clear();
-            self.lir.operands_into(id, &mut buf);
-            stack.extend(buf.iter().copied());
-        }
-        false
-    }
-
     /// The interface an `invokespecial` of `m` names among the class's (`initJClass`'s `superCallTargets`): none for any
     /// other call, nor for the class's own method.
     fn super_call_target<'m>(&self, m: &'m MethodRef) -> Option<&'m Rc<str>> {
         (m.owner_is_interface && matches!(m.kind, Invoke::Special) && *m.owner != *self.this_name).then_some(&m.owner)
     }
 
-    /// The interface targets of the calls under `roots` in the order the walk writes them (a node after its operands),
-    /// each with its call's end in the class's file (`SuperCall`'s place; `u32::MAX` for a call without one).
-    fn super_calls(&self, roots: &[LirId], lines: bool) -> SuperCalls {
-        let mut calls = Vec::new();
-        let mut stack: Vec<(LirId, bool)> = roots.iter().rev().map(|&r| (r, false)).collect();
-        let mut buf = Vec::new();
-        while let Some((id, operands_done)) = stack.pop() {
-            if !operands_done {
-                stack.push((id, true));
-                buf.clear();
-                self.lir.operands_into(id, &mut buf);
-                stack.extend(buf.iter().rev().map(|&o| (o, false)));
-                continue;
-            }
-            let (method, at) = match &self.lir.node(id).kind {
-                Kind::SuperCall { method, place, .. } => (method, place.as_ref().filter(|(file, _)| *file == self.line_file).map_or(u32::MAX, |(_, end)| *end)),
-                Kind::Call { method, at: None, .. } | Kind::StaticCall { method, .. } | Kind::LiftedCall { method, .. } | Kind::Helper { method, .. } => (method, u32::MAX),
-                Kind::New { ctor, .. } | Kind::InitCall { ctor, .. } => (ctor, u32::MAX),
-                Kind::Compare { how: Comparing::Ordering(m) | Comparing::Equality(m), .. } => (m, u32::MAX),
-                _ => continue,
-            };
-            if let Some(t) = self.super_call_target(method) {
-                calls.push((t.clone(), at));
-            }
-        }
-        SuperCalls { calls, lifted: None, ctor_code: self.ctor_code, lines }
+    /// The interface a node's `invokespecial` names among the class's, with its call's end in the class's file
+    /// (`SuperCall`'s place; `u32::MAX` for a call without one).
+    fn interface_super_call(&self, id: LirId) -> Option<(&Rc<str>, u32)> {
+        let (method, at) = match &self.lir.node(id).kind {
+            Kind::SuperCall { method, place, .. } => (method, place.as_ref().filter(|(file, _)| *file == self.line_file).map_or(u32::MAX, |(_, end)| *end)),
+            Kind::Call { method, at: None, .. } | Kind::StaticCall { method, .. } | Kind::LiftedCall { method, .. } | Kind::Helper { method, .. } => (method, u32::MAX),
+            Kind::New { ctor, .. } | Kind::InitCall { ctor, .. } => (ctor, u32::MAX),
+            Kind::Compare { how: Comparing::Ordering(m) | Comparing::Equality(m), .. } => (m, u32::MAX),
+            _ => return None,
+        };
+        self.super_call_target(method).map(|t| (t, at))
     }
 
     /// A def's member in the context `held_context` made: its body lowered (`Gen::lower_method_body`), asked as
     /// `hold_tree` asks and held, its code starting at `first_line` where the class's walk writes it.
     pub(super) fn hold_def(&mut self, what: &'static str, first_line: u32, (sym, params, body): (SymId, &[SymId], TExprId)) {
         let code = HeldCode::Def(self.lower_method_body(sym, params, body));
-        for r in self.held_roots(&code) {
-            self.ask_lifted(r);
-        }
-        let super_calls = self.super_calls(&self.held_roots(&code), true);
+        let super_calls = self.prepare_held(&self.held_roots(&code), Some(true));
         let mut held = self.hold_method(what, code, super_calls);
         held.first_line = Some(first_line);
         self.enter_plan(held);
@@ -872,15 +848,13 @@ impl<'a> Gen<'a> {
     /// class's walk to write.
     pub(super) fn hold_tree(&mut self, what: &'static str, compose: impl FnOnce(&mut Self) -> LirId) {
         let tree = self.lowering(compose);
-        self.ask_lifted(tree);
-        let lines = self.has_lines(&[tree]);
-        let super_calls = self.super_calls(&[tree], lines);
+        let super_calls = self.prepare_held(&[tree], None);
         let held = self.hold_method(what, HeldCode::Tree(tree), super_calls);
         self.enter_plan(held);
     }
 
     /// The lifted method a call names, its body found by its name in
-    /// the class's table and queued where the class first asks for it, as a held tree is held (`Gen::ask_lifted`). The
+    /// the class's table and queued where the class first asks for it, as a held tree is held (`Gen::prepare_held`). The
     /// body of a local def's default getter is given back, to be queued once the call's operands are visited. A call
     /// the table cannot answer asks for no body: its class is refused.
     pub(super) fn ask_lifted_call(&mut self, method: &MethodRef, from: LiftedFrom) -> Option<Pending> {
@@ -907,78 +881,88 @@ impl<'a> Gen<'a> {
         pending
     }
 
-    /// Queues the lifted bodies the tree `root` asks for, the closures, local defs, local lazy vals and local defaults'
-    /// getters whose methods its writer calls, before any of its code is written. A default getter's body is queued
-    /// once the call's operands are visited, after the bodies its arguments ask for; asked while a round of lifted
-    /// bodies is lowered, it is queued for the next round.
-    fn ask_lifted(&mut self, root: LirId) {
-        self.hold_lines(root);
-        let mut stack = vec![(root, false)];
-        let mut buf = Vec::new();
-        while let Some((id, operands_asked)) = stack.pop() {
-            let kind = &self.lir.node(id).kind;
-            if operands_asked {
-                let Kind::LiftedCall { method, from, .. } = kind else { unreachable!("a default getter's call, by the walk") };
-                let (method, from) = (method.clone(), *from);
-                if let Some(p) = self.ask_lifted_call(&method, from) {
-                    if self.draining {
-                        self.pending_next.push(p);
-                    } else {
-                        self.defer(p);
-                    }
-                }
-                continue;
-            }
-            match kind {
-                Kind::Closure { target, .. } => {
-                    let target = target.clone();
-                    self.lambda_method(&target);
-                }
-                Kind::LiftedCall { from: LiftedFrom::Default(_), .. } => stack.push((id, true)),
-                Kind::LiftedCall { method, from, .. } => {
-                    let (method, from) = (method.clone(), *from);
-                    self.ask_lifted_call(&method, from);
-                }
-                _ => {}
-            }
-            buf.clear();
-            self.lir.operands_into(id, &mut buf);
-            stack.extend(buf.iter().rev().map(|&o| (o, false)));
-        }
-    }
-
-    /// The lines of a held tree that its calls decide (`lir::Place::held`): under the nearest node placed as a call in
-    /// the class's file, a node placed in that file with the call's span and of another expression is an argument the
-    /// typer made (a given, a default): it takes the line of the call's end, where scalac places it, and nothing under
-    /// it takes another; a call of another span decides for the nodes under it.
-    fn hold_lines(&mut self, root: LirId) {
+    /// What the code under `roots` asks of its class before any of it is written, in one walk of each root in turn, a
+    /// node before its operands. The lines its calls decide are held (`lir::Place::held`): under the nearest node placed
+    /// as a call in the class's file, a node placed in that file with the call's span and of another expression is an
+    /// argument the typer made (a given, a default): it takes the line of the call's end, where scalac places it, and
+    /// nothing under it takes another; a call of another span decides for the nodes under it. The lifted bodies it
+    /// asks for are queued: the closures, local defs, local lazy vals and local defaults' getters whose methods its
+    /// writer calls. A default getter's body is queued once the call's operands are visited, after the bodies its
+    /// arguments ask for; asked while a round of lifted bodies is lowered, it is queued for the next round. The
+    /// interface targets of its `invokespecial`s are listed in the order the writer writes them (a node after its
+    /// operands). `lines` says whether the code has a line of its own where its maker knows; elsewhere a node placed in
+    /// the class's file says so (`Gen::mark_line` marks only those).
+    fn prepare_held(&mut self, roots: &[LirId], lines: Option<bool>) -> SuperCalls {
         let prog = self.cx.input.prog;
-        let mut stack: Vec<(LirId, Option<(TExprId, crate::source::Span)>)> = vec![(root, None)];
+        let mut placed = false;
+        let mut calls = Vec::new();
+        let mut stack: Vec<(LirId, HeldVisit)> = Vec::new();
         let mut buf = Vec::new();
-        while let Some((id, around)) = stack.pop() {
-            let mut inner = around;
-            if let Some(place) = self.lir.node(id).of {
-                if place.held {
-                    continue;
-                }
-                if let Some((file, span)) = prog.span_of(place.expr) {
-                    if file == self.line_file {
-                        if let Some((call, call_span)) = around {
-                            if call != place.expr && call_span == span {
-                                self.lir.node_mut(id).of = Some(crate::lir::Place { point: span.end.saturating_sub(1), held: true, ..place });
-                                continue;
+        for &root in roots {
+            stack.push((root, HeldVisit::Before(HeldLines::Under(None))));
+            while let Some((id, visit)) = stack.pop() {
+                let around = match visit {
+                    HeldVisit::Before(around) => around,
+                    HeldVisit::After { default_getter, super_call } => {
+                        if super_call {
+                            if let Some((target, at)) = self.interface_super_call(id) {
+                                calls.push((target.clone(), at));
                             }
                         }
-                        if place.call {
-                            inner = Some((place.expr, span));
+                        if default_getter {
+                            let Kind::LiftedCall { method, from, .. } = &self.lir.node(id).kind else { unreachable!("a default getter's call, by the walk") };
+                            let (method, from) = (method.clone(), *from);
+                            if let Some(p) = self.ask_lifted_call(&method, from) {
+                                if self.draining {
+                                    self.pending_next.push(p);
+                                } else {
+                                    self.defer(p);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                };
+                let mut inner = around;
+                if let Some(place) = self.lir.node(id).of {
+                    let in_file = prog.span_of(place.expr).filter(|(file, _)| *file == self.line_file).map(|(_, span)| span);
+                    placed |= in_file.is_some();
+                    if let HeldLines::Under(call) = around {
+                        if place.held {
+                            inner = HeldLines::Held;
+                        } else if let Some(span) = in_file {
+                            if call.is_some_and(|(call, call_span)| call != place.expr && call_span == span) {
+                                self.lir.node_mut(id).of = Some(crate::lir::Place { point: span.end.saturating_sub(1), held: true, ..place });
+                                inner = HeldLines::Held;
+                            } else if place.call {
+                                inner = HeldLines::Under(Some((place.expr, span)));
+                            }
                         }
                     }
                 }
+                let mut default_getter = false;
+                match &self.lir.node(id).kind {
+                    Kind::Closure { target, .. } => {
+                        let target = target.clone();
+                        self.lambda_method(&target);
+                    }
+                    Kind::LiftedCall { from: LiftedFrom::Default(_), .. } => default_getter = true,
+                    Kind::LiftedCall { method, from, .. } => {
+                        let (method, from) = (method.clone(), *from);
+                        self.ask_lifted_call(&method, from);
+                    }
+                    _ => {}
+                }
+                let super_call = self.interface_super_call(id).is_some();
+                if default_getter || super_call {
+                    stack.push((id, HeldVisit::After { default_getter, super_call }));
+                }
+                buf.clear();
+                self.lir.operands_into(id, &mut buf);
+                stack.extend(buf.iter().rev().map(|&o| (o, HeldVisit::Before(inner))));
             }
-            buf.clear();
-            self.lir.operands_into(id, &mut buf);
-            stack.extend(buf.iter().rev().map(|&o| (o, inner)));
         }
+        SuperCalls { calls, lifted: None, ctor_code: self.ctor_code, lines: lines.unwrap_or(placed) }
     }
 
     /// Writes a held method from its tree, a step of the class's walk (`Gen::write_entries`): opened
@@ -2350,7 +2334,7 @@ fn super_call_key(lifted: Option<(u32, u32)>, ctor_code: bool, lines: bool, at: 
 
 impl<'a> Gen<'a> {
     /// The class file's interfaces, the last step of its writing: the targets of the super calls its held trees hold
-    /// (`Gen::super_calls`), ordered by their key (`super_call_key`), are interfaces of it (`initJClass`): a direct trait another brings keeps its place among
+    /// (`Gen::prepare_held`), ordered by their key (`super_call_key`), are interfaces of it (`initJClass`): a direct trait another brings keeps its place among
     /// the direct ones, any other target comes after the parents' list, in the order scalac's back end writes the
     /// class's bodies and so fills its set, a super accessor's Java target at its accessor's place. A call copied into a
     /// class that is no instance of the interface (a value class's method in its companion) names no interface of the
@@ -3022,12 +3006,7 @@ impl<'a> Gen<'a> {
             None => self.lowering(make),
         };
         let code = HeldCode::ModulePart(ModulePart { root, init, fields: fields.clone(), head });
-        for s in self.held_roots(&code) {
-            self.ask_lifted(s);
-        }
-        let roots = self.held_roots(&code);
-        let lines = self.has_lines(&roots);
-        let super_calls = self.super_calls(&roots, lines);
+        let super_calls = self.prepare_held(&self.held_roots(&code), None);
         if !init {
             // The `<clinit>` declares them where it meets them (`Gen::write_module_part`): a statement's before it, the
             // rest after the last.
