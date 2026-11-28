@@ -2779,6 +2779,12 @@ return_tail_call_try_unguarded	fail	-	exception
 return_tail_call_untagged	pass	-	
 return_tail_call_value_class	pass	-	
 return_tail_call_while_label	pass	-	
+return_through_catch	pass	-	
+return_through_closure	pass	-	
+return_through_finalizer_or_lock	pass	-	
+return_through_lazy_initializer	pass	-	
+return_through_nested_monitors	pass	-	
+return_through_unit_finalizers	pass	-	
 return_value_if_match_jump	pass	-	
 return_value_position_branch	pass	-	
 return_value_position_verify	pass	-	

@@ -3808,7 +3808,7 @@ impl<'a> Gen<'a> {
     /// took it (`shouldEmitCleanup`), exits the monitor and goes on to the next enclosing frame's exit or returns
     /// (`pendingCleanups`). The value's type is the body's; the operands under the block stay where they are, a
     /// `return` inside dropping them as it leaves (`drop_stack`). `returns`: whether the body holds a `return` of the
-    /// method (the node's `returns`), for which the early-return slot is made before the block.
+    /// method, for which the early-return slot is made before the block.
     pub fn monitor_block(&mut self, recv: impl FnOnce(&mut Self), t: ErasedType, returns: bool, body: impl FnOnce(&mut Self, &ErasedType)) -> ErasedType {
         let object = ErasedType::object();
         recv(self);

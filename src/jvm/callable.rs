@@ -1696,7 +1696,7 @@ impl<'a> Gen<'a> {
         let done = self.lir.label();
         let handler = self.lower_handler_value(failed, Vec::new(), done, want);
         let handlers = Rc::from([ExceptionHandler { class: Rc::from(THROWABLE), caught: Caught::Dropped, body: handler }]);
-        let protected = self.push_protected(Kind::Try { body, catch: Some(Catch { done, handlers }), finalizer: None, returns: false }, want.clone());
+        let protected = self.lir.push(Kind::Try { body, catch: Some(Catch { done, handlers }), finalizer: None }, want.clone());
         self.lir.ret(protected)
     }
 

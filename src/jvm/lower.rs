@@ -152,7 +152,7 @@ impl<'a> Gen<'a> {
                 let body = self.lower_expr(t.body, &own);
                 let catch = (!t.cases.is_empty()).then(|| self.lower_catch(index, &own));
                 let finalizer = t.finalizer.map(|f| self.lower_expr(f, &ErasedType::V));
-                let node = self.push_protected(Kind::Try { body, catch, finalizer, returns: false }, own.clone());
+                let node = self.lir.push(Kind::Try { body, catch, finalizer }, own.clone());
                 self.lower_adapt(node, &own, want)
             }
             // A def's call of itself in a tail position of a `return`'s value: the loop's jump
@@ -1352,7 +1352,7 @@ impl<'a> Gen<'a> {
         let t = self.static_type(body);
         let lock = self.lower_expr(lock, &ErasedType::object());
         let body = self.lower_expr(body, &t);
-        self.push_protected(Kind::Synchronized { lock, body, returns: false }, t)
+        self.lir.push(Kind::Synchronized { lock, body }, t)
     }
 
     /// A def's body that a closure it makes returns from, as dotty's `NonLocalReturns.nonLocalReturnTry` makes it
@@ -1395,19 +1395,8 @@ impl<'a> Gen<'a> {
         let handled = self.lir.push(Kind::If { cond: same, then: returned, otherwise: Some(rethrown) }, ret.clone());
         let handler = self.lower_handler_value(handled, Vec::new(), done, &ret);
         let handlers = Rc::from([ExceptionHandler { class: control, caught: Caught::Temp(caught), body: handler }]);
-        let protected = self.push_protected(Kind::Try { body: value, catch: Some(Catch { done, handlers }), finalizer: None, returns: false }, ret.clone());
+        let protected = self.lir.push(Kind::Try { body: value, catch: Some(Catch { done, handlers }), finalizer: None }, ret.clone());
         (kept, self.lir.push(Kind::Return(protected), ErasedType::V))
-    }
-
-    /// The `try` or `synchronized` node, its `returns` recorded (`Body::returns_through`).
-    pub(super) fn push_protected(&mut self, kind: Kind, ty: ErasedType) -> LirId {
-        let id = self.lir.push(kind, ty);
-        let through = self.lir.returns_through(id);
-        match &mut self.lir.node_mut(id).kind {
-            Kind::Try { returns, .. } | Kind::Synchronized { returns, .. } => *returns = through,
-            _ => unreachable!("a `try` or a `synchronized` block"),
-        }
-        id
     }
 
     /// The instance of the object that holds a file's top-level definitions.

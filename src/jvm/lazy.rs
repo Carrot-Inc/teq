@@ -215,7 +215,7 @@ impl<'a> Gen<'a> {
             let stored = g.lir.call(&initialize, initialized_by, &[computed]);
             let otherwise = Some(g.lower_adapt(stored, &value, &ret));
             let body = g.lir.push(Kind::If { cond, then, otherwise }, ret.clone());
-            let synchronized = g.push_protected(Kind::Synchronized { lock, body, returns: false }, ret.clone());
+            let synchronized = g.lir.push(Kind::Synchronized { lock, body }, ret.clone());
             g.lir.ret(synchronized)
         })
     }
@@ -483,7 +483,7 @@ impl<'a> Gen<'a> {
             let release = self.lir.call(&method(&waiting, "countDown", Invoke::Virtual), read_lock, &[]);
             let release_lock = self.lir.seq(&[declare_lock, handed], release);
             let finalizer = self.lir.push(Kind::If { cond: failed, then: release_lock, otherwise: None }, ErasedType::V);
-            let evaluate = self.push_protected(Kind::Try { body, catch: None, finalizer: Some(finalizer), returns: false }, ErasedType::V);
+            let evaluate = self.lir.push(Kind::Try { body, catch: None, finalizer: Some(finalizer) }, ErasedType::V);
             let read = self.lir.push(Kind::Temp(nullable), object.clone());
             let answer = self.lir.ret(read);
             let then = self.lir.seq(&[declare_result, declare_nullable, evaluate], answer);

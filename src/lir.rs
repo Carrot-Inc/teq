@@ -407,15 +407,12 @@ pub enum Kind {
     /// the text a call holds.
     Concat { parts: List, calls: Rc<[u32]>, operands: Rc<[u32]> },
     /// `try`: the body; where it throws, the cases (`Catch`); the finalizer, which runs on every
-    /// way out. `returns`: whether a `return` of the method leaves through the finalizer
-    /// (`Body::returns_through`), which the JVM writer must know before the `try` to make the
-    /// method's early-return slot (dotty's `shouldEmitCleanup`). Recorded by the lowering.
-    Try { body: LirId, catch: Option<Catch>, finalizer: Option<LirId>, returns: bool },
+    /// way out.
+    Try { body: LirId, catch: Option<Catch>, finalizer: Option<LirId> },
     /// The body's value, evaluated holding the monitor of the object `lock`, which is evaluated
     /// first; the monitor is released on every way out of the body, a throw and a `return`
-    /// included. `returns`: whether a `return` of the method leaves through the monitor exit,
-    /// as `Try`'s.
-    Synchronized { lock: LirId, body: LirId, returns: bool },
+    /// included.
+    Synchronized { lock: LirId, body: LirId },
     /// A value of the type `from` as one of the node's type: dropped, the unit value or a zero
     /// for none, a cast, a box or its content, a primitive conversion (`Gen::adapt`).
     Adapt { value: LirId, from: ErasedType, how: Adaptation },

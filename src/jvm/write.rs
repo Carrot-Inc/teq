@@ -366,12 +366,12 @@ impl<'a> Gen<'a> {
             }
             Kind::Underlying { value } => self.write(value),
             Kind::Concat { parts, calls, operands } => self.write_concat(parts, &calls, &operands),
-            Kind::Try { body, catch, finalizer, returns } => {
-                self.check_returns(id, returns);
+            Kind::Try { body, catch, finalizer } => {
+                let returns = self.lir.returns_through(id);
                 self.write_try(&ty, body, catch, finalizer, returns)
             }
-            Kind::Synchronized { lock, body, returns } => {
-                self.check_returns(id, returns);
+            Kind::Synchronized { lock, body } => {
+                let returns = self.lir.returns_through(id);
                 self.monitor_block(|g| g.write(lock), ty, returns, |g, _| g.write(body));
             }
             Kind::Adapt { value, from, how } => {
@@ -639,11 +639,6 @@ impl<'a> Gen<'a> {
             let vt = self.vt(ty);
             self.code.push(vt);
         }
-    }
-
-    /// A `try`'s or a `synchronized` block's recorded `returns` is the tree's answer (`Body::returns_through`).
-    fn check_returns(&self, id: LirId, returns: bool) {
-        debug_assert!(returns == self.lir.returns_through(id), "the recorded `returns` of {id:?}");
     }
 
     /// Whether the branch leaves the method or goes round its loop, where a value is wanted: the

@@ -2713,6 +2713,12 @@ cases/return_tail_call_try_unguarded	pass	-
 cases/return_tail_call_untagged	pass	-	
 cases/return_tail_call_value_class	pass	-	
 cases/return_tail_call_while_label	pass	-	
+cases/return_through_catch	pass	-	
+cases/return_through_closure	pass	-	
+cases/return_through_finalizer_or_lock	pass	-	
+cases/return_through_lazy_initializer	pass	-	
+cases/return_through_nested_monitors	pass	-	
+cases/return_through_unit_finalizers	pass	-	
 cases/return_value_if_match_jump	pass	-	
 cases/return_value_position_branch	pass	-	
 cases/return_value_position_verify	pass	-	
