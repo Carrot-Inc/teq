@@ -614,6 +614,8 @@ cases/default_call_bound_ahead_type	pass	-
 cases/default_getter_approximation_refinement	pass	-	
 cases/default_getter_infers	pass	-	
 cases/default_getter_operands	pass	-	
+cases/default_getter_spelled_generic	pass	-	
+cases/default_getter_spelled_override	pass	-	
 cases/default_getter_wildapprox	pass	-	
 cases/default_names_member	pass	-	
 cases/default_receiver_inherited_parent_args	pass	-	

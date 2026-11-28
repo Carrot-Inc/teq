@@ -620,6 +620,8 @@ default_call_bound_ahead_type	pass	-
 default_getter_approximation_refinement	pass	-	
 default_getter_infers	pass	-	
 default_getter_operands	pass	-	
+default_getter_spelled_generic	pass	-	
+default_getter_spelled_override	pass	-	
 default_getter_wildapprox	pass	-	
 default_names_member	pass	-	
 default_receiver_inherited_parent_args	pass	-	

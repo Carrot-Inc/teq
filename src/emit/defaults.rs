@@ -780,7 +780,9 @@ impl<'a> super::Emitter<'a> {
             let by_name = sig.clauses.iter().flat_map(|c| c.params.iter()).nth(i).is_some_and(|p| p.by_name);
             let params = Self::getter_params(&sig.clauses, &fun.params, 0, i);
             let g = self.getter_name(sym, i);
-            if members.iter().any(|&m| m != f && self.reach.funs[m.idx()] && *self.sym_name(self.prog.funs[m.idx()].sym) == *g) {
+            // A member of the class that IS this getter (its name's kind says so: a loaded class's getter member beside
+            // its folded record) is written already; a member only spelled so is another method.
+            if members.iter().any(|&m| m != f && self.reach.funs[m.idx()] && self.syms.getter_mark(self.interner, self.prog.funs[m.idx()].sym) == Some((name, i as u32))) {
                 continue;
             }
             self.line();

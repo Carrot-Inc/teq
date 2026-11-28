@@ -444,6 +444,44 @@ expect "capture: another package's x removed runs" "$(timeout 20 node "$work/out
 stop
 rm -rf "$work/out"
 
+# Methods spelled as the getters of a class's own default and of an inherited default are named
+# apart. Adding and removing them in one session must keep the names and calls a fresh build gives.
+src=$work/getter_spelled
+cp -r tests/split/getter_spelled "$src"
+start "$src" --split "$work/out"
+expect "getter_spelled: first build" "$(field ok)" 'true'
+same_as_fresh "getter_spelled: first build" "$src"
+expect "getter_spelled: first build runs" "$(timeout 20 node "$work/out/main.mjs")" "$(cat tests/split/getter_spelled.expected)"
+
+sed -i.bak '/^  def h\[/a\  def `h$default$1`(s: String): Int = 99' "$src/lib.scala"
+echo '  println(new lib.Holder().`h$default$1`("x"))' >> "$src/use.scala"
+build "$src/lib.scala" "$src/use.scala"
+expect "getter_spelled: Holder method added" "$(field ok)" 'true'
+same_as_fresh "getter_spelled: Holder method added" "$src"
+expect "getter_spelled: Holder method added runs" "$(timeout 20 node "$work/out/main.mjs")" $'seven\n107\n107\n99'
+
+sed -i.bak '/^  override def m(/a\  def `m$default$1`(s: String): Int = 99' "$src/use.scala"
+echo '  println(new Sub().`m$default$1`("x"))' >> "$src/use.scala"
+build "$src/use.scala"
+expect "getter_spelled: Sub method added" "$(field ok)" 'true'
+same_as_fresh "getter_spelled: Sub method added" "$src"
+expect "getter_spelled: Sub method added runs" "$(timeout 20 node "$work/out/main.mjs")" $'seven\n107\n107\n99\n99'
+
+mv "$src/use.scala.bak" "$src/use.scala"
+build "$src/use.scala"
+expect "getter_spelled: Sub method removed" "$(field ok)" 'true'
+same_as_fresh "getter_spelled: Sub method removed" "$src"
+expect "getter_spelled: Sub method removed runs" "$(timeout 20 node "$work/out/main.mjs")" $'seven\n107\n107\n99'
+
+mv "$src/lib.scala.bak" "$src/lib.scala"
+cp tests/split/getter_spelled/use.scala "$src/use.scala"
+build "$src/lib.scala" "$src/use.scala"
+expect "getter_spelled: Holder method removed" "$(field ok)" 'true'
+same_as_fresh "getter_spelled: Holder method removed" "$src"
+expect "getter_spelled: Holder method removed runs" "$(timeout 20 node "$work/out/main.mjs")" "$(cat tests/split/getter_spelled.expected)"
+stop
+rm -rf "${work:?}/out"
+
 # An upstream module's products rebuilt between two requests of a session over them (the vite
 # dev server over a description whose upstream sbt compiles): the next request takes the full
 # path, read through the directory's new identity, and answers as a fresh session does, also

@@ -1876,6 +1876,55 @@ impl<'a> Worker<'a> {
     /// Settles what no lookup has settled and names the alternatives of every overloaded name,
     /// so that the output does not depend on which of them the program happened to call.
     pub(super) fn name_all_alternatives(&mut self) {
+        let sets = self.name_overload_sets();
+        let getters = self.name_recorded_getter_alternatives();
+        if sets || getters {
+            self.add_bridges();
+        }
+    }
+
+    /// A recorded default occupies the getter's property in its class and subclasses, just as
+    /// the DefaultGetter member does in a class converted from a pickle.
+    fn name_recorded_getter_alternatives(&mut self) -> bool {
+        let mut getters: FxMap<Name, Vec<ClassId>> = FxMap::default();
+        for tc in self.prog.classes.iter() {
+            for &f in &tc.methods {
+                let fun = &self.prog.funs[f.idx()];
+                let method = self.syms.dispatch_name(fun.sym);
+                for (i, _) in fun.own_defaults() {
+                    if let Some(name) = self.interner.lookup(&format!("{}$default${}", self.name_ref(method), i + 1)) {
+                        getters.entry(name).or_default().push(tc.id);
+                    }
+                }
+            }
+        }
+        let mut collisions = Vec::new();
+        for tc in self.prog.classes.iter() {
+            for &f in &tc.methods {
+                let m = self.prog.funs[f.idx()].sym;
+                let name = self.syms.dispatch_name(m);
+                let Some(owners) = getters.get(&name) else { continue };
+                if self.syms.getter_mark(self.interner, m).is_none() && self.syms.class(tc.id).base_types.iter().any(|(b, _)| owners.contains(b)) {
+                    collisions.push(m);
+                }
+            }
+        }
+        if collisions.is_empty() {
+            return false;
+        }
+        for &m in &collisions {
+            for &r in self.roots_of(m).iter() {
+                self.suffixed_roots.insert(r, ());
+                self.syms.sym_mut(r).dispatch = Dispatch::UNKNOWN;
+                self.dispatch_pending.push(r);
+            }
+        }
+        self.suffix_clashing_roots(&collisions);
+        self.settle_dispatch_pending();
+        true
+    }
+
+    fn name_overload_sets(&mut self) -> bool {
         let mut members: Vec<SymId> = std::mem::take(&mut self.dispatch_pending);
         for (c, entry) in std::mem::take(&mut self.unsettled_std_entries) {
             if self.syms.sym(entry).merge_pending {
@@ -1897,7 +1946,7 @@ impl<'a> Worker<'a> {
         }
         if self.syms.overloads.is_empty() && members.is_empty() && self.named_like.is_empty() {
             self.alternatives_named = true;
-            return;
+            return false;
         }
         // The sets that settling an entry merges while the roots are told apart (a std class
         // entered on demand) are told apart in the loop, before they are named.
@@ -1936,7 +1985,7 @@ impl<'a> Worker<'a> {
         for (m, root) in std::mem::take(&mut self.named_like) {
             self.name_like(m, root);
         }
-        self.add_bridges();
+        true
     }
 
     /// Names the alternatives of the overload sets entered since `from`, those of a std file
