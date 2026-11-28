@@ -156,9 +156,6 @@ pub(super) struct HeldMethod {
     desc: String,
     /// The jar method's attributes its class file takes after its code (`MethodSite::attributes`).
     attributes: Option<Rc<JarAttributes>>,
-    /// Whether the method entered its class's plan (`Gen::enter_plan`): not where the class holds one of its name and
-    /// signature already, and its code is written all the same and dropped.
-    entered: bool,
     what: &'static str,
     /// The line its code starts at, where its writer gives one before the body (`Code::line`).
     first_line: Option<u32>,
@@ -464,13 +461,10 @@ impl<'a> Gen<'a> {
         self.checked_methods.insert((method.name().clone(), desc), ());
     }
 
-    /// Ends the method begun, `m`: its code goes to the class file under its header where it `entered` the plan. A method
-    /// whose code could not be written refuses its class (false): an internal error, at which the class's walk stops.
-    /// The code of a method the class holds already (`Gen::enter_plan`'s repeat) is dropped, after it was written
-    /// for all that writing it leaves in the class: the constants and the bootstrap methods its
-    /// instructions name, the function arities it names and what it reports. The class's interface step also counts
-    /// its held super calls. It asks for no second writing of the class with wide jumps (`overflow`).
-    fn end_method(&mut self, m: MethodDef, desc: &str, entered: bool, attributes: Option<Rc<JarAttributes>>) -> bool {
+    /// Ends the method begun, `m`: its code goes to the class file under its header. A method whose code could not be
+    /// written refuses its class (false): an internal error, at which the class's walk stops. It asks for no second
+    /// writing of the class with wide jumps (`overflow`).
+    fn end_method(&mut self, m: MethodDef, desc: &str, attributes: Option<Rc<JarAttributes>>) -> bool {
         self.method_open = false;
         let at = self.m.at;
         let code = std::mem::replace(&mut self.code, Code::new(Vec::new()));
@@ -479,9 +473,6 @@ impl<'a> Gen<'a> {
             let fault = if code.underflow { "the operand stack model underflowed" } else { "internal error: a value stored in slots reserved for another width" };
             self.unsupported(&format!("{} while writing {}{}{}", fault, m.name(), desc, line));
             return false;
-        }
-        if !entered {
-            return true;
         }
         let reached = !self.cw.overflow;
         self.cw.method(method_access(m.flags()), m.name(), desc, Some(code));
@@ -749,14 +740,15 @@ impl<'a> Gen<'a> {
         Box::new(self.hold_method(if lazy { "local lazy val's method" } else { "lifted method" }, code, super_calls))
     }
 
-    /// The held method entering the class's plan, unless the class holds one of its name and signature already: the
-    /// first one held is the class's. A later one's code is written all the same and left out at its end
-    /// (`Gen::end_method`).
-    fn enter_plan(&mut self, mut held: HeldMethod) {
-        held.entered = !self.plan.has_method(held.method.name(), &held.desc);
-        if held.entered {
-            self.plan.methods.push(held.method.clone());
+    /// The held method entering the class's plan; one of a name and signature the class holds already is an internal
+    /// error that refuses the class (every maker asks the plan before it holds a member: `Gen::companion_members`,
+    /// `Gen::copy_members`, ..., as dotty makes a synthetic member only where none exists), and it enters nothing.
+    fn enter_plan(&mut self, held: HeldMethod) {
+        if self.plan.has_method(held.method.name(), &held.desc) {
+            self.unsupported(&format!("internal error: a second {} {}{} in the class", held.what, held.method.name(), held.desc));
+            return;
         }
+        self.plan.methods.push(held.method.clone());
         self.held_methods.push(held);
         self.entries.push(Entry::Held);
     }
@@ -771,7 +763,7 @@ impl<'a> Gen<'a> {
         let (m, lir) = (std::mem::take(&mut self.m), self.lir.start);
         self.lower_declared.clear();
         let under = HeldUnder { context: self.context.clone() };
-        HeldMethod { method, desc, attributes, entered: false, what, first_line: None, under, super_calls, m, lir, code }
+        HeldMethod { method, desc, attributes, what, first_line: None, under, super_calls, m, lir, code }
     }
 
     /// A member of the class whose body is the tree `compose` lowers, held where a writer would have begun it: its
@@ -987,7 +979,7 @@ impl<'a> Gen<'a> {
     /// (`Gen::open_method`), its body, ended (`Gen::end_method`). False where its code could not be written: the class
     /// is refused there.
     fn write_held(&mut self, held: HeldMethod) -> bool {
-        let HeldMethod { method, desc, attributes, entered, first_line, under, m, lir, code, .. } = held;
+        let HeldMethod { method, desc, attributes, first_line, under, m, lir, code, .. } = held;
         let maker = self.enter_held_under(under);
         // An object's two methods are written from its one constructor tree, which the class's plan keeps.
         let mut tree = matches!(code, HeldCode::ModulePart(_)).then(|| self.module_tree.take().expect("an object's constructor tree in its class's plan"));
@@ -1014,7 +1006,7 @@ impl<'a> Gen<'a> {
                 self.write_module_part(part.root, part.init, &part.fields);
             }
         }
-        let written = self.end_method(method, &desc, entered, attributes);
+        let written = self.end_method(method, &desc, attributes);
         if let Some(mut tree) = tree {
             std::mem::swap(&mut self.lir, &mut tree.lir);
             self.module_tree = Some(tree);
