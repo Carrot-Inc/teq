@@ -97,7 +97,7 @@ impl<'a> Defaults<'a> {
 
     /// Whether the JavaScript function of `of` computes parameter `i`'s default where its
     /// argument is `undefined`: the parameter has a default, its own or, an override's, one a
-    /// member it overrides declares (`js_declarer`), and no value of its type is `undefined`,
+    /// member it overrides declares (`Program::default_declarer`), and no value of its type is `undefined`,
     /// which an argument passed as `()` would be.
     pub fn initializer(&self, of: DefaultOf, i: usize) -> bool {
         let Some(p) = self.param(of, i) else { return false };
@@ -106,45 +106,8 @@ impl<'a> Defaults<'a> {
         }
         match of {
             DefaultOf::Ctor(_) => p.has_default,
-            DefaultOf::Method(s) => p.has_default || self.js_declarer(s, i).is_some(),
+            DefaultOf::Method(s) => p.has_default || self.prog.default_declarer(self.syms, s, i).is_some(),
         }
-    }
-
-    /// The method whose default of parameter `i` a call of `m` in JavaScript takes: `m` where its
-    /// parameter has one, else the nearest member of its class's ancestors that the JavaScript
-    /// output names alike (JavaScript dispatches by name) and that declares one.
-    pub fn js_declarer(&self, m: SymId, i: usize) -> Option<SymId> {
-        let declares = |s: SymId| self.syms.sym(s).sig.as_ref().and_then(|sig| sig.clauses.iter().flat_map(|c| c.params.iter()).nth(i).map(|p| p.has_default)).unwrap_or(false);
-        if declares(m) {
-            return Some(m);
-        }
-        let info = self.syms.sym(m);
-        let Owner::Class(c) = info.owner else { return None };
-        if info.kind != SymKind::Def || info.is_extension || info.name == crate::names::INIT {
-            return None;
-        }
-        let name = self.syms.dispatch_name(m);
-        for &(b, _) in self.syms.class(c).base_types.iter().skip(1) {
-            let Some(&found) = self.syms.class(b).members.get(&info.name) else { continue };
-            let alts: Vec<SymId> = match self.syms.alternatives(found) {
-                Some(set) => set.to_vec(),
-                None => vec![found],
-            };
-            for p in alts {
-                if self.syms.sym(p).kind == SymKind::Def && self.syms.dispatch_name(p) == name && declares(p) {
-                    return Some(p);
-                }
-            }
-        }
-        // A member a class's inherited pair makes `m` implement (`Program::inherited_defaults`):
-        // the getter is the one on `this`, whichever class mixes `m` in.
-        // The function is one, its getter's name its own: where a class's pair makes it implement a member that the
-        // output names apart (`f$Int`), whose getter that name does not find, it computes none.
-        let implemented = self.prog.inherited_defaults.get(&m)?;
-        if implemented.iter().any(|&p| declares(p) && self.syms.dispatch_name(p) != name) {
-            return None;
-        }
-        implemented.iter().copied().find(|&p| self.syms.dispatch_name(p) == name && declares(p))
     }
 
     /// Whether no value of type `t` is JavaScript's `undefined`, which a parameter default of the

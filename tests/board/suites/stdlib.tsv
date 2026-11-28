@@ -619,6 +619,7 @@ declared_erasure_bodies	pass	-
 def_refinement_receiver	pass	-	
 default_call_bound_ahead_type	pass	-	
 default_getter_approximation_refinement	pass	-	
+default_getter_generic_parent	pass	-	
 default_getter_infers	pass	-	
 default_getter_operands	pass	-	
 default_getter_spelled_generic	pass	-	

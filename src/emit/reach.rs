@@ -3736,7 +3736,7 @@ impl Meet for Walker {
                 self.reach.getter_names.insert((cx.syms.sym(s).name, index), ());
                 // The getters it dispatches to: the overrides' the call reaches, and the one of
                 // the member the method takes the default from, whether or not its body is.
-                let declarer = defaults_of(cx).js_declarer(s, index as usize).unwrap_or(s);
+                let declarer = cx.prog.default_declarer(cx.syms, s, index as usize).unwrap_or(s);
                 self.call_method(cx, false, s);
                 self.reach_getter(cx, declarer, index);
             }
@@ -3808,7 +3808,7 @@ impl Walker {
             if fun.defaults[i].is_some() || !d.initializer(DefaultOf::Method(s), i) {
                 continue;
             }
-            if let Some(declarer) = d.js_declarer(s, i).filter(|&x| x != s) {
+            if let Some(declarer) = cx.prog.default_declarer(cx.syms, s, i).filter(|&x| x != s) {
                 self.reach_getter(cx, declarer, i as u32);
             }
             for &p in &implemented {

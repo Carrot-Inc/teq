@@ -2409,7 +2409,7 @@ impl<'a> Emitter<'a> {
             };
             if let (None, Some(DefaultOf::Method(m)), true) = (defaults.get(i).copied().flatten(), of, initializer) {
                 // The default a member it overrides declares: that member's getter, which
-                // JavaScript finds on `this` (`defaults::Defaults::js_declarer`).
+                // JavaScript finds on `this` (`Program::default_declarer`).
                 let before = crate::typer::elaborate::clause_start(self.syms.sym(m).sig.as_ref().expect("a method's signature"), i);
                 let getter = self.getter_name(m, i);
                 let _ = write!(self.out, " = this.{}(", getter);

@@ -615,6 +615,7 @@ cases/declared_erasure_bodies	pass	-
 cases/def_refinement_receiver	pass	-	
 cases/default_call_bound_ahead_type	pass	-	
 cases/default_getter_approximation_refinement	pass	-	
+cases/default_getter_generic_parent	pass	-	
 cases/default_getter_infers	pass	-	
 cases/default_getter_operands	pass	-	
 cases/default_getter_spelled_generic	pass	-	

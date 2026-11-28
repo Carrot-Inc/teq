@@ -4811,19 +4811,25 @@ impl<'a> Gen<'a> {
         if let Some(route) = recv.and_then(|r| self.value_class_default_route(r, s, i, priors)) {
             return route;
         }
-        let m = self.mref(s);
-        let types = match self.jvm_param_order(s).filter(|o| o.len() == m.params.len()) {
+        // Applications.findDefaultGetter selects the getter on the receiver. genCallMethod takes
+        // the descriptor from the selected method (Scala 3.8.4, BCodeBodyBuilder.scala 1455-1459).
+        let declarer = match recv.map(|r| cx.input.prog.expr(r)) {
+            Some(TExpr::Super(SuperTarget::Mixin(_))) => s,
+            _ => cx.input.prog.default_declarer(cx.input.syms, s, i).unwrap_or(s),
+        };
+        let m = self.mref(declarer);
+        let types = match self.jvm_param_order(declarer).filter(|o| o.len() == m.params.len()) {
             Some(order) => self.signature_order(&order, &m.params),
             None => m.params.clone(),
         };
-        let shape = self.default_getter_shape(s, i);
-        let want = self.default_getter_want(s, i, &shape);
+        let shape = self.default_getter_shape(declarer, i);
+        let want = self.default_getter_want(declarer, i, &shape);
         let paths = self.default_operands_are_paths(recv, priors);
         let written = self.written_priors(priors, &types);
         let priors = written.clone();
-        let taken = self.getter_args(s, shape.before, &priors);
+        let taken = self.getter_args(declarer, shape.before, &priors);
         let before: Vec<ErasedType> = taken.iter().map(|p| p.ty.clone()).collect();
-        let (name, desc) = self.default_getter_ref(s, i, &before);
+        let (name, desc) = self.default_getter_ref(declarer, i, &before);
         let (params, ret) = parse_method_desc(&desc);
         // A by-name parameter's getter passed as a function made where it is called.
         let thunk = self.function_type(0);
@@ -4835,6 +4841,7 @@ impl<'a> Gen<'a> {
             .zip(&params)
             .map(|(p, param)| GetterArgument { expr: p.expr, ty: p.ty.clone(), param: param.clone() })
             .collect();
+        let m = self.mref(s);
         let Some(r) = recv else {
             let getter = MethodRef { owner: m.owner.clone(), owner_is_interface: m.owner_is_interface, name, params, ret, desc, kind: m.kind };
             return DefaultRoute::FileMember(info.file, getter, args, want).held_unless_paths(paths, &written);

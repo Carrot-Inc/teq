@@ -1262,7 +1262,7 @@ pub struct Program {
     /// For a method that a class's inherited pair makes implement a method declaring defaults
     /// it does not declare itself (a trait's `f(a: Int)` mixed beside another's
     /// `f(a: Int = 3)`), the members it so implements: the JavaScript function of the method
-    /// computes such a default from the getter on `this` (`emit::defaults::js_declarer`). Made
+    /// computes such a default from the getter on `this` (`Program::default_declarer`). Made
     /// again from the classes' pairs at every build (`Worker::record_class_pairs`).
     pub inherited_defaults: crate::intern::FxMap<SymId, Vec<SymId>>,
     /// The trait whose methods the runtime gives to partial function values.
@@ -1536,6 +1536,44 @@ impl Program {
 }
 
 impl Program {
+    /// The method whose getter of parameter `i`'s default a call of `m` takes, for both back ends: `m` where its
+    /// parameter has one, else the nearest member of its class's ancestors with `m`'s dispatch name that declares one
+    /// (JavaScript finds that getter by name; the JVM calls it by its own descriptor), else one a class's inherited
+    /// pair makes `m` implement.
+    pub fn default_declarer(&self, syms: &Symbols, m: SymId, i: usize) -> Option<SymId> {
+        let declares = |s: SymId| syms.sym(s).sig.as_ref().and_then(|sig| sig.clauses.iter().flat_map(|c| c.params.iter()).nth(i).map(|p| p.has_default)).unwrap_or(false);
+        if declares(m) {
+            return Some(m);
+        }
+        let info = syms.sym(m);
+        let Owner::Class(c) = info.owner else { return None };
+        if info.kind != SymKind::Def || info.is_extension || info.name == crate::names::INIT {
+            return None;
+        }
+        let name = syms.dispatch_name(m);
+        for &(b, _) in syms.class(c).base_types.iter().skip(1) {
+            let Some(&found) = syms.class(b).members.get(&info.name) else { continue };
+            let alts: Vec<SymId> = match syms.alternatives(found) {
+                Some(set) => set.to_vec(),
+                None => vec![found],
+            };
+            for p in alts {
+                if syms.sym(p).kind == SymKind::Def && syms.dispatch_name(p) == name && declares(p) {
+                    return Some(p);
+                }
+            }
+        }
+        // A member a class's inherited pair makes `m` implement (`Program::inherited_defaults`):
+        // the getter is the one on `this`, whichever class mixes `m` in.
+        // The function is one, its getter's name its own: where a class's pair makes it implement a member that the
+        // output names apart (`f$Int`), whose getter that name does not find, it computes none.
+        let implemented = self.inherited_defaults.get(&m)?;
+        if implemented.iter().any(|&p| declares(p) && syms.dispatch_name(p) != name) {
+            return None;
+        }
+        implemented.iter().copied().find(|&p| syms.dispatch_name(p) == name && declares(p))
+    }
+
     /// A tag as scalac's `Synthesizer` makes it, and as a program or a library body may write it:
     /// a val of `ClassTag`'s companion (`ClassTag.Int`), `ClassTag.apply(classOf[C])`, or such a
     /// tag's `wrap`. Pure, and its `newArray` is the standard allocation, so that a `@jvmEvidence`

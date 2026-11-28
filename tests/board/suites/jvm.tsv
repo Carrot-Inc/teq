@@ -621,6 +621,7 @@ declared_erasure_bodies	pass	-
 def_refinement_receiver	pass	-	
 default_call_bound_ahead_type	pass	-	
 default_getter_approximation_refinement	pass	-	
+default_getter_generic_parent	pass	-	
 default_getter_infers	pass	-	
 default_getter_operands	pass	-	
 default_getter_spelled_generic	pass	-	
@@ -2439,7 +2440,7 @@ overload_function_input_arity	pass	-
 overload_functions	pass	-	
 overload_inheritance	pass	-	
 overload_inherited_default	pass	-	
-overload_inherited_default_generic_curried	fail	-	verify
+overload_inherited_default_generic_curried	pass	-	
 overload_inherited_default_order	pass	-	
 overload_inherited_default_preference	pass	-	
 overload_inherited_value	pass	-	
