@@ -1,0 +1,15 @@
+public class MethodOneLinePredicateFirst extends Parent implements Marker,java.util.function.IntPredicate,java.util.function.IntUnaryOperator
+public class MethodOneLineOperatorFirst extends Parent implements Marker,java.util.function.IntUnaryOperator,java.util.function.IntPredicate
+public class MethodTwoLinesPredicateFirst extends Parent implements Marker,java.util.function.IntPredicate,java.util.function.IntUnaryOperator
+public class MethodTwoLinesOperatorFirst extends Parent implements Marker,java.util.function.IntUnaryOperator,java.util.function.IntPredicate
+public class ConstructorOneLinePredicateFirst extends Parent implements Marker,java.util.function.IntPredicate,java.util.function.IntUnaryOperator
+public class ConstructorOneLineOperatorFirst extends Parent implements Marker,java.util.function.IntUnaryOperator,java.util.function.IntPredicate
+public class ConstructorTwoLinesPredicateFirst extends Parent implements Marker,java.util.function.IntPredicate,java.util.function.IntUnaryOperator
+public class ConstructorTwoLinesOperatorFirst extends Parent implements Marker,java.util.function.IntUnaryOperator,java.util.function.IntPredicate
+public class LambdaOneLinePredicateFirst extends Parent implements Marker,java.util.function.IntPredicate,java.util.function.IntUnaryOperator
+public class LambdaOneLineOperatorFirst extends Parent implements Marker,java.util.function.IntUnaryOperator,java.util.function.IntPredicate
+public class LambdaTwoLinesPredicateFirst extends Parent implements Marker,java.util.function.IntPredicate,java.util.function.IntUnaryOperator
+public class LambdaTwoLinesOperatorFirst extends Parent implements Marker,java.util.function.IntUnaryOperator,java.util.function.IntPredicate
+Nested interfaces: 3
+java/util/function/Predicate.negate:()Ljava/util/function/Predicate;
+java/util/Collection.removeIf:(Ljava/util/function/Predicate;)Z

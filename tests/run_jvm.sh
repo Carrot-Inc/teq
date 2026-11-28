@@ -349,10 +349,14 @@ library_value_names() {
   done
 }
 case_listing() {
-  local name=$1
+  local name=$1 case_name
   local fixture=tests/support/$name
+  shift
+  if [ $# = 0 ]; then set -- "$name"; fi
+  local jars=()
+  for case_name in "$@"; do jars+=("$out/$case_name.jar"); done
   command -v javap > /dev/null || { aux_not_run "$name" "no javap"; return 0; }
-  bash "$fixture/list.sh" "$out/$name.jar" > "$out/$name.list" || return 1
+  bash "$fixture/list.sh" "${jars[@]}" > "$out/$name.list" || return 1
   diff -u "$fixture/$name.expected" "$out/$name.list"
 }
 final_select() {
@@ -437,6 +441,11 @@ elif [ -z "$VERSION" ]; then
   jar_companion_touch || status=1
   library_value_reads || status=1
   library_value_names || status=1
+  case_listing member_inherited_signatures member_inherited_abstract_first member_inherited_body_first \
+    member_inherited_implemented_abstract_first member_inherited_implemented_body_first || status=1
+  case_listing super_call_interface_order || status=1
+  case_listing boolean_line_marks || status=1
+  case_listing if_join_value_throw || status=1
   case_listing underlying_line || status=1
   case_listing wide_branch || status=1
   final_select || status=1

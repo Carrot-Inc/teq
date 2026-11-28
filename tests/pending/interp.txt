@@ -252,6 +252,7 @@ scala3_null_lazy_val	compile
 scala3_unit_lazy_val	compile
 std_small_members	unsupported
 string_constant_fold_surrogates	output
+super_call_interface_order	compile
 super_call_object_members_jvm	unsupported
 super_rebind_result	unsupported
 sync_break_direct	compile

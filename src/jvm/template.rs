@@ -1198,8 +1198,7 @@ fn read_tree(tokens: &[String], at: &mut usize) -> Option<Tree> {
                     stack.push(Slot::Value(Some(ty.clone())));
                     ops.push(Op::Neg(ty));
                 }
-                // A conversion, where the adaptation between the two types is that instruction (a
-                // value the use types is checked at the use, `Gen::tree_fits`).
+                // Check a known operand's conversion here. `tree_unfit` checks an operand typed at the use.
                 (opcode, 1, Some(to)) => {
                     if let Some(from) = value(&mut stack)? {
                         if primitive_conversion(&from, &to) != [opcode] {

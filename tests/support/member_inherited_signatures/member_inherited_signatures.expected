@@ -1,0 +1,34 @@
+member_inherited_abstract_first
+Parent
+  public abstract int pick(int);
+descriptor: (I)I
+Subject
+  public int pick(int);
+descriptor: (I)I
+member_inherited_body_first
+Parent
+  public abstract int pick(int);
+descriptor: (I)I
+Subject
+  public int pick(int);
+descriptor: (I)I
+member_inherited_implemented_abstract_first
+Parent
+  public default int pick(int);
+descriptor: (I)I
+Subject
+  public abstract int pick(int);
+descriptor: (I)I
+Child
+  public int pick(int);
+descriptor: (I)I
+member_inherited_implemented_body_first
+Parent
+  public default int pick(int);
+descriptor: (I)I
+Subject
+  public abstract int pick(int);
+descriptor: (I)I
+Child
+  public int pick(int);
+descriptor: (I)I

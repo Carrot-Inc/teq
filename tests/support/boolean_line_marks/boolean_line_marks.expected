@@ -1,0 +1,31 @@
+  public boolean argumentAnd(boolean, boolean);
+line 5: 0
+line 6: 1
+  public int branchAnd(boolean, boolean);
+line 9: 0
+line 10: 1
+line 11: 20
+line 12: 22
+  public int conditionAnd(boolean, boolean);
+line 16: 0
+line 17: 8
+line 18: 10
+  public boolean argumentNot(boolean);
+line 21: 0
+line 22: 1
+  public int conditionNot(boolean);
+line 26: 0
+line 27: 4
+line 28: 6
+  public boolean argumentEqual(int, int);
+line 31: 0
+line 32: 1
+  public int branchEqual(int, int);
+line 35: 0
+line 36: 1
+line 37: 17
+line 38: 19
+  public int conditionEqual(int, int);
+line 42: 0
+line 43: 5
+line 44: 7

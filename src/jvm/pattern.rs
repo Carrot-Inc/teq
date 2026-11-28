@@ -486,7 +486,7 @@ impl<'a> Gen<'a> {
 
     /// A pattern definition of the general match (`makePatDef`'s `None`) or a for-comprehension's alias, as scalac
     /// writes it (dotty's `makePatDef`, `None`, `Desugar.scala` 1590-1671 at 3.8.4): the scrutinee
-    /// held, a labelled block left where the pattern does not match (`Gen::lower_pattern`, binding
+    /// held, a labelled block left where the pattern does not match (`Gen::lower_steps`, binding
     /// the variables), its value the case's, its `MatchError` after. Without a variable the match
     /// alone; with one, `val x` is the match, its slot taken first (`Kind::LocalAt`); with more, `val $1` is the tuple
     /// of the variables (`specialised_tuple`'s class, else `TupleN$.apply`, past `MAX_TUPLE_ARITY` a `TupleXXL`), its
@@ -615,7 +615,7 @@ impl<'a> Gen<'a> {
     }
 
     /// A pattern definition of a tuple of variables past 22 (`MatchableTuple` over a `TupleXXL`), as scalac writes it:
-    /// `val $1`'s slot first, the scrutinee held, the pattern's tests and bindings (`Gen::lower_pattern`: the class,
+    /// `val $1`'s slot first, the scrutinee held, the pattern's tests and bindings (`Gen::lower_steps`: the class,
     /// `TupleXXL.unapplySeq`, the sequence's length and elements), the scrutinee the match's value, its `MatchError`
     /// after; then each variable `$1.apply(i)` (`Desugar.scala` 1650-1654 at 3.8.4), which `Tuple.apply`'s inline
     /// expansion makes `$1` copied into a temporary and `productElement(i)` of it.

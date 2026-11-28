@@ -1,0 +1,18 @@
+0: iload_1
+1: ifeq 8
+4: iconst_4
+5: goto 18
+8: new # // class java/lang/IllegalArgumentException
+11: dup
+12: ldc # // String no
+14: invokespecial # // Method java/lang/IllegalArgumentException."<init>":(Ljava/lang/String;)V
+17: athrow
+18: istore_2
+19: iload_2
+20: iconst_1
+21: iadd
+22: ireturn
+StackMapTable: number_of_entries = 2
+frame_type = 8 /* same */
+frame_type = 73 /* same_locals_1_stack_item */
+stack = [ int ]

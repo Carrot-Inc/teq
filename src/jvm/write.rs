@@ -378,7 +378,7 @@ impl<'a> Gen<'a> {
             }
             Kind::Synchronized { lock, body } => {
                 let returns = self.lir.returns_through(id);
-                self.monitor_block(|g| g.write(lock), ty, returns, |g, _| g.write(body));
+                self.monitor_block(|g| g.write(lock), ty, returns, |g| g.write(body));
             }
             Kind::Adapt { value, from, how } => {
                 self.write(value);

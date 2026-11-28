@@ -482,10 +482,8 @@ pub struct MethodCx {
     /// The declared parameters in order, each with its slot.
     pub params: Vec<(u16, ErasedType)>,
     pub this_slot: Option<u16>,
-    /// In an object's `<clinit>`, the temporary its head keeps the instance in: `this` while the method's tree is
-    /// lowered, before the writer gives the temporary the slot `this_slot` then names (`Gen::hold_module_part`). The
-    /// lowering asks of the two through `MethodCx::has_instance` and `MethodCx::instance_is_first_local` alone.
-    pub this_kept: Option<crate::lir::TempId>,
+    /// Whether the head of this `<clinit>` keeps the instance in its first local.
+    pub head_keeps_instance: bool,
     pub ret: ErasedType,
     pub tail: Option<TailLoop>,
     /// The locals of the method that live in a cell (`free::cells`).
@@ -493,8 +491,6 @@ pub struct MethodCx {
     /// Set while the arguments of the super constructor are evaluated: `this` is not there
     /// yet, and a field of it named there is the constructor parameter it will be set from.
     pub before_super: bool,
-    /// The method is a lifted lambda, so a `return` in it would leave the def around it.
-    pub lambda: bool,
     /// The method is a lifted lambda or a local lazy val's initialiser: a `return` in it throws
     /// `NonLocalReturnControl` with the key of the def it leaves (dotty's `NonLocalReturns`).
     pub closure: bool,
@@ -568,12 +564,11 @@ impl Default for MethodCx {
             locals: FxMap::default(),
             params: Vec::new(),
             this_slot: None,
-            this_kept: None,
+            head_keeps_instance: false,
             ret: ErasedType::V,
             tail: None,
             cells: Vec::new(),
             before_super: false,
-            lambda: false,
             closure: false,
             return_target: ReturnTarget::Unknown,
             this_module: None,
@@ -593,10 +588,9 @@ impl Default for MethodCx {
 }
 
 impl MethodCx {
-    /// Whether the method runs on an instance `this` reads: one in a slot, or the one an object's `<clinit>` keeps
-    /// (`this_kept`).
+    /// Whether the method runs on an instance `this` reads: one in a slot, or the one an object's `<clinit>` keeps.
     pub fn has_instance(&self) -> bool {
-        self.this_slot.is_some() || self.this_kept.is_some()
+        self.this_slot.is_some() || self.head_keeps_instance
     }
 
     /// Whether the instance is the method's first local, as `this` is in an instance method. The one an object's
@@ -604,7 +598,7 @@ impl MethodCx {
     /// (`Gen::write_held`), declares no temporary before the one it keeps the instance in (`Gen::lower_module_head`).
     /// A temporary the head declared before that one would move it.
     pub fn instance_is_first_local(&self) -> bool {
-        self.this_slot == Some(0) || self.this_kept.is_some()
+        self.this_slot == Some(0) || self.head_keeps_instance
     }
 }
 
@@ -1919,10 +1913,9 @@ impl<'a> Gen<'a> {
 
     /// The operation `name` on an array whose kind only the value knows (`erased_array_method`),
     /// its operands on the stack.
-    fn erased_array_op(&mut self, name: &str) -> ErasedType {
+    fn erased_array_op(&mut self, name: &str) {
         let m = erased_array_method(name);
         self.invoke_mref(&m);
-        m.ret
     }
 
     /// `t` as a type test reads it (`Worker::test_for`): a variable's instance, an alias expanded, the parent of a
@@ -2059,9 +2052,10 @@ impl<'a> Gen<'a> {
 
     /// `array(i)` with the array and the index on the stack: the load instruction of a JVM
     /// array's kind, `ScalaRunTime.array_apply` on an erased one.
-    pub fn array_load(&mut self, array: &ErasedType) -> ErasedType {
+    pub fn array_load(&mut self, array: &ErasedType) {
         let Some(elem) = Self::array_element(array) else {
-            return self.erased_array_op("array_apply");
+            self.erased_array_op("array_apply");
+            return;
         };
         let opcode = match elem {
             ErasedType::I => op::IALOAD,
@@ -2077,7 +2071,6 @@ impl<'a> Gen<'a> {
         self.code.popn(2);
         let vt = self.vt(&elem);
         self.code.push(vt);
-        elem
     }
 
     /// `array(i) = v` with the array, the index and the value on the stack, the value of the array's element type:
@@ -2113,15 +2106,15 @@ impl<'a> Gen<'a> {
         self.code.push(VT::Int);
     }
 
-    pub fn array_clone(&mut self, array: &ErasedType) -> ErasedType {
+    pub fn array_clone(&mut self, array: &ErasedType) {
         if Self::array_element(array).is_none() {
-            return self.erased_array_op("array_clone");
+            self.erased_array_op("array_clone");
+            return;
         }
-        let ErasedType::L(name) = array else { return array.clone() };
+        let ErasedType::L(name) = array else { return };
         let object = ErasedType::object();
         self.invoke_desc(Invoke::Virtual, name, false, "clone", "()Ljava/lang/Object;", 0, &object);
         self.checkcast(name);
-        array.clone()
     }
 
     /// A new array of type `array` whose length is on the stack.
@@ -3808,7 +3801,7 @@ impl<'a> Gen<'a> {
     /// (`pendingCleanups`). The value's type is the body's; the operands under the block stay where they are, a
     /// `return` inside dropping them as it leaves (`drop_stack`). `returns`: whether the body holds a `return` of the
     /// method, for which the early-return slot is made before the block.
-    pub fn monitor_block(&mut self, recv: impl FnOnce(&mut Self), t: ErasedType, returns: bool, body: impl FnOnce(&mut Self, &ErasedType)) -> ErasedType {
+    pub fn monitor_block(&mut self, recv: impl FnOnce(&mut Self), t: ErasedType, returns: bool, body: impl FnOnce(&mut Self)) {
         let object = ErasedType::object();
         recv(self);
         self.dup();
@@ -3837,7 +3830,7 @@ impl<'a> Gen<'a> {
         let protected = self.code.locals_mark();
         self.code.bind(start);
         let from = self.code.pc();
-        body(self, &t);
+        body(self);
         if let Some(slot) = result {
             self.store(slot, &t);
         }
@@ -3876,7 +3869,6 @@ impl<'a> Gen<'a> {
         if made_early {
             self.m.early_return = None;
         }
-        t
     }
 
     /// Drops every operand on the stack (an uninitialised object's too): what a `return` leaving
@@ -4199,7 +4191,7 @@ impl<'a> Gen<'a> {
 
     /// `genConstant`'s `ClazzTag` (BCodeBodyBuilder.scala 597-614) for the class of `kind`: a primitive's or `Unit`'s
     /// boxed class's `TYPE` (`boxedClassOfPrimitive`, `Unit`'s `java.lang.Void`), a reference or array class by `ldc`.
-    pub(super) fn push_class(&mut self, kind: &ErasedType) -> ErasedType {
+    pub(super) fn push_class(&mut self, kind: &ErasedType) {
         let class = ErasedType::L(Rc::from("java/lang/Class"));
         match kind {
             ErasedType::L(name) => {
@@ -4211,7 +4203,6 @@ impl<'a> Gen<'a> {
             ErasedType::V => self.getstatic("java/lang/Void", "TYPE", &class),
             primitive => self.getstatic(primitive.box_class(), "TYPE", &class),
         }
-        class
     }
 
     /// The class of the object `c`'s instance; None for an object without a body that only its
@@ -4431,8 +4422,7 @@ impl<'a> Gen<'a> {
         self.method_site(r, &m.owner, m.owner_is_interface, &m.name, &m.desc, Referenced::Sym(s))
     }
 
-    /// `invoke_site` of a virtual call of the method `name` of descriptor `desc` that `owner`
-    /// declares, a std template's (`assemble`) as a member's.
+    /// The invocation site for a virtual call from a template or a member selection.
     pub(super) fn method_site(&mut self, r: TExprId, owner: &Rc<str>, owner_is_interface: bool, name: &str, desc: &str, member: Referenced) -> Option<Site> {
         let mut site = self.qualifier_site(r, owner, member)?;
         let overrides_object = &**owner != OBJECT

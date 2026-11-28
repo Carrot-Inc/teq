@@ -141,6 +141,7 @@ cases/block_then_select	pass	-
 cases/block_value_type_application	pass	-	
 cases/body_reads_outer_member	pass	-	
 cases/boolean_assign_ops	pass	-	
+cases/boolean_line_marks	pass	-	
 cases/boolean_strict_operators	pass	-	
 cases/bottom_path_kinds	pass	-	
 cases/bound_argument_object_load_routes	pass	-	
@@ -1233,6 +1234,7 @@ cases/hk_infer_base_type	pass	-
 cases/hk_var_exact_alias	pass	-	
 cases/hkt	pass	-	
 cases/iarray_ops	pass	-	
+cases/if_join_value_throw	pass	-	
 cases/immutable_hash_map	pass	-	
 cases/immutable_queue	pass	-	
 cases/implemented_method_joined_elsewhere	pass	-	
@@ -2202,6 +2204,10 @@ cases/member_fallback_macro	pass	-
 cases/member_fallback_macro_clauses	pass	-	
 cases/member_fallback_named	pass	-	
 cases/member_fallback_shapes	pass	-	
+cases/member_inherited_abstract_first	pass	-	
+cases/member_inherited_body_first	pass	-	
+cases/member_inherited_implemented_abstract_first	pass	-	
+cases/member_inherited_implemented_body_first	pass	-	
 cases/member_retry_dependent	pass	-	
 cases/member_retry_lambda_order	pass	-	
 cases/member_retry_matrix	pass	-	
@@ -3186,6 +3192,7 @@ cases/structural_value_class	pass	-
 cases/summon_from_wildcard_given	pass	-	
 cases/summoner_sugar	pass	-	
 cases/super_call_argument_branches	pass	-	
+cases/super_call_interface_order	pass	-	
 cases/super_call_java_library_template	pass	-	
 cases/super_call_java_superclass	pass	-	
 cases/super_call_kinds	pass	-	

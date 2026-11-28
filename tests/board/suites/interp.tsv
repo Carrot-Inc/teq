@@ -141,6 +141,7 @@ block_then_select	pass	-
 block_value_type_application	pass	-	
 body_reads_outer_member	pass	-	
 boolean_assign_ops	pass	-	
+boolean_line_marks	pass	-	
 boolean_strict_operators	pass	-	
 bottom_path_kinds	pass	-	
 bound_argument_object_load_routes	pass	-	
@@ -1244,6 +1245,7 @@ hk_infer_base_type	pass	-
 hk_var_exact_alias	pass	-	
 hkt	pass	-	
 iarray_ops	pass	-	
+if_join_value_throw	pass	-	
 immutable_hash_map	pass	-	
 immutable_queue	pass	-	
 implemented_method_joined_elsewhere	pass	-	
@@ -2254,6 +2256,10 @@ member_fallback_macro	pass	-
 member_fallback_macro_clauses	pass	-	
 member_fallback_named	pass	-	
 member_fallback_shapes	pass	-	
+member_inherited_abstract_first	pass	-	
+member_inherited_body_first	pass	-	
+member_inherited_implemented_abstract_first	pass	-	
+member_inherited_implemented_body_first	pass	-	
 member_retry_dependent	pass	-	
 member_retry_lambda_order	pass	-	
 member_retry_matrix	pass	-	
@@ -3256,6 +3262,7 @@ structural_value_class	pass	-
 summon_from_wildcard_given	pass	-	
 summoner_sugar	pass	-	
 super_call_argument_branches	pass	-	
+super_call_interface_order	fail	-	compile
 super_call_java_library_template	pass	-	
 super_call_java_superclass	pass	-	
 super_call_kinds	pass	-	

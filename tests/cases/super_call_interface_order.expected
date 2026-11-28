@@ -1,0 +1,14 @@
+MethodOneLinePredicateFirst: Marker,IntPredicate,IntUnaryOperator
+MethodOneLineOperatorFirst: Marker,IntUnaryOperator,IntPredicate
+MethodTwoLinesPredicateFirst: Marker,IntPredicate,IntUnaryOperator
+MethodTwoLinesOperatorFirst: Marker,IntUnaryOperator,IntPredicate
+ConstructorOneLinePredicateFirst: Marker,IntPredicate,IntUnaryOperator
+ConstructorOneLineOperatorFirst: Marker,IntUnaryOperator,IntPredicate
+ConstructorTwoLinesPredicateFirst: Marker,IntPredicate,IntUnaryOperator
+ConstructorTwoLinesOperatorFirst: Marker,IntUnaryOperator,IntPredicate
+LambdaOneLinePredicateFirst: Marker,IntPredicate,IntUnaryOperator
+LambdaOneLineOperatorFirst: Marker,IntUnaryOperator,IntPredicate
+LambdaTwoLinesPredicateFirst: Marker,IntPredicate,IntUnaryOperator
+LambdaTwoLinesOperatorFirst: Marker,IntUnaryOperator,IntPredicate
+Nested: Marker,Predicate,Collection
+false

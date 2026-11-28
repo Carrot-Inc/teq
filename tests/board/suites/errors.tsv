@@ -762,6 +762,8 @@ member_retry_dependent_warning	pass	-
 member_retry_later_using	pass	-	
 member_retry_refusals	pass	-	
 member_retry_warnings	pass	-	
+member_target_name_abstract_first	pass	-	
+member_target_name_body_first	pass	-	
 member_variance_controls	pass	-	
 message_disambiguation	pass	-	
 message_disambiguation.check	fail	-	< tests/errors/message_disambiguation.scala:6:43: error: Found: (x : Left.Token)

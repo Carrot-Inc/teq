@@ -1163,8 +1163,7 @@ impl ClassWriter {
         self.fields.insert(0, Member { access, name, desc, attrs: Vec::new() });
     }
 
-    /// The class's interfaces in the place of the list it was made with: a list that holds the
-    /// targets of the class's super calls is known when its bodies are written.
+    /// Installs the interface list including the super-call targets collected when each method is held.
     pub fn set_interfaces(&mut self, interfaces: &[String]) {
         let list = interfaces.iter().map(|i| self.cp.class(i)).collect();
         self.interfaces = list;
@@ -1177,7 +1176,7 @@ impl ClassWriter {
         self.methods.sort_by_key(|m| at.get(&(m.name, m.desc)).copied().unwrap_or(usize::MAX));
     }
 
-    pub fn method(&mut self, access: u16, name: &str, desc: &str, code: Option<Code>) {
+    pub fn method(&mut self, access: u16, name: &str, desc: &str, code: Option<Code>) -> usize {
         let name = self.cp.utf8(name);
         let desc = self.cp.utf8(desc);
         let mut attrs = Vec::new();
@@ -1187,18 +1186,18 @@ impl ClassWriter {
             self.overflow |= overflow;
             attrs.push((attr, bytes));
         }
+        let at = self.methods.len();
         self.methods.push(Member { access, name, desc, attrs });
+        at
     }
 
-    /// Adds to the method `name` `desc` written already what a forwarder writes of the method it
+    /// Adds to the method at `at` what a forwarder writes of the method it
     /// forwards to, as dotty copies its annotations (`MixinOps.mkForwarderSym`) and the backend
     /// writes them (`BCodeSkelBuilder.initJMethod`): the exceptions it declares, its deprecation,
     /// its annotations and its parameters', runtime-visible and invisible, in ASM's order of the
     /// attributes. Each list in the reverse of the method's order, as `addAnnotations` prepends
     /// each annotation.
-    pub fn method_metadata(&mut self, name: &str, desc: &str, from: &JarAttributes) {
-        let (Some(&n), Some(&d)) = (self.cp.utf8.get(name), self.cp.utf8.get(desc)) else { return };
-        let Some(at) = self.methods.iter().position(|m| m.name == n && m.desc == d) else { return };
+    pub fn method_metadata(&mut self, at: usize, from: &JarAttributes) {
         let mut attrs = Vec::new();
         if !from.exceptions.is_empty() {
             let mut body = (from.exceptions.len() as u16).to_be_bytes().to_vec();

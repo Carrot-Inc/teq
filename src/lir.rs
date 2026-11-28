@@ -415,7 +415,7 @@ pub enum Kind {
     /// included.
     Synchronized { lock: LirId, body: LirId },
     /// A value of the type `from` as one of the node's type: dropped, the unit value or a zero
-    /// for none, a cast, a box or its content, a primitive conversion (`Gen::adapt`).
+    /// for none, a cast, a box or its content, a primitive conversion (`Gen::write_adaptation`).
     Adapt { value: LirId, from: ErasedType, how: Adaptation },
     /// A function object: an instance of the interface of `method` whose `method` calls the
     /// lifted method `target` with the captured values, then its own arguments, and gives its
@@ -1153,21 +1153,16 @@ pub struct ClassDef {
     pub name: Rc<str>,
     pub flags: ClassFlags,
     pub superclass: Rc<str>,
-    /// The interfaces its parents give it, in their order: the traits it extends that no other
-    /// of them brings, then those its kind gives it (a case class's `Product`, a mirror's). A
-    /// class file names more: a module class's `java/io/Serializable`, and each interface a
-    /// `super` call of the class's code goes to, which the class's walk adds from its held trees' calls before it
-    /// writes any (`Gen::write_entries`).
+    /// Reduced direct traits, then interfaces supplied by the class's kind. The JVM writer restores targeted direct
+    /// traits in place and appends other super-call targets among the bases before the module's interface suffix.
     pub interfaces: Vec<Rc<str>>,
     /// The name of the source file it is written from, where it has one.
     pub source: Option<Rc<str>>,
     /// Where its definition stands, the place of a refusal of the class that has no site of its own; none where
     /// the class has no definition to point at.
     pub place: Option<(crate::source::FileId, crate::source::Span)>,
-    /// In the order they are declared, but a lazy member's handle before every field declared
-    /// before it. The list is whole when the class's last method is: a handle is declared where
-    /// its member's accessor is written, an enum's values where its companion's initialiser
-    /// stores them.
+    /// Fields in declaration order, including those added while holding methods. Each lazy member's handle
+    /// precedes the fields declared before it.
     pub fields: Vec<FieldDef>,
     /// In the order they are written, the lifted methods excepted (closures, local defs, a local lazy val's
     /// accessor and initialiser, a local def's default getters): they keep the slots lifted methods were written
