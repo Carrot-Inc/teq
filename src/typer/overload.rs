@@ -3231,6 +3231,9 @@ impl<'a> Worker<'a> {
         }
         let mut applicable = cands;
         for (k, &li) in explicit_lists.iter().enumerate() {
+            // dotty re-resolves by the expected result only where no written list follows: a following list makes the
+            // result a FunProto, which resultConforms accepts (Applications.scala 2425-2434, adaptByResult 2448-2462).
+            let last_list = li + 1 == lists.len();
             let shapes = self.arg_shapes(&lists[li]);
             // A function literal of several parameters stands for one that takes a tuple only
             // where no alternative takes a function of that many. dotc's first pass leaves out
@@ -3258,7 +3261,7 @@ impl<'a> Worker<'a> {
                 };
                 infos[li] = Some(ListInfo { types: vec![None; shapes.len()], literals: Vec::new(), lambdas: vec![None; shapes.len()], shapes, function_names: Vec::new() });
                 return match fitting.first() {
-                    Some(&i) if kept.is_empty() => Ok(i),
+                    Some(&i) if kept.is_empty() || !last_list => Ok(i),
                     Some(&i) => {
                         let mut pool = kept;
                         pool.push(i);
@@ -3312,6 +3315,9 @@ impl<'a> Worker<'a> {
             }
             let mut best = self.narrow_most_specific(alts, applicable.clone(), &explicit, Some(k));
             if best.len() == 1 {
+                if !last_list {
+                    return Ok(best[0]);
+                }
                 let mut pool = applicable.clone();
                 if !partial && !widened {
                     let kept = self.kept_from_partial(alts, &cands, &fitting, k, &upto[k].shapes);

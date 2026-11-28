@@ -2399,6 +2399,7 @@ cases/overload_operators	pass	-
 cases/overload_partial_functions	pass	-	
 cases/overload_protected_alternative	pass	-	
 cases/overload_resolution	pass	-	
+cases/overload_result_next_list	pass	-	
 cases/overload_roots	pass	-	
 cases/overload_sam	pass	-	
 cases/overload_std_collections	pass	-	
