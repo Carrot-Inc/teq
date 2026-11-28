@@ -1,0 +1,4 @@
+tests/errors/array_class_literal_name_in_finally.scala:6:35: error: Type name is too long for the JVM
+      println(try 1 finally println(classOf[Array[Element]]))
+                                    ^^^^^^^^^^^^^^^^^^^^^^^
+1 error found

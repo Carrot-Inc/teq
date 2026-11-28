@@ -1,0 +1,4 @@
+tests/errors/captured_lambda_handle_discarded.scala:132:29: error: not supported on the JVM yet: the method $anonfun$1 would take 255 argument slots, and a method handle allows 254
+          val f = (x: Int) => x + v0 + v1 + v2 + v3 + v4 + v5 + v6 + v7 +
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1 error found

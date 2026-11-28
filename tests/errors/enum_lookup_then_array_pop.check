@@ -1,0 +1,3 @@
+jvm backend: Probe$.main: an enum lookup whose companion is not known
+jvm backend: Probe$.main: no @jvm intrinsic or body for pop
+2 constructs not supported by the JVM backend

@@ -1,0 +1,2 @@
+jvm backend: local_extension_default_receiver$package$.label: the default of a right-associative extension's receiver, whose getter takes the arguments of a clause the call gives after it
+1 construct not supported by the JVM backend

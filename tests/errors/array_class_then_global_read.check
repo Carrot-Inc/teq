@@ -1,0 +1,5 @@
+tests/errors/array_class_then_global_read.scala:11:13: error: Type name is too long for the JVM
+      println(classOf[Array[Element]])
+              ^^^^^^^^^^^^^^^^^^^^^^^
+1 error found
+jvm backend: Probe$.main: JavaScript interop

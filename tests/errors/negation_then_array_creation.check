@@ -1,0 +1,3 @@
+jvm backend: Probe$.main: a new array of an element type only a ClassTag knows
+jvm backend: Probe$.main: the instruction ineg of $0 ineg
+2 constructs not supported by the JVM backend

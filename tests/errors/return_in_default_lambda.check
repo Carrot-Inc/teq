@@ -1,0 +1,5 @@
+tests/errors/return_in_default_lambda.scala:1:37: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+  def run(f: () => Int = () => return 1): Int = f()
+                                      ^
+jvm backend: return_in_default_lambda$package$.run: a non-local return of a def that makes no key
+1 construct not supported by the JVM backend

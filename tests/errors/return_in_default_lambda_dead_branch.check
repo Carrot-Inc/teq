@@ -1,0 +1,5 @@
+tests/errors/return_in_default_lambda_dead_branch.scala:3:12: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+      return 1
+             ^
+jvm backend: return_in_default_lambda_dead_branch$package$.run: a non-local return of a def that makes no key
+1 construct not supported by the JVM backend

@@ -1,0 +1,4 @@
+tests/errors/array_class_literal_name.scala:5:49: error: Type name is too long for the JVM
+    def main(args: Array[String]): Unit = println(classOf[Array[Element]].isArray)
+                                                  ^^^^^^^^^^^^^^^^^^^^^^^
+1 error found

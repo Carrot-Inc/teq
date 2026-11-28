@@ -1,0 +1,4 @@
+tests/errors/capturing_function_parameter_slots_discarded.scala:39:14: error: not supported on the JVM yet: a function of 254 parameters that captures 1 values would take 255 argument slots, because teq does not pass its parameters as one array yet, and the JVM allows 254
+          ) => x
+               ^
+1 error found

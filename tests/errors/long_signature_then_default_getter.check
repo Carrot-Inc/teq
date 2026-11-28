@@ -1,0 +1,7 @@
+tests/errors/long_signature_then_default_getter.scala:9:13: error: Method signature is too long for the JVM
+          def count(
+              ^^^^^
+tests/errors/long_signature_then_default_getter.scala:47:15: error: Platform restriction: a parameter list's length cannot exceed 254 (Long and Double count as 2).
+          trait Count:
+                ^^^^^
+2 errors found

@@ -1,0 +1,4 @@
+tests/errors/default_forwarder_with_wide_priors_dead_branch.scala:6:17: error: Platform restriction: a parameter list's length cannot exceed 254 (Long and Double count as 2).
+            trait Count:
+                  ^^^^^
+1 error found

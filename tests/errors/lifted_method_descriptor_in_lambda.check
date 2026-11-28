@@ -1,0 +1,4 @@
+tests/errors/lifted_method_descriptor_in_lambda.scala:134:15: error: not supported on the JVM yet: the method sum$1 would take 256 argument slots, and a class file holds 255
+            def sum(): Long = v0 + v1 + v2 + v3 + v4 + v5 + v6 + v7 +
+                ^^^
+1 error found

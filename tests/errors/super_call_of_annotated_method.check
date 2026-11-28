@@ -1,0 +1,2 @@
+jvm backend: Child.inherited: not supported on the JVM yet: a super call of value, which carries its own `@jvm` template
+1 construct not supported by the JVM backend

@@ -1,0 +1,4 @@
+tests/errors/wide_parameter_slots.scala:2:7: error: Platform restriction: a parameter list's length cannot exceed 254 (Long and Double count as 2).
+    def count(
+        ^^^^^
+1 error found

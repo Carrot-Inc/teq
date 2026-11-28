@@ -1,0 +1,6 @@
+tests/errors/global_read_then_return.scala:9:10: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+    return 1
+           ^
+jvm backend: global_read_then_return$package$.run: JavaScript interop
+jvm backend: global_read_then_return$package$.run: a non-local return of a def that makes no key
+2 constructs not supported by the JVM backend

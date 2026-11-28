@@ -1,0 +1,2 @@
+jvm backend: Probe$.main: the instruction ineg of $0 ineg
+1 construct not supported by the JVM backend

@@ -1,0 +1,2 @@
+jvm backend: inherited_intrinsic_without_body$package$.result: no @jvm intrinsic or body for read of Reader
+1 construct not supported by the JVM backend

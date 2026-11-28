@@ -1,0 +1,3 @@
+jvm backend: Child.read: a new array of an element type only a ClassTag knows
+jvm backend: Child.read: not supported on the JVM yet: this super call
+2 constructs not supported by the JVM backend

@@ -1,0 +1,4 @@
+tests/errors/array_class_literal_name_discarded.scala:6:5: error: Type name is too long for the JVM
+      classOf[Array[Element]]
+      ^^^^^^^^^^^^^^^^^^^^^^^
+1 error found

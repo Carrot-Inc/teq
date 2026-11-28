@@ -1,0 +1,4 @@
+tests/errors/array_class_literal_name_in_lambda.scala:6:22: error: Type name is too long for the JVM
+      val read = () => classOf[Array[Element]]
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+1 error found

@@ -1,0 +1,6 @@
+jvm backend: Probe$.main: JavaScript interop
+jvm backend: local_lazy_accessor_names_after_global$package$.read: internal error: a second local lazy val's method $bang$1(Lscala/runtime/LazyInt;)I in the class
+jvm backend: local_lazy_accessor_names_after_global$package$.read: internal error: a second local lazy val's method $bang$lzyINIT1$1(Lscala/runtime/LazyInt;)I in the class
+jvm backend: local_lazy_accessor_names_after_global$package$.read: internal error: two lifted methods named $bang$1(Lscala/runtime/LazyInt;)I in the class
+jvm backend: local_lazy_accessor_names_after_global$package$.read: internal error: two lifted methods named $bang$lzyINIT1$1(Lscala/runtime/LazyInt;)I in the class
+5 constructs not supported by the JVM backend

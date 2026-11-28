@@ -1,0 +1,3 @@
+jvm backend: method_call_then_default_receiver$package$.result: no @jvm intrinsic or body for read of Reader
+jvm backend: method_call_then_default_receiver$package$.result: the default of a right-associative extension's receiver, whose getter takes the arguments of a clause the call gives after it
+2 constructs not supported by the JVM backend

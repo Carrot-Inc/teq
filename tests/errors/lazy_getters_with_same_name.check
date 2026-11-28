@@ -1,0 +1,3 @@
+jvm backend: Count: internal error: a second lazy initialiser $bang$lzyINIT1 in the class
+jvm backend: Count: internal error: a second lazy val's getter $bang()I in the class
+2 constructs not supported by the JVM backend

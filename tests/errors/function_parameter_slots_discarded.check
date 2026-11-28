@@ -1,0 +1,4 @@
+tests/errors/function_parameter_slots_discarded.scala:38:14: error: not supported on the JVM yet: a function of 255 parameters would take 256 argument slots, because teq does not pass its parameters as one array yet, and the JVM allows 255
+          ) => p0
+               ^^
+1 error found

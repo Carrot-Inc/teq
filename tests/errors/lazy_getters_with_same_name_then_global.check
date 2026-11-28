@@ -1,0 +1,4 @@
+jvm backend: Count: internal error: a second lazy initialiser $bang$lzyINIT1 in the class
+jvm backend: Count: internal error: a second lazy val's getter $bang()I in the class
+jvm backend: Probe$.main: JavaScript interop
+3 constructs not supported by the JVM backend

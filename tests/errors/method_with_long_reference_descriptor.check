@@ -1,0 +1,4 @@
+tests/errors/method_with_long_reference_descriptor.scala:6:7: error: Method signature is too long for the JVM
+    def count(
+        ^^^^^
+1 error found

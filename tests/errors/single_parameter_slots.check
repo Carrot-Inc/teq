@@ -1,0 +1,4 @@
+tests/errors/single_parameter_slots.scala:2:7: error: Platform restriction: a parameter list's length cannot exceed 254.
+    def count(
+        ^^^^^
+1 error found
