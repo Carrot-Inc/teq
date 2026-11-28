@@ -991,6 +991,8 @@ PY
         if grep -q -- "$absent" "$out/$name/js-prod.js" "$out/$name/js-whole.js"; then ok=0; detail="$detail"$'\n'"$absent is in the output"; fi
       done < <(cat "$dir/absent.txt" 2> /dev/null)
       result "$name" bundle $ok "$detail"
+    elif [ ! -f "$dir/js-errors.txt" ] && [ -n "$js_failed" ]; then
+      echo "left out $name bundle: the products' JavaScript build failed (see js-run)"
     fi
   fi
   if [ $have_scalac = 0 ]; then

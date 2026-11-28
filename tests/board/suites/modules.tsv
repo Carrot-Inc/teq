@@ -331,6 +331,7 @@ inlinecaseblock	pass	-
 inlinecopymembers	fail	-	known classes: the same as inlinesam: the classes b's expansions of a's inline bodies make are named at the product's pseudo file's places (`Mac$$anon$iw5fyuj19dac_11$1rc96ct_139`), the whole build's
 inlineinterp	pass	-	
 inlinejdkctor	fail	-	known classes: a downstream's expansion of the product's inline body constructs the std's `Exception` with its default cause passed (`Exception(String, Throwable)`, the arguments through locals), wher
+inlinejdkplaceholder	fail	-	known check-lean: the lean std models neither JDK interface (`type Constable not found` and `type ConstantDesc not found`)
 inlinelocalclass	fail	-	known classes: the same as ledgerlocalclass: each expansion's copy of the upstream inline body's local class carries the pseudo file's SourceFile and line numbers (`a!ilca.API`), the whole build's Lib
 inlinematcheffect	pass	-	
 inlinenestedcapture	fail	-	known classes: the same as companionderived: the anonymous classes the downstream's expansions of the upstream's inline bodies make (the nested classes `leaf` and `leafOf` make inside `derived`'s and

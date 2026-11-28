@@ -3789,6 +3789,22 @@ inlinejdkctor_b usedName ijb.Use$package StringContext pending scalac Default
 inlinejdkctor_b usedName ijb.Use$package apply pending scalac Default
 inlinejdkctor_b usedName ijb.Use$package s pending scalac Default
 inlinejdkctor_b usedName ijb.Use$package scala pending scalac Default
+inlinejdkplaceholder_a lib.Tests isConstant pending
+inlinejdkplaceholder_a lib.Tests isDescriptor pending
+inlinejdkplaceholder_a lib.Tests matchConstant pending
+inlinejdkplaceholder_a lib.Tests matchDescriptor pending
+inlinejdkplaceholder_a usedName lib.Tests Nothing pending scalac Default
+inlinejdkplaceholder_a usedName lib.Tests isInstanceOf pending scalac Default
+inlinejdkplaceholder_b app.Use$package run pending
+inlinejdkplaceholder_b usedName app.Use$package Nothing pending scalac Default
+inlinejdkplaceholder_b usedName app.Use$package constant pending scalac Default
+inlinejdkplaceholder_b usedName app.Use$package isInstanceOf pending scalac Default
+inlinejdkplaceholder_b usedName app.Use$package java pending scalac Default
+inlinejdkplaceholder_b usedName app.Use$package lang pending scalac Default
+inlinejdkplaceholder_b usedName app.Use$package x$proxy1 pending scalac Default
+inlinejdkplaceholder_b usedName app.Use$package x$proxy2 pending scalac Default
+inlinejdkplaceholder_b usedName app.Use$package x$proxy3 pending scalac Default
+inlinejdkplaceholder_b usedName app.Use$package x$proxy4 pending scalac Default
 inlinelocalclass_a ilca.API make pending
 inlinelocalclass_a usedName ilca.API _$C;init; pending teq Default
 inlinelocalclass_a usedName ilca.API ilca;API$;_$C;init; pending scalac Default

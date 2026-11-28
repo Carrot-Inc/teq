@@ -337,3 +337,7 @@ eflxiobjdefaultwritten interp-run  the same as js-run: the run over the products
 efspelledgetter bundle  a source local class's default getters in the converted class's one form (the source side of the local trait default family's): the products' class writes its getter member before its method and its parameter's default as the call of that getter, where the whole build writes the default in place in the parameter and the getter after the method; the same value
 defaultgetterslocal bundle  the whole build folds the escaped local trait's default into its method's parameter (`m(a = 21)`), the products do not: the top-level converter's fold, the default getters' converted slice
 defaultgettersmember bundle  the products' bundle lacks the getter m$default$1 the whole build writes: the top-level converter's second conversion, the default getters' converted slice
+inlinejdkplaceholder check-lean  the lean std models neither JDK interface (`type Constable not found` and `type ConstantDesc not found`)
+inlinejdkplaceholder check-lean-whole  the lean std models neither JDK interface (`type Constable not found` and `type ConstantDesc not found`)
+inlinejdkplaceholder js-run  the whole JavaScript build stops at compilation with `type Constable not found` and `type ConstantDesc not found`
+inlinejdkplaceholder interp-run  the whole interpreter run exits 1 at compilation with `type Constable not found` and `type ConstantDesc not found`

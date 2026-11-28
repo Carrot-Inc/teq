@@ -4541,6 +4541,32 @@ impl<'c> Copier<'c> {
     }
 
     fn test(&mut self, t: &mut Worker, test: TestId) -> TestId {
+        let copy = self.copy_test(t, test);
+        if t.jvm && self.stored.is_some() {
+            Self::complete_test_classes(t, copy);
+        }
+        copy
+    }
+
+    // The TypeRef of an unpickled inline body resolves in the caller (TreeUnpickler.scala
+    // 473-483, 705-712). A copied test can be shared with the body or derived from a filled type.
+    fn complete_test_classes(t: &mut Worker, test: TestId) {
+        match t.prog.tests[test.idx()] {
+            TypeTest::Class(c) | TypeTest::Trait(c) => {
+                if t.loaded.as_ref().and_then(|l| l.java.placeholder(c)).is_some_and(|(p, _)| t.jdk_rooted(p)) {
+                    t.complete_class(c);
+                }
+            }
+            TypeTest::Or(a, b) | TypeTest::And(a, b) => {
+                Self::complete_test_classes(t, a);
+                Self::complete_test_classes(t, b);
+            }
+            TypeTest::Outer(_, inner) | TypeTest::Proven(inner, _) => Self::complete_test_classes(t, inner),
+            _ => {}
+        }
+    }
+
+    fn copy_test(&mut self, t: &mut Worker, test: TestId) -> TestId {
         // A reducible match's pattern is the reduction's, which reads no test: the stored one
         // stands where its copy would be a plain duplicate of it (`shared_test`).
         if self.reducing && self.shared_test(t, test) {
@@ -4608,15 +4634,15 @@ impl<'c> Copier<'c> {
                 TypeTest::Value(e)
             }
             TypeTest::Or(a, b) => {
-                let a = self.test(t, a);
-                TypeTest::Or(a, self.test(t, b))
+                let a = self.copy_test(t, a);
+                TypeTest::Or(a, self.copy_test(t, b))
             }
             TypeTest::And(a, b) => {
-                let a = self.test(t, a);
-                TypeTest::And(a, self.test(t, b))
+                let a = self.copy_test(t, a);
+                TypeTest::And(a, self.copy_test(t, b))
             }
-            TypeTest::Outer(accessor, inner) => TypeTest::Outer(accessor, self.test(t, inner)),
-            TypeTest::Proven(inner, nullable) => TypeTest::Proven(self.test(t, inner), nullable),
+            TypeTest::Outer(accessor, inner) => TypeTest::Outer(accessor, self.copy_test(t, inner)),
+            TypeTest::Proven(inner, nullable) => TypeTest::Proven(self.copy_test(t, inner), nullable),
             TypeTest::Class(c) if self.stored_trigger(t, c).is_some() => TypeTest::Class(self.outside_reduction(|k| k.stored_class_copy(t, c))),
             TypeTest::Trait(c) if self.stored_trigger(t, c).is_some() => TypeTest::Trait(self.outside_reduction(|k| k.stored_class_copy(t, c))),
             other if self.map.is_some() => other,
