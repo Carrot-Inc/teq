@@ -646,8 +646,6 @@ t7336	run-error: no builtin for scala.concurrent.enqueueMicrotask (a @js templat
 t7374	compile-error: test contains Java sources
 t7396	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
 t7912	run-error: Exception in thread "main" scala.NotImplementedError: an implementation is missing
-t7992	compile-error: expected an identifier, found 'super'
-t7992b	compile-error: expected an identifier, found 'super'
 t8087	compile-error: value getDeclaredFields is not a member of Class[Bar]
 t8188	compile-error: ObjectInputStream is not a member of the package
 t8199	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed: reallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereall

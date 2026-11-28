@@ -39,7 +39,7 @@ LazyValsLongs	pass	-
 Meter	pass	-	
 MeterCaseClass	fail	-	compile-error: object creation impossible, since def apply(v1: Double): Meter in trait Function1 is not defined
 MultiArr	pass	-	
-NestedClasses	fail	-	compile-error: expected an identifier, found 'super'
+NestedClasses	fail	-	compile-error: not supported yet: AAA1.super from a class nested in AAA1
 OrderingTest	fail	-	compile-error: no given instance of type Ordering[Iterable[Int]] was found for parameter ord
 Parser	fail	-	compile-error: cannot resolve import: Conversion is not an object or a package
 Pouring	pass	-	
@@ -461,7 +461,7 @@ i15399	pass	-
 i1543	pass	-	
 i15618	pass	-	
 i1569	pass	-	
-i15702	fail	-	compile-error: expected an identifier, found 'super'
+i15702	fail	-	compile-error: not supported yet: N.super from a class nested in N
 i15723	pass	-	
 i15725	fail	-	wrong-output
 i1573	pass	-	
@@ -836,8 +836,8 @@ i9132	pass	-
 i9155	fail	-	run-error: Error: UnsupportedOperationException: reflection is not available on JavaScript
 i9161	pass	-	
 i9175	fail	-	compile-error: value empty is not a member of SortedMap[String, Int]
-i9225	fail	-	compile-error: expected an identifier, found 'super'
-i9341	fail	-	compile-error: expected an identifier, found 'super'
+i9225	fail	-	compile-error: not supported yet: B.super from a class nested in B
+i9341	fail	-	compile-error: not supported yet: B.super from a class nested in B
 i9404	pass	-	
 i9439	pass	-	
 i9473	pass	-	
@@ -1231,7 +1231,7 @@ t10032	pass	-
 t1005	pass	-	
 t10170	pass	-	
 t10232	fail	-	compile-error: ObjectInputStream is not a member of the package
-t10290	fail	-	compile-error: expected an identifier, found 'super'
+t10290	fail	-	compile-error: not supported yet: B.super from a class nested in B
 t1044	pass	-	
 t1048	pass	-	
 t10594	pass	-	
@@ -1410,7 +1410,7 @@ t4238	fail	-	compile-error: test contains Java sources
 t4288	pass	-	
 t429	pass	-	
 t4297	pass	-	
-t4300	fail	-	compile-error: expected an identifier, found 'super'
+t4300	fail	-	compile-error: not supported yet: B.super from a class nested in B
 t4317	fail	-	compile-error: test contains Java sources
 t4332b	fail	-	compile-error: value combinations is not a member of List[Int]
 t4351	pass	-	
@@ -1605,8 +1605,8 @@ t7899	pass	-
 t7912	fail	-	run-error: NotImplementedError [scala.NotImplementedError]: an implementation is missing
 t7985	pass	-	
 t7985b	pass	-	
-t7992	fail	-	compile-error: expected an identifier, found 'super'
-t7992b	fail	-	compile-error: expected an identifier, found 'super'
+t7992	pass	-	
+t7992b	pass	-	
 t8002	pass	-	
 t8010	pass	-	
 t8015-ffc	pass	-	
@@ -1641,7 +1641,7 @@ t8611b	fail	-	compile-error: type Enumeration not found
 t8611c	pass	-	
 t8690	fail	-	compile-error: Source is not a member of the package
 t8738	pass	-	
-t8803	fail	-	compile-error: expected an identifier, found 'super'
+t8803	fail	-	compile-error: not supported yet: C.super from a class nested in C
 t8823	fail	-	compile-error: type Product2 not found
 t8845	pass	-	
 t8888	pass	-	

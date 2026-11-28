@@ -20,7 +20,7 @@ LazyValsLongs.scala	pass	lean:pass
 Meter.scala	pass	lean:pass	
 MeterCaseClass.scala	fail	lean:fail	MeterCaseClass.scala:17:10: object creation impossible, since def apply(v1: Double): Meter in trait Function1 is not defined
 MultiArr.scala	pass	lean:pass	
-NestedClasses.scala	fail	lean:fail	NestedClasses.scala:59:27: expected an identifier, found 'super'
+NestedClasses.scala	fail	lean:fail	NestedClasses.scala:59:22: not supported yet: AAA1.super from a class nested in AAA1
 OrderingTest.scala	pass	lean:fail	
 Parser.scala	fail	lean:fail	option: -preview (teq has no flag for it)
 Pouring.scala	pass	lean:pass	
@@ -389,7 +389,7 @@ i15399.scala	pass	lean:pass
 i1543.scala	pass	lean:pass	
 i15618.scala	pass	lean:pass	
 i1569.scala	pass	lean:pass	
-i15702.scala	fail	lean:fail	i15702.scala:18:15: expected an identifier, found 'super'
+i15702.scala	fail	lean:fail	i15702.scala:18:13: not supported yet: N.super from a class nested in N
 i15723.scala	pass	lean:pass	
 i15725.scala	fail	lean:fail	output: line 1: the .check has '2 meters', the program printed 'ToString@2'
 i1573.scala	pass	lean:pass	
@@ -685,8 +685,8 @@ i9068.scala	pass	lean:fail
 i9132.scala	pass	lean:pass	
 i9161.scala	pass	lean:pass	
 i9175.scala	pass	lean:fail	
-i9225.scala	fail	lean:fail	i9225.scala:8:33: expected an identifier, found 'super'
-i9341.scala	fail	lean:fail	i9341.scala:3:15: expected an identifier, found 'super'
+i9225.scala	fail	lean:fail	i9225.scala:8:31: not supported yet: B.super from a class nested in B
+i9341.scala	fail	lean:fail	i9341.scala:3:13: not supported yet: B.super from a class nested in B
 i9404.scala	fail	lean:pass	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
 i9439.scala	pass	lean:pass	
 i9473.scala	pass	lean:pass	
@@ -937,7 +937,7 @@ t0936.scala	pass	lean:pass
 t10032.scala	pass	lean:pass	
 t1005.scala	pass	lean:pass	
 t10170.scala	pass	lean:pass	
-t10290.scala	fail	lean:fail	t10290.scala:14:16: expected an identifier, found 'super'
+t10290.scala	fail	lean:fail	t10290.scala:14:14: not supported yet: B.super from a class nested in B
 t1044.scala	pass	lean:pass	
 t1048.scala	pass	lean:pass	
 t107.scala	pass	lean:pass	
@@ -1094,7 +1094,7 @@ t4190.scala	pass	lean:pass
 t4288.scala	pass	lean:pass	
 t429.scala	pass	lean:pass	
 t4297.scala	pass	lean:pass	
-t4300.scala	fail	lean:fail	t4300.scala:9:17: expected an identifier, found 'super'
+t4300.scala	fail	lean:fail	t4300.scala:9:15: not supported yet: B.super from a class nested in B
 t4332b.scala	pass	lean:fail	
 t4351.scala	pass	lean:pass	
 t4398.scala	pass	lean:pass	
@@ -1266,8 +1266,8 @@ t7899.scala	pass	lean:pass
 t7912.scala	pass	lean:fail	
 t7985.scala	pass	lean:pass	
 t7985b.scala	pass	lean:pass	
-t7992.scala	fail	lean:fail	t7992.scala:9:9: expected an identifier, found 'super'
-t7992b.scala	fail	lean:fail	t7992b.scala:9:9: expected an identifier, found 'super'
+t7992.scala	pass	lean:pass	
+t7992b.scala	pass	lean:pass	
 t8002.scala	pass	lean:pass	
 t8010.scala	pass	lean:pass	
 t8015-ffc.scala	pass	lean:pass	
@@ -1295,7 +1295,7 @@ t8611a.scala	pass	lean:pass
 t8611b.scala	fail	lean:fail	lang.scala:1:1: not supported on JavaScript: method getType of java.lang.reflect.Field (a Java definition without an implementation in the std's platform layer)
 t8611c.scala	pass	lean:pass	
 t8738.scala	pass	lean:pass	
-t8803.scala	fail	lean:fail	t8803.scala:20:68: expected an identifier, found 'super'
+t8803.scala	fail	lean:fail	t8803.scala:20:66: not supported yet: C.super from a class nested in C
 t8823.scala	pass	lean:fail	
 t8845.scala	pass	lean:pass	
 t8888.scala	pass	lean:pass	

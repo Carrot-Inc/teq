@@ -1,0 +1,299 @@
+# program	scalac 3.8.4 observable (output, REFUSED or VERIFY with the first error line)
+qs_class_none_a_def0	A
+qs_class_none_a_def1	A
+qs_class_none_a_generic	A
+qs_class_none_a_overload	A
+qs_class_none_a_val	REFUSED	super may be not be used on value m
+qs_class_none_a_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_none_b_def0	A
+qs_class_none_b_def1	A
+qs_class_none_b_generic	A
+qs_class_none_b_overload	A
+qs_class_none_b_val	REFUSED	super may be not be used on value m
+qs_class_none_b_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_none_c_def0	A
+qs_class_none_c_def1	A
+qs_class_none_c_generic	A
+qs_class_none_c_overload	A
+qs_class_none_c_val	REFUSED	super may be not be used on value m
+qs_class_none_c_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_none_d_def0	A
+qs_class_none_d_def1	A
+qs_class_none_d_generic	A
+qs_class_none_d_overload	A
+qs_class_none_d_val	REFUSED	super may be not be used on value m
+qs_class_none_d_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_none_e_def0	A
+qs_class_none_e_def1	A
+qs_class_none_e_generic	A
+qs_class_none_e_overload	A
+qs_class_none_e_val	REFUSED	super may be not be used on value m
+qs_class_none_e_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_none_f_def0	A
+qs_class_none_f_def1	A
+qs_class_none_f_generic	A
+qs_class_none_f_overload	A
+qs_class_none_f_val	REFUSED	super may be not be used on value m
+qs_class_none_f_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_none_g_def0	A
+qs_class_none_g_def1	A
+qs_class_none_g_generic	A
+qs_class_none_g_overload	A
+qs_class_none_g_val	REFUSED	super may be not be used on value m
+qs_class_none_g_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_A_a_def0	A
+qs_class_A_a_def1	A
+qs_class_A_a_generic	A
+qs_class_A_a_overload	A
+qs_class_A_a_val	REFUSED	super may be not be used on value m
+qs_class_A_a_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_A_b_def0	A
+qs_class_A_b_def1	A
+qs_class_A_b_generic	A
+qs_class_A_b_overload	A
+qs_class_A_b_val	REFUSED	super may be not be used on value m
+qs_class_A_b_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_A_c_def0	A
+qs_class_A_c_def1	A
+qs_class_A_c_generic	A
+qs_class_A_c_overload	A
+qs_class_A_c_val	REFUSED	super may be not be used on value m
+qs_class_A_c_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_A_d_def0	A
+qs_class_A_d_def1	A
+qs_class_A_d_generic	A
+qs_class_A_d_overload	A
+qs_class_A_d_val	REFUSED	super may be not be used on value m
+qs_class_A_d_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_A_e_def0	A
+qs_class_A_e_def1	A
+qs_class_A_e_generic	A
+qs_class_A_e_overload	A
+qs_class_A_e_val	REFUSED	super may be not be used on value m
+qs_class_A_e_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_A_f_def0	A
+qs_class_A_f_def1	A
+qs_class_A_f_generic	A
+qs_class_A_f_overload	A
+qs_class_A_f_val	REFUSED	super may be not be used on value m
+qs_class_A_f_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_A_g_def0	A
+qs_class_A_g_def1	A
+qs_class_A_g_generic	A
+qs_class_A_g_overload	A
+qs_class_A_g_val	REFUSED	super may be not be used on value m
+qs_class_A_g_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_U_a_def0	U
+qs_class_U_a_def1	U
+qs_class_U_a_generic	U
+qs_class_U_a_overload	U
+qs_class_U_a_val	REFUSED	super may be not be used on value m
+qs_class_U_a_abstract	REFUSED	method m in trait U is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_U_b_def0	U
+qs_class_U_b_def1	U
+qs_class_U_b_generic	U
+qs_class_U_b_overload	U
+qs_class_U_b_val	REFUSED	super may be not be used on value m
+qs_class_U_b_abstract	REFUSED	method m in trait U is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_U_c_def0	U
+qs_class_U_c_def1	U
+qs_class_U_c_generic	U
+qs_class_U_c_overload	U
+qs_class_U_c_val	REFUSED	super may be not be used on value m
+qs_class_U_c_abstract	REFUSED	method m in trait U is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_U_d_def0	U
+qs_class_U_d_def1	U
+qs_class_U_d_generic	U
+qs_class_U_d_overload	U
+qs_class_U_d_val	REFUSED	super may be not be used on value m
+qs_class_U_d_abstract	REFUSED	method m in trait U is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_U_e_def0	U
+qs_class_U_e_def1	U
+qs_class_U_e_generic	U
+qs_class_U_e_overload	U
+qs_class_U_e_val	REFUSED	super may be not be used on value m
+qs_class_U_e_abstract	REFUSED	method m in trait U is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_U_f_def0	U
+qs_class_U_f_def1	U
+qs_class_U_f_generic	U
+qs_class_U_f_overload	U
+qs_class_U_f_val	REFUSED	super may be not be used on value m
+qs_class_U_f_abstract	REFUSED	method m in trait U is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_U_g_def0	U
+qs_class_U_g_def1	U
+qs_class_U_g_generic	U
+qs_class_U_g_overload	U
+qs_class_U_g_val	REFUSED	super may be not be used on value m
+qs_class_U_g_abstract	REFUSED	method m in trait U is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_none_a_def0	A
+qs_trait_none_a_def1	A
+qs_trait_none_a_generic	A
+qs_trait_none_a_overload	A
+qs_trait_none_a_val	REFUSED	super may be not be used on value m
+qs_trait_none_a_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_none_b_def0	A
+qs_trait_none_b_def1	A
+qs_trait_none_b_generic	A
+qs_trait_none_b_overload	A
+qs_trait_none_b_val	REFUSED	super may be not be used on value m
+qs_trait_none_b_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_none_c_def0	A
+qs_trait_none_c_def1	A
+qs_trait_none_c_generic	A
+qs_trait_none_c_overload	A
+qs_trait_none_c_val	REFUSED	super may be not be used on value m
+qs_trait_none_c_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_none_d_def0	A
+qs_trait_none_d_def1	A
+qs_trait_none_d_generic	A
+qs_trait_none_d_overload	A
+qs_trait_none_d_val	REFUSED	super may be not be used on value m
+qs_trait_none_d_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_none_e_def0	A
+qs_trait_none_e_def1	A
+qs_trait_none_e_generic	A
+qs_trait_none_e_overload	A
+qs_trait_none_e_val	REFUSED	super may be not be used on value m
+qs_trait_none_e_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_none_f_def0	A
+qs_trait_none_f_def1	A
+qs_trait_none_f_generic	A
+qs_trait_none_f_overload	A
+qs_trait_none_f_val	REFUSED	super may be not be used on value m
+qs_trait_none_f_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_none_g_def0	A
+qs_trait_none_g_def1	A
+qs_trait_none_g_generic	A
+qs_trait_none_g_overload	A
+qs_trait_none_g_val	REFUSED	super may be not be used on value m
+qs_trait_none_g_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_A_a_def0	VERIFY	Exception in thread "main" java.lang.VerifyError: Bad invokespecial instruction: current class isn't assignable to reference class.
+qs_trait_A_a_def1	VERIFY	Exception in thread "main" java.lang.VerifyError: Bad invokespecial instruction: current class isn't assignable to reference class.
+qs_trait_A_a_generic	VERIFY	Exception in thread "main" java.lang.VerifyError: Bad invokespecial instruction: current class isn't assignable to reference class.
+qs_trait_A_a_overload	VERIFY	Exception in thread "main" java.lang.VerifyError: Bad invokespecial instruction: current class isn't assignable to reference class.
+qs_trait_A_a_val	REFUSED	super may be not be used on value m
+qs_trait_A_a_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_A_b_def0	A
+qs_trait_A_b_def1	A
+qs_trait_A_b_generic	A
+qs_trait_A_b_overload	A
+qs_trait_A_b_val	REFUSED	super may be not be used on value m
+qs_trait_A_b_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_A_c_def0	A
+qs_trait_A_c_def1	A
+qs_trait_A_c_generic	A
+qs_trait_A_c_overload	A
+qs_trait_A_c_val	REFUSED	super may be not be used on value m
+qs_trait_A_c_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_A_d_def0	A
+qs_trait_A_d_def1	A
+qs_trait_A_d_generic	A
+qs_trait_A_d_overload	A
+qs_trait_A_d_val	REFUSED	super may be not be used on value m
+qs_trait_A_d_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_A_e_def0	A
+qs_trait_A_e_def1	A
+qs_trait_A_e_generic	A
+qs_trait_A_e_overload	A
+qs_trait_A_e_val	REFUSED	super may be not be used on value m
+qs_trait_A_e_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_A_f_def0	A
+qs_trait_A_f_def1	A
+qs_trait_A_f_generic	A
+qs_trait_A_f_overload	A
+qs_trait_A_f_val	REFUSED	super may be not be used on value m
+qs_trait_A_f_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_trait_A_g_def0	A
+qs_trait_A_g_def1	A
+qs_trait_A_g_generic	A
+qs_trait_A_g_overload	A
+qs_trait_A_g_val	REFUSED	super may be not be used on value m
+qs_trait_A_g_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_none_a_def0	A
+qs_object_none_a_def1	A
+qs_object_none_a_generic	A
+qs_object_none_a_overload	A
+qs_object_none_a_val	REFUSED	super may be not be used on value m
+qs_object_none_a_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_none_b_def0	A
+qs_object_none_b_def1	A
+qs_object_none_b_generic	A
+qs_object_none_b_overload	A
+qs_object_none_b_val	REFUSED	super may be not be used on value m
+qs_object_none_b_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_none_c_def0	A
+qs_object_none_c_def1	A
+qs_object_none_c_generic	A
+qs_object_none_c_overload	A
+qs_object_none_c_val	REFUSED	super may be not be used on value m
+qs_object_none_c_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_none_d_def0	A
+qs_object_none_d_def1	A
+qs_object_none_d_generic	A
+qs_object_none_d_overload	A
+qs_object_none_d_val	REFUSED	super may be not be used on value m
+qs_object_none_d_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_none_e_def0	A
+qs_object_none_e_def1	A
+qs_object_none_e_generic	A
+qs_object_none_e_overload	A
+qs_object_none_e_val	REFUSED	super may be not be used on value m
+qs_object_none_e_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_none_f_def0	A
+qs_object_none_f_def1	A
+qs_object_none_f_generic	A
+qs_object_none_f_overload	A
+qs_object_none_f_val	REFUSED	super may be not be used on value m
+qs_object_none_f_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_none_g_def0	A
+qs_object_none_g_def1	A
+qs_object_none_g_generic	A
+qs_object_none_g_overload	A
+qs_object_none_g_val	REFUSED	super may be not be used on value m
+qs_object_none_g_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_A_a_def0	A
+qs_object_A_a_def1	A
+qs_object_A_a_generic	A
+qs_object_A_a_overload	A
+qs_object_A_a_val	REFUSED	super may be not be used on value m
+qs_object_A_a_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_A_b_def0	A
+qs_object_A_b_def1	A
+qs_object_A_b_generic	A
+qs_object_A_b_overload	A
+qs_object_A_b_val	REFUSED	super may be not be used on value m
+qs_object_A_b_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_A_c_def0	A
+qs_object_A_c_def1	A
+qs_object_A_c_generic	A
+qs_object_A_c_overload	A
+qs_object_A_c_val	REFUSED	super may be not be used on value m
+qs_object_A_c_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_A_d_def0	A
+qs_object_A_d_def1	A
+qs_object_A_d_generic	A
+qs_object_A_d_overload	A
+qs_object_A_d_val	REFUSED	super may be not be used on value m
+qs_object_A_d_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_A_e_def0	A
+qs_object_A_e_def1	A
+qs_object_A_e_generic	A
+qs_object_A_e_overload	A
+qs_object_A_e_val	REFUSED	super may be not be used on value m
+qs_object_A_e_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_A_f_def0	A
+qs_object_A_f_def1	A
+qs_object_A_f_generic	A
+qs_object_A_f_overload	A
+qs_object_A_f_val	REFUSED	super may be not be used on value m
+qs_object_A_f_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_object_A_g_def0	A
+qs_object_A_g_def1	A
+qs_object_A_g_generic	A
+qs_object_A_g_overload	A
+qs_object_A_g_val	REFUSED	super may be not be used on value m
+qs_object_A_g_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qs_class_plainA_a_def0	A
+qs_class_this_b_def0	B
+qs_pin_A_a_def0	VERIFY	Exception in thread "main" java.lang.VerifyError: Bad invokespecial instruction: current class isn't assignable to reference class.
+qs_pin_A_b_def0	Mid

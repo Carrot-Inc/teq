@@ -305,8 +305,6 @@ t6706.scala	lang.scala:1:1: not supported on JavaScript: method gc of java.lang.
 t6827.scala	output: line 1: the .check has 'start at -5: OOB', the program printed 'start at -5: ok'
 t7200.scala	t7200.scala:19:9: recursive use of coflatMap needs an explicit result type
 t7396.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
-t7992.scala	t7992.scala:9:9: expected an identifier, found 'super'
-t7992b.scala	t7992b.scala:9:9: expected an identifier, found 'super'
 t8199.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: reallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongna
 t8346.scala	t8346.scala:5:33: not found: Value
 t8601d.scala	run: exit 1: java.lang.RuntimeException: failed to throw NPE

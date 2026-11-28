@@ -1482,7 +1482,7 @@ impl Mentions<'_> {
             | Expr::SymRef(_)
             | Expr::This
             | Expr::QualThis(_)
-            | Expr::Super(_)
+            | Expr::Super(..)
             | Expr::Unsupported(_)
             | Expr::Withheld(_)
             | Expr::Derived

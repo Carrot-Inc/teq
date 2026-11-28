@@ -1141,8 +1141,8 @@ impl<'a> Worker<'a> {
                 typed
             }
             Expr::Select(q, name) => {
-                if let Expr::Super(parent) = ast.expr(q) {
-                    return self.apply_super_member(parent, name, targs, lists, ast.expr_span(q), span, expected);
+                if let Expr::Super(qual, parent) = ast.expr(q) {
+                    return self.apply_super_member(qual, parent, name, targs, lists, ast.expr_span(q), span, expected);
                 }
                 if let Some(tables) = ast.reader.as_deref() {
                     if self.body_node.map_or(true, |n| n.file != self.env.file || n.call != e) {
@@ -1233,6 +1233,7 @@ impl<'a> Worker<'a> {
     #[inline(never)]
     pub(super) fn apply_super_member(
         &mut self,
+        qual: Name,
         parent: Name,
         name: Name,
         targs: Option<ListRef>,
@@ -1247,10 +1248,13 @@ impl<'a> Worker<'a> {
         };
         // In a parent's argument `super` is the class around's for scalac; no tree here reads the `super` of an
         // enclosing instance from inside the constructor, so it stays refused there.
-        let Some(c) = self.this_class().filter(|&c| self.parent_args_of != Some(c) && self.ctor_context().is_none()) else {
-            self.error(super_span, "super can be used only in a class, object, or template");
+        let Some(c) = self.super_qualifying_class(qual, super_span) else {
             return failed(self, &lists);
         };
+        if self.parent_args_of == Some(c) || self.ctor_context().is_some() {
+            self.error(super_span, "super can be used only in a class, object, or template");
+            return failed(self, &lists);
+        }
         if let Some(m) = self.inline_under_check().filter(|&m| !self.defined_in_body_of(c, m)) {
             let msg = format!("Super call not allowed in inlineable method {}", self.name_str(self.syms.sym(m).name));
             self.error(super_span, msg);
@@ -1310,12 +1314,26 @@ impl<'a> Worker<'a> {
             let own = self.syms.class(c).members.get(&name).copied();
             target = deferred.filter(|_| own.map_or(false, |o| self.syms.sym(o).mods & stackable == stackable));
         }
-        let Some((m, owner, owner_ty)) = target else {
-            // `super.equals` and its companions reach `Object`'s definitions, whichever trait
-            // declared them abstract on the way.
-            if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS | names::CLONE) {
-                return self.apply_super_any_member(c, in_trait, name, targs, lists, span, expected);
+        if let Some((m, owner, _)) = target {
+            let first_parent = self.syms.class(c).parents.first().copied();
+            let direct_superclass = first_parent.and_then(|p| self.class_of(p));
+            let in_class = self.syms.class(owner).kind != ClassKind::Trait;
+            if in_class && named_parent.map_or(false, |k| Some(k) != direct_superclass) && Some(owner) != direct_superclass {
+                let msg = format!(
+                    "Super call cannot be emitted: the selected {} is declared in {}, which is not the direct superclass of {}",
+                    self.member_description(m, None),
+                    self.class_description(owner),
+                    self.class_description(c)
+                );
+                self.error_by(crate::source::Group::PostTyper, span, msg);
+                return failed(self, &lists);
             }
+            if !self.is_method_sym(m) {
+                let msg = format!("super may be not be used on {}", self.member_description(m, None));
+                self.error_by(crate::source::Group::PostTyper, span, msg);
+                return failed(self, &lists);
+            }
+        } else if !matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS | names::CLONE) {
             // A name no parent has, in a class that derives from `scala.Dynamic`: the parents' dynamic method
             // (`typer::dynamic`), called through `super` as written. An extension method that gives the name
             // for the class comes first under scalac on `super` too (`Typer.typedSelectWithAdapt`:
@@ -1326,7 +1344,7 @@ impl<'a> Worker<'a> {
                 let spans = self.overload_arg_spans.len();
                 match self.dynamic_call(this_ty, name, lists, span, None) {
                     Ok(Some((method, lists, span))) => {
-                        let applied = self.apply_super_member(parent, method, targs, lists, super_span, span, expected);
+                        let applied = self.apply_super_member(qual, parent, method, targs, lists, super_span, span, expected);
                         self.overload_arg_spans.truncate(spans);
                         return applied;
                     }
@@ -1350,25 +1368,16 @@ impl<'a> Worker<'a> {
             };
             self.error_by(group, span, msg);
             return failed(self, &lists);
+        }
+        if qual != names::EMPTY && self.this_class() != Some(c) {
+            let q = self.name_str(qual);
+            self.error_by(crate::source::Group::Own, span, format!("not supported yet: {q}.super from a class nested in {q}"));
+            return failed(self, &lists);
+        }
+        let Some((m, owner, owner_ty)) = target else {
+            // Object's definition, whichever trait declared the member abstract on the way.
+            return self.apply_super_any_member(c, in_trait, name, targs, lists, span, expected);
         };
-        let first_parent = self.syms.class(c).parents.first().copied();
-        let direct_superclass = first_parent.and_then(|p| self.class_of(p));
-        let in_class = self.syms.class(owner).kind != ClassKind::Trait;
-        if in_class && named_parent.map_or(false, |k| Some(k) != direct_superclass) && Some(owner) != direct_superclass {
-            let msg = format!(
-                "Super call cannot be emitted: the selected {} is declared in {}, which is not the direct superclass of {}",
-                self.member_description(m, None),
-                self.class_description(owner),
-                self.class_description(c)
-            );
-            self.error_by(crate::source::Group::PostTyper, span, msg);
-            return failed(self, &lists);
-        }
-        if !self.is_method_sym(m) {
-            let msg = format!("super may be not be used on {}", self.member_description(m, None));
-            self.error_by(crate::source::Group::PostTyper, span, msg);
-            return failed(self, &lists);
-        }
         let info = self.syms.class(c);
         let through_chain = info.kind != ClassKind::Trait
             && info.superclass.map_or(false, |s| {

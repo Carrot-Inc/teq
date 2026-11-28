@@ -464,12 +464,9 @@ impl<'p> TreePrinter<'p> {
             Expr::This => "this".into(),
             Expr::ThisOf(t) => self.ty(t).cat(".this"),
             Expr::QualThis(q) => Text::str(self.name(q)).cat(".this"),
-            Expr::Super(mix) => {
-                if mix == crate::names::EMPTY {
-                    "super".into()
-                } else {
-                    Text::str("super[").cat(self.name(mix)).cat("]")
-                }
+            Expr::Super(q, mix) => {
+                let sup = if q == crate::names::EMPTY { Text::str("super") } else { Text::str(self.name(q)).cat(".super") };
+                if mix == crate::names::EMPTY { sup } else { sup.cat("[").cat(self.name(mix)).cat("]") }
             }
             Expr::ClassOf(t) => {
                 let ty = self.at_prec(GLOBAL_PREC, |s| s.ty(t));

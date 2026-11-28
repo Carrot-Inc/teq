@@ -3550,14 +3550,18 @@ fn package_segment(seg: &str) -> std::borrow::Cow<'_, str> {
 /// The member a super accessor `super$a$b$C$$m` calls: `m`.
 fn super_accessor_member(tasty: &TastyFile, n: crate::tasty::NameRef) -> Option<(String, Option<u32>)> {
     let crate::tasty::TName::SuperAccessor(u) = tasty.names.get(n as usize)? else { return None };
+    Some(unexpanded_super_member(tasty, *u))
+}
+
+fn unexpanded_super_member(tasty: &TastyFile, name: crate::tasty::NameRef) -> (String, Option<u32>) {
     let member = |u: crate::tasty::NameRef| match tasty.names.get(u as usize) {
         Some(crate::tasty::TName::Expanded(_, m)) => tasty.name(*m),
         _ => tasty.name(u),
     };
-    match tasty.names.get(*u as usize)? {
+    match tasty.names.get(name as usize) {
         // `super$T$$m$default$N`: the getter of the member's parameter `N - 1`.
-        crate::tasty::TName::DefaultGetter(e, index) => Some((member(*e), Some(*index))),
-        _ => Some((member(*u), None)),
+        Some(crate::tasty::TName::DefaultGetter(e, index)) => (member(*e), Some(*index)),
+        _ => (member(name), None),
     }
 }
 

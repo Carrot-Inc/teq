@@ -589,7 +589,7 @@ usingspelled	pass	-
 valaccessor	pass	-	
 valueclass	pass	-	
 valueclassjoin	fail	-	valueclassjoin check-lean
-valueclasssuperequals	fail	-	known over-scalac-js: scalac pickles a value class's super call as its super accessor (`V.this.super$equals(V.this)`, PostTyper's), which the products' reader refuses ("not supported yet: value super$
+valueclasssuperequals	pass	-	
 valueexports	pass	-	
 varargs	pass	-	
 vcfamily	pass	-	

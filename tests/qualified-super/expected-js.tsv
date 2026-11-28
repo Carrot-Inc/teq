@@ -1,0 +1,17 @@
+# program	scalac 3.8.4 Scala.js observable (output, REFUSED or FAILED with diagnostic)
+# For qs_pin_A_a_def0 and qs_pin_A_b_def0 scalac's two back ends print DIFFERENT values for one program: the JVM
+# Mid (qs_pin_A_a_def0 by its twin), Scala.js A. Neither is mended toward the other: teq's JVM prints Mid, its
+# JavaScript and its interpreter A. dotty's trees call A.m: ResolveSuper.rebindSuper (transform/ResolveSuper.scala
+# 85-118 at 3.8.4) implements T's super accessor in C (javap: T$$m$super$A is aload_0; invokespecial A.m), and the
+# JVM begins that invokespecial's lookup at C's direct superclass Mid. The scala-dev#143 check
+# (transform/SuperAccessors.scala 138-153) refuses such a call, but it tests the qualifier class T, not C.
+qs_trait_A_a_def0	A
+qs_trait_A_a_def1	A
+qs_trait_A_a_generic	A
+qs_trait_A_a_overload	A
+qs_trait_A_b_def0	A
+qs_trait_A_b_def1	A
+qs_trait_A_b_generic	A
+qs_trait_A_b_overload	A
+qs_pin_A_a_def0	A
+qs_pin_A_b_def0	A

@@ -386,8 +386,6 @@ t7200.scala	t7200.scala:19:9: recursive use of coflatMap needs an explicit resul
 t7214.scala	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
 t7912.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: A$@41 (of class A$)
 t7932.scala	t7932.scala:16:16: method category overrides nothing
-t7992.scala	t7992.scala:9:9: expected an identifier, found 'super'
-t7992b.scala	t7992b.scala:9:9: expected an identifier, found 'super'
 t8177f.scala	t8177f.scala:21:25: value toGenericString is not a member of Method
 t8199.scala	teq: This construct can be rewritten automatically under -rewrite -source 3.4-migration.
 t8346.scala	t8346.scala:5:33: not found: Value

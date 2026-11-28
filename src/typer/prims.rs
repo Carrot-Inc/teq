@@ -186,7 +186,7 @@ enum AppliedHead {
     /// A value, typed, with its type.
     Value(TExprId, TypeId),
     /// `super`, with the parent it names and its place.
-    Super(Name, Span),
+    Super(Name, Name, Span),
 }
 
 impl<'a> Worker<'a> {
@@ -1015,7 +1015,7 @@ impl<'a> Worker<'a> {
         let ast = self.cur_ast();
         match ast.expr(f) {
             Expr::Select(q, n) if n == names::APPLY => match ast.expr(q) {
-                Expr::Super(parent) => Some((q, AppliedHead::Super(parent, ast.expr_span(q)))),
+                Expr::Super(qual, parent) => Some((q, AppliedHead::Super(qual, parent, ast.expr_span(q)))),
                 _ => {
                     let (tq, qty) = self.type_expr(q, None);
                     let qty = self.solve_in(qty);
@@ -1037,7 +1037,7 @@ impl<'a> Worker<'a> {
     fn apply_on_head(&mut self, head: AppliedHead, name: Name, targs: Option<ListRef>, lists: Vec<ArgList>, span: Span) -> (TExprId, TypeId) {
         match head {
             AppliedHead::Value(tf, fty) => self.apply_member(tf, fty, name, targs, lists, span, None),
-            AppliedHead::Super(parent, at) => self.apply_super_member(parent, name, targs, lists, at, span, None),
+            AppliedHead::Super(qual, parent, at) => self.apply_super_member(qual, parent, name, targs, lists, at, span, None),
         }
     }
 

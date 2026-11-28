@@ -1881,12 +1881,33 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The member a super accessor `super$pkg$Trait$$m` stands for.
-    fn super_accessor_member(&mut self, cv: &Conv, n: u32) -> Option<Name> {
-        let text = cv.tasty.name(cv.tasty.source_name(n));
-        let rest = text.strip_prefix("super$")?;
-        let (_, member) = rest.rsplit_once("$$")?;
-        Some(self.interner.intern(member))
+    /// The member and optional mix of an accessor (dotty's `ResolveSuper.decomposeSuperName`).
+    fn super_accessor_member(&mut self, cv: &Conv, n: NameRef) -> Option<(Name, Name)> {
+        let TName::SuperAccessor(u) = *cv.tasty.names.get(cv.tasty.source_name(n) as usize)? else { return None };
+        let (member, mix) = match cv.tasty.names[u as usize] {
+            TName::ExpandPrefix(m, p) => (m, self.conv_name(cv, p)),
+            _ => (u, names::EMPTY),
+        };
+        let (mut member, getter) = super::unexpanded_super_member(&cv.tasty, member);
+        if let Some(index) = getter {
+            member.push_str(&format!("$default${}", index + 1));
+        }
+        Some((self.interner.intern(&member), mix))
+    }
+
+    fn super_qualifier(&mut self, cv: &mut Conv, recv: &Term) -> Option<Name> {
+        let class = match &recv.kind {
+            TermKind::QualThis(t) => t,
+            TermKind::Path(TType::This(t)) => t,
+            _ => return None,
+        };
+        if let TType::LocalType(addr, _) = class {
+            if let Some(i) = cv.local_classes.iter().rposition(|a| a == addr) {
+                return Some(if i + 1 == cv.local_classes.len() { names::EMPTY } else { cv.local_class_places[i].0 });
+            }
+        }
+        let c = self.this_class_of(cv, class)?;
+        Some(if cv.this_chain.last() == Some(&c) { names::EMPTY } else { self.syms.class(c).name })
     }
 
     fn mentions_local_type(&self, cv: &Conv, t: &TType) -> bool {
@@ -2906,11 +2927,11 @@ impl<'a> Worker<'a> {
                         return cv.expr(Expr::Ident(name));
                     }
                 }
-                // `C.this.super$pkg$Trait$$m`, the accessor scalac writes for `super.m` in a
-                // trait, is the super call itself.
-                if let Some(member) = self.super_accessor_member(cv, *n) {
-                    let sup = cv.expr(Expr::Super(names::EMPTY));
-                    return cv.expr(Expr::Select(sup, member));
+                if let Some((member, mix)) = self.super_accessor_member(cv, *n) {
+                    if let Some(qual) = self.super_qualifier(cv, q) {
+                        let sup = cv.expr(Expr::Super(qual, mix));
+                        return cv.expr(Expr::Select(sup, member));
+                    }
                 }
                 // `scala.math.package.min`: the package object's member is the package's, as
                 // the loader spills it and the std defines it; so is a member of `Predef` where
@@ -3070,12 +3091,13 @@ impl<'a> Worker<'a> {
                 }
                 cv.expr(Expr::TypeApply(fe, l))
             }
-            TermKind::Super(_, mixin) => {
+            TermKind::Super(recv, mixin) => {
+                let qual = self.super_qualifier(cv, recv).unwrap_or(names::EMPTY);
                 let name = match mixin {
                     Some(TType::TypeRef(_, n)) => self.conv_name(cv, *n),
                     _ => names::EMPTY,
                 };
-                cv.expr(Expr::Super(name))
+                cv.expr(Expr::Super(qual, name))
             }
             TermKind::Typed(e, ty, inferred) => {
                 let inner = self.conv_expr(cv, e);

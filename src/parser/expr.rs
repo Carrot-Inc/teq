@@ -1619,19 +1619,7 @@ impl<'a> Parser<'a> {
                 self.bump();
                 self.ast.add_expr(Expr::This, start)
             }
-            Tok::KwSuper => {
-                self.bump();
-                let mut parent = names::EMPTY;
-                if self.at(Tok::LBracket) && self.kind_at(1) == Tok::Ident && self.kind_at(2) == Tok::RBracket {
-                    self.bump();
-                    parent = self.bump().name;
-                    self.bump();
-                }
-                if !self.at(Tok::Dot) {
-                    self.error_at(self.span(), "expected '.' after super");
-                }
-                self.ast.add_expr(Expr::Super(parent), start.to(self.prev_span()))
-            }
+            Tok::KwSuper => self.parse_super(names::EMPTY, start),
             Tok::Underscore => {
                 self.bump();
                 self.placeholder(start).1
@@ -2061,6 +2049,20 @@ impl<'a> Parser<'a> {
         false
     }
 
+    fn parse_super(&mut self, qualifier: Name, start: Span) -> ExprId {
+        self.bump();
+        let mut parent = names::EMPTY;
+        if self.at(Tok::LBracket) && self.kind_at(1) == Tok::Ident && self.kind_at(2) == Tok::RBracket {
+            self.bump();
+            parent = self.bump().name;
+            self.bump();
+        }
+        if !self.at(Tok::Dot) {
+            self.error_at(self.span(), "expected '.' after super");
+        }
+        self.ast.add_expr(Expr::Super(qualifier, parent), start.to(self.prev_span()))
+    }
+
     pub(super) fn parse_postfix(&mut self, mut e: ExprId, start: Span) -> ExprId {
         loop {
             match self.kind() {
@@ -2072,6 +2074,12 @@ impl<'a> Parser<'a> {
                         e = self.ast.add_expr(Expr::Match(e, cases), start.to(self.prev_span()));
                         self.ast.notes.places.note(TokenRead::TermMatch, e.0, keyword);
                         continue;
+                    }
+                    if self.at(Tok::KwSuper) && self.ast.expr_span(e) == start && !self.is_wildcard(e) {
+                        if let Expr::Ident(q) = self.ast.expr(e) {
+                            e = self.parse_super(q, start);
+                            continue;
+                        }
                     }
                     if self.at(Tok::KwThis) {
                         if let Expr::Ident(q) | Expr::Select(_, q) = self.ast.expr(e) {

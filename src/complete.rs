@@ -20,6 +20,7 @@ pub enum Site {
     /// the receiver's type; `path` the receiver as a path of names where it is one, which a
     /// package or an object answers by.
     Member { recv: Span, path: Option<Vec<String>> },
+    Super { qualifier: Option<String>, mix: Option<String> },
     /// A type's name: the scope's types, or those of the package or object `path` (`a.b.Ty`).
     Type { path: Option<Vec<String>> },
     /// The class after `new`, likewise.
@@ -281,6 +282,10 @@ fn site_in(ast: &Ast, fake: Name, interner: &Interner) -> Option<Site> {
                 while let Expr::Parens(inner) = ast.expr(r) {
                     r = inner;
                 }
+                if let Expr::Super(q, mix) = ast.expr(r) {
+                    let name = |n| (n != crate::names::EMPTY).then(|| interner.get(n).to_string());
+                    return Some(Site::Super { qualifier: name(q), mix: name(mix) });
+                }
                 return Some(Site::Member { recv: ast.expr_span(r), path: expr_path(ast, q, interner) });
             }
             Expr::NamedArg(n, _) if n == fake => return Some(Site::Nothing),
@@ -340,13 +345,10 @@ fn expr_names(e: &Expr, fake: Name) -> bool {
     matches!(*e, Expr::Infix(_, n, _, _) | Expr::Prefix(n, _) if n == fake)
 }
 
-/// The receiver as a path of names, `a.b.c`, where it is one; `super` as itself.
+/// The receiver as a path of names, `a.b.c`, where it is one.
 fn expr_path(ast: &Ast, e: crate::ast::ExprId, interner: &Interner) -> Option<Vec<String>> {
     match ast.expr(e) {
         Expr::Ident(n) => Some(vec![interner.get(n).to_string()]),
-        // `super[P]` names the parent it selects in.
-        Expr::Super(q) if q == crate::names::EMPTY => Some(vec!["super".to_string()]),
-        Expr::Super(q) => Some(vec!["super".to_string(), interner.get(q).to_string()]),
         Expr::Select(q, n) => {
             let mut p = expr_path(ast, q, interner)?;
             p.push(interner.get(n).to_string());

@@ -824,7 +824,7 @@ i209.scala	fail	-	check: diagnostic 1 of 1: scalac's is error i209.scala:8:3 met
 i20946	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:5:3 Exception occurred while executing macro expansion.; teq's is error Test_2.scala:5:3 not supported yet in a macro: Ref of Int, which is no term (called by macroWithAssertFailing)
 i20946a	fail	-	check: diagnostic 1 of 1: scalac's is error Test_2.scala:5:3 Exception occurred while executing macro expansion.; teq's is error Test_2.scala:5:3 exception in macro: java.lang.AssertionError: assertion failed: Expected a type symbol, but go
 i21071.scala	fail	-	marks: 2 errors where 1 are marked: i21071.scala:9:3: Ambiguous overload. The overloaded alternatives of method foo in object MySuite with types
-i2117.scala	fail	-	marks: 3 errors where 1 are marked: i2117.scala:2:5: expected an identifier, found 'super'
+i2117.scala	pass	-	
 i21207.scala	fail	-	marks: 6 errors where 5 are marked: i21207.scala:20:11: method foo1 in class P must be called with () argument
 i21212.scala	fail	-	marks: no error where 1 are marked
 i21239.orig.scala	pass	-	

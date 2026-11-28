@@ -2813,8 +2813,10 @@ impl<'a> Worker<'a> {
                 }
                 (te, ERROR)
             }
-            Expr::Super(_) => {
-                self.error_by(crate::source::Group::Parser, span, "super can only be used to select a member");
+            Expr::Super(qual, _) => {
+                if qual == names::EMPTY || self.super_qualifying_class(qual, span).is_some() {
+                    self.error_by(crate::source::Group::Parser, span, "super can only be used to select a member");
+                }
                 (self.prog.add(TExpr::Unit), ERROR)
             }
             Expr::NamedArg(_, v) => {
@@ -4001,6 +4003,22 @@ impl<'a> Worker<'a> {
             Frame::Class(c) if self.syms.class(*c).name == name => Some(*c),
             _ => None,
         })
+    }
+
+    pub(super) fn super_qualifying_class(&mut self, qual: Name, span: Span) -> Option<ClassId> {
+        if qual == names::EMPTY {
+            let class = self.this_class();
+            if class.is_none() {
+                self.error(span, "super can be used only in a class, object, or template");
+            }
+            class
+        } else {
+            let class = self.qualified_this_class(qual);
+            if class.is_none() {
+                self.error(span, format!("{} is not an enclosing class", self.name_str(qual)));
+            }
+            class
+        }
     }
 
     /// Keeps the `self =>` alias of the class's definition on the class, where the lookup of

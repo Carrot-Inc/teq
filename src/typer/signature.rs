@@ -46,7 +46,7 @@ pub(super) enum Head {
     /// path of names where it is one.
     Member { recv: Span, name: String, path: Option<Vec<String>> },
     /// `super.m(..)`, `super[P].m(..)`.
-    Super { qualifier: Option<String>, name: String },
+    Super { qualifier: Option<String>, mix: Option<String>, name: String },
     /// `new C(..)`: the class's path; an anonymous class's parent (`new C(..) { .. }`), which
     /// may be abstract; `implied` where no list of its own is written (`(new C)(..)`).
     New { path: Vec<String>, anonymous: bool, implied: bool },
@@ -546,7 +546,11 @@ fn application(ast: &Ast, app: ExprId, offset: u32, new_end: &dyn Fn(ExprId) -> 
     let (kind, name_span) = match ast.expr(head) {
         Expr::Ident(n) => (Head::Name(interner.get(n).to_string()), Some(head_span)),
         Expr::Select(q, n) => match ast.expr(q) {
-            Expr::Super(p) => (Head::Super { qualifier: (p != crate::names::EMPTY).then(|| interner.get(p).to_string()), name: interner.get(n).to_string() }, ast.name_span(head)),
+            Expr::Super(q, p) => (Head::Super {
+                qualifier: (q != crate::names::EMPTY).then(|| interner.get(q).to_string()),
+                mix: (p != crate::names::EMPTY).then(|| interner.get(p).to_string()),
+                name: interner.get(n).to_string(),
+            }, ast.name_span(head)),
             _ => (Head::Member { recv: receiver(ast, q), name: interner.get(n).to_string(), path: expr_path(ast, q, interner) }, ast.name_span(head)),
         },
         _ => (Head::Value, None),
@@ -830,14 +834,17 @@ impl<'a> Worker<'a> {
                     None => Vec::new(),
                 }
             }
-            Head::Super { qualifier, name } => {
+            Head::Super { qualifier, mix, name } => {
                 let Some(n) = self.interner.lookup(name) else { return Vec::new() };
-                let class = self.env.frames.iter().rev().find_map(|f| match f {
-                    super::Frame::Class(c) => Some(*c),
-                    _ => None,
-                });
+                let class = match qualifier {
+                    Some(q) => self.interner.lookup(q).and_then(|q| self.qualified_this_class(q)),
+                    None => self.env.frames.iter().rev().find_map(|f| match f {
+                        super::Frame::Class(c) => Some(*c),
+                        _ => None,
+                    }),
+                };
                 let Some(c) = class else { return Vec::new() };
-                self.super_signatures(c, qualifier.as_deref(), n)
+                self.super_signatures(c, mix.as_deref(), n)
             }
             Head::New { path, anonymous, implied } => match self.new_class_at(path, at) {
                 Some(c) => {

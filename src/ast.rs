@@ -90,8 +90,8 @@ pub enum Expr {
     /// A body a product's pickle withholds (`ELIDED`): typing it fails the
     /// build with the message, which names the definition, the module and the part that writes it.
     Withheld(StrId),
-    /// `super`, or `super[T]` with the name of the parent; always the qualifier of a selection.
-    Super(Name),
+    /// `[Q.]super[P]`: the enclosing class and the parent, each empty when omitted.
+    Super(Name, Name),
     Select(ExprId, Name),
     Apply(ExprId, ListRef),
     UsingApply(ExprId, ListRef),
@@ -1823,7 +1823,7 @@ impl Ast {
                 return false;
             }
             match self.expr(e) {
-                Expr::Ident(_) | Expr::SymRef(_) | Expr::This | Expr::ThisOf(_) | Expr::QualThis(_) | Expr::Super(_) => return true,
+                Expr::Ident(_) | Expr::SymRef(_) | Expr::This | Expr::ThisOf(_) | Expr::QualThis(_) | Expr::Super(..) => return true,
                 Expr::Select(q, _) | Expr::Parens(q) => e = q,
                 _ => return false,
             }

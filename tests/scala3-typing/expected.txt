@@ -842,7 +842,7 @@ neg/i209.scala	same
 neg/i20946	same	
 neg/i20946a	same	
 neg/i21071.scala	superset	+1 lines: Ambiguous overload. The overloaded alternatives of method foo in object MySuite with types
-neg/i2117.scala	syntax	expected identifier, found {}
+neg/i2117.scala	same	
 neg/i21207.scala	same	
 neg/i21212.scala	accepts		--source 3.7
 neg/i21239.orig.scala	same	
@@ -2515,7 +2515,7 @@ pos/i10769.scala	accepts
 pos/i10769b.scala	accepts	
 pos/i10848a.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 pos/i10848b.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
-pos/i10871.scala	syntax	expected identifier, found {}
+pos/i10871.scala	rejects	not supported yet: B.super from a class nested in B
 pos/i10897.scala	accepts	
 pos/i10900.scala	accepts	
 pos/i10927.scala	accepts	
@@ -4962,7 +4962,7 @@ pos/sub-cases-reachability.scala	syntax	expected {}, found {}
 pos/subtyping.scala	accepts	
 pos/sudoku.scala	rejects	cannot resolve import
 pos/summonInline.scala	accepts	
-pos/superacc.scala	syntax	expected identifier, found {}
+pos/superacc.scala	rejects	not supported yet: D.super from a class nested in D
 pos/supercalls.scala	accepts	
 pos/surrogates.scala	accepts	
 pos/suspend-strawman	rejects	{} is not a member of the package
@@ -5003,7 +5003,7 @@ pos/t0154.scala	accepts
 pos/t0165.scala	accepts	
 pos/t0204.scala	accepts	
 pos/t0227.scala	accepts	
-pos/t0231.scala	syntax	expected identifier, found {}
+pos/t0231.scala	rejects	not supported yet: Bar.super from a class nested in Bar
 pos/t0273.scala	accepts	
 pos/t0301.scala	accepts	
 pos/t0304.scala	accepts	

@@ -495,7 +495,11 @@ fn remap_names(ast: &mut Ast, map: &[Name]) {
     for e in &mut ast.exprs {
         match e {
             Expr::Ident(n) | Expr::Select(_, n) | Expr::NamedArg(n, _) | Expr::Infix(_, n, _, _)
-            | Expr::Prefix(n, _) | Expr::Interp(n, _, _) | Expr::Super(n) | Expr::QualThis(n) => m(n),
+            | Expr::Prefix(n, _) | Expr::Interp(n, _, _) | Expr::QualThis(n) => m(n),
+            Expr::Super(q, parent) => {
+                m(q);
+                m(parent);
+            }
             _ => {}
         }
     }

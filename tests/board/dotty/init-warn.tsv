@@ -136,8 +136,8 @@ soundness4.scala	fail	-	marks: 0 warnings where 1 are marked
 soundness6.scala	fail	-	marks: 0 warnings where 1 are marked
 structural.scala	fail	-	marks: 0 warnings where 1 are marked
 super-resolution.scala	fail	-	marks: 0 warnings where 3 are marked
-super-resolution2.scala	fail	-	marks: an error where warnings are marked: super-resolution2.scala:13:7: expected an identifier, found 'super'
-super-resolution3.scala	fail	-	marks: an error where warnings are marked: super-resolution3.scala:18:7: expected an identifier, found 'super'
+super-resolution2.scala	fail	-	marks: an error where warnings are marked: super-resolution2.scala:13:5: not supported yet: N.super from a class nested in N
+super-resolution3.scala	fail	-	marks: an error where warnings are marked: super-resolution3.scala:18:5: not supported yet: N.super from a class nested in N
 super.scala	fail	-	marks: 0 warnings where 2 are marked
 t3273.scala	fail	-	marks: 0 warnings where 2 are marked
 trait1.scala	fail	-	marks: 0 warnings where 1 are marked

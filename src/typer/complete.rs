@@ -336,7 +336,7 @@ impl<'a> Worker<'a> {
         let calls = flags & 2 != 0
             && !cx.applied
             && match cx.site {
-                Site::Scope | Site::Member { .. } => !self.index_expects_function(&ids, name),
+                Site::Scope | Site::Member { .. } | Site::Super { .. } => !self.index_expects_function(&ids, name),
                 Site::New { .. } => true,
                 _ => false,
             };
@@ -640,7 +640,7 @@ impl<'a> Worker<'a> {
         };
         // Where no name is written: the definition whose right-hand side the cursor is, and the
         // type of the receiver of the call it is an argument of, likewise.
-        let term = calls && matches!(cx.site, Site::Scope | Site::Member { .. });
+        let term = calls && matches!(cx.site, Site::Scope | Site::Member { .. } | Site::Super { .. });
         // A member's from the symbol table, a local's from the index's declarations of the
         // locals, the latest of its name's position.
         let declared = cx.rhs_of.filter(|_| term).and_then(|at| match self.declaration_at(ids, at) {
@@ -688,30 +688,27 @@ impl<'a> Worker<'a> {
                         w.path_members(r, &prefix, true, &mut out);
                     }
                 }
+                Site::Super { qualifier, mix } => {
+                    let class = match qualifier {
+                        Some(q) => w.interner.lookup(q).and_then(|q| w.qualified_this_class(q)),
+                        None => w.env.frames.iter().rev().find_map(|f| match f {
+                            Frame::Class(c) => Some(*c),
+                            _ => None,
+                        }),
+                    };
+                    if let Some(c) = class {
+                        for p in w.syms.class(c).parents.clone() {
+                            if mix.as_ref().map_or(true, |m| w.class_of(p).is_some_and(|k| w.name_ref(w.syms.class(k).name) == m)) {
+                                w.member_candidates(p, true, &prefix, &mut out);
+                            }
+                        }
+                    }
+                }
                 Site::Member { path, .. } => match receiver {
                     Some((te, ty)) => {
                         let ty = w.zonk(ty);
                         let through_this = matches!(w.prog.expr(te), crate::tir::TExpr::This | crate::tir::TExpr::Super(_));
                         w.member_candidates(ty, through_this, &prefix, &mut out);
-                    }
-                    // `super` and a package have no node: the parents' members of the class the
-                    // site is in, the package's by its path.
-                    None if path.as_ref().is_some_and(|p| p.first().is_some_and(|s| s == "super")) => {
-                        let qualifier = path.as_ref().and_then(|p| p.get(1)).cloned();
-                        let class = w.env.frames.iter().rev().find_map(|f| match f {
-                            Frame::Class(c) => Some(*c),
-                            _ => None,
-                        });
-                        if let Some(c) = class {
-                            let parents = w.syms.class(c).parents.clone();
-                            for p in parents {
-                                // `super[P]` selects in the parent `P` alone.
-                                let named = qualifier.as_ref().map_or(true, |q| w.class_of(p).is_some_and(|k| w.name_ref(w.syms.class(k).name) == q));
-                                if named {
-                                    w.member_candidates(p, true, &prefix, &mut out);
-                                }
-                            }
-                        }
                     }
                     None => {
                         if let Some(r @ TermRef::Package(_)) = path.as_ref().and_then(|p| w.term_path(p, offset)) {

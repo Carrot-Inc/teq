@@ -489,7 +489,7 @@ i10769.scala	pass	check:pass
 i10769b.scala	pass	check:pass	
 i10848a.scala	fail	check:fail	i10848a.scala:6:3: 'erased' is not part of the supported Scala subset
 i10848b.scala	fail	check:fail	i10848b.scala:4:3: 'erased' is not part of the supported Scala subset
-i10871.scala	fail	check:fail	i10871.scala:4:15: expected an identifier, found 'super'
+i10871.scala	fail	check:fail	i10871.scala:4:13: not supported yet: B.super from a class nested in B
 i10897.scala	pass	check:pass	
 i10900.scala	pass	check:pass	
 i10927.scala	pass	check:pass	
@@ -2720,7 +2720,7 @@ strip-tvars-for-lubbasetypes.scala	pass	check:pass
 subtyping.scala	pass	check:pass	
 sudoku.scala	pass	check:fail	
 summonInline.scala	pass	check:pass	
-superacc.scala	fail	check:fail	superacc.scala:15:14: expected an identifier, found 'super'
+superacc.scala	fail	check:fail	superacc.scala:15:12: not supported yet: D.super from a class nested in D
 supercalls.scala	pass	check:pass	
 surrogates.scala	pass	check:pass	
 suspend-strawman	pass	check:fail	
@@ -2761,7 +2761,7 @@ t0154.scala	pass	check:pass
 t0165.scala	pass	check:pass	
 t0204.scala	pass	check:pass	
 t0227.scala	pass	check:pass	
-t0231.scala	fail	check:fail	t0231.scala:10:25: expected an identifier, found 'super'
+t0231.scala	fail	check:fail	t0231.scala:10:21: not supported yet: Bar.super from a class nested in Bar
 t0273.scala	pass	check:pass	
 t0301.scala	pass	check:pass	
 t0304.scala	pass	check:pass	
