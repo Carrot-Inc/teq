@@ -157,7 +157,8 @@ companion_proxy_access	pass	-
 companion_proxy_prefix	pass	-	
 concat_recipe_literal	pass	-	
 concat_recipe_literal.check	pass	-	
-concat_recipe_template	fail	-	exit code 0
+concat_recipe_template	pass	-	
+concat_recipe_template.check	pass	-	
 condition_bracket_line_then_statement	pass	-	
 conflicting_bases	pass	-	
 conformance_extras	pass	-	

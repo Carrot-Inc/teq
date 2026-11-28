@@ -5,7 +5,7 @@ object Recipe {
 }
 
 // A JVM template supplies the same 65,534 characters as the literal in concat_recipe_literal.scala.
-// scalac 3.8.4 refuses the equivalent literal concat. The JVM template currently builds and prints 65536.
+// scalac 3.8.4 refuses the equivalent literal concat.
 // command: build
 // teq: --target jvm --all-mains
 // jars: scala-library

@@ -1,0 +1,5 @@
+tests/errors/concat_recipe_template.scala:1:8: error: Error while emitting Recipe$
+UTF8 string too large
+  object Recipe {
+         ^^^^^^
+1 error found

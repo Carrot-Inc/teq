@@ -506,22 +506,10 @@ impl<'a> Gen<'a> {
                         false => self.lir.push(Kind::StaticFieldStore { owner, name, value }, ErasedType::V),
                     }
                 }
-                // The string as a value, an operand wherever it stands (`Gen::assemble` loads it as one): a
-                // concatenation's text alone is read off a `Text` node itself (`Gen::lower_concat`).
-                Op::Text(text) => {
-                    let string = ErasedType::L(Rc::from(STRING));
-                    let constant = self.lir.push(Kind::Str(text.clone()), string.clone());
-                    self.lir.push(Kind::Typed(constant), string)
-                }
+                Op::Text(text) => self.lir.push(Kind::Str(text.clone()), ErasedType::L(Rc::from(STRING))),
                 Op::Module(class) => self.lir.push(Kind::Module(class.clone()), ErasedType::L(class.clone())),
                 Op::Int(v) => self.lir.push(Kind::Int(*v), ErasedType::I),
-                // The null seen at `Object`, as `Gen::assemble` types it: compared with `eq`/`ne` it is
-                // loaded beside the other side (`aconst_null; if_acmpXX`), where a `Null` node alone is
-                // tested by `ifnull`/`ifnonnull` (`Gen::write_compare`).
-                Op::Null => {
-                    let null = self.lir.push(Kind::Null, ErasedType::object());
-                    self.lir.push(Kind::Typed(null), ErasedType::object())
-                }
+                Op::Null => self.lir.push(Kind::Null, ErasedType::object()),
                 Op::Convert(to, _) => {
                     let value = take(&mut stack);
                     let from = self.lir.ty(value).clone();
@@ -1144,10 +1132,6 @@ fn read_tree(tokens: &[String], at: &mut usize) -> Option<Tree> {
                 stack.push(Slot::Value(Some(ErasedType::L(Rc::from(STRING_BUILDER)))));
                 ops.push(if t == "builder_append" { Op::BuilderAppend } else { Op::BuilderInsert });
             }
-            // `Gen::assemble` models the null as an `Object`, a `Null` node as the null type: the
-            // two write the same bytes where no frame holds the value (the std's `nullRef`, read by
-            // a branch's `areturn`), and a frame that holds it says `null` where it said `Object`.
-            // Lowered as `Typed(Null)` (`lower_tree`), a comparison keeps the class file's form.
             "aconst_null" => {
                 stack.push(Slot::Value(Some(ErasedType::object())));
                 ops.push(Op::Null);
