@@ -89,7 +89,7 @@ impl<'a> Gen<'a> {
         if let Some(file) = &class.source {
             self.cw.source_file(file);
         }
-        self.cw.cp.plan_frozen = cfg!(debug_assertions);
+        self.cw.cp.plan_frozen = true;
         debug_assert!(self.entries.is_empty(), "a class begun while the plan of {} is open", self.plan.name);
         self.walking = false;
         self.plan = class;

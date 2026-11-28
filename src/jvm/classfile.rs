@@ -72,7 +72,7 @@ pub struct ConstPool {
     consts: FxMap<Const, u16>,
     /// A lowering runs (`Gen::lowering`): nothing may enter the pool, whose order is the output's.
     pub frozen: bool,
-    /// In checks builds, a class's plan is being made outside its declarations (`Gen::plan_phase`): what enters the pool
+    /// A class's plan is being made outside its declarations (`Gen::plan_phase`): what enters the pool
     /// then would enter it before the code of the methods written so far once the class is written from its plan.
     pub plan_frozen: bool,
 }
@@ -87,7 +87,7 @@ impl ConstPool {
             return i;
         }
         assert!(!self.frozen, "the constant pool is written while a lowering runs");
-        debug_assert!(!self.plan_frozen, "the constant pool is written while a class's plan is made");
+        assert!(!self.plan_frozen, "the constant pool is written while a class's plan is made");
         let i = self.take(1);
         self.bytes.push(1);
         let encoded = modified_utf8(s);
@@ -103,7 +103,7 @@ impl ConstPool {
             return i;
         }
         assert!(!self.frozen, "the constant pool is written while a lowering runs");
-        debug_assert!(!self.plan_frozen, "the constant pool is written while a class's plan is made");
+        assert!(!self.plan_frozen, "the constant pool is written while a class's plan is made");
         let b = &mut self.bytes;
         let mut wide = false;
         match c {

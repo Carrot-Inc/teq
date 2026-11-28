@@ -1086,10 +1086,10 @@ impl<'a> Gen<'a> {
         HeldUnder { context: std::mem::replace(&mut self.context, under.context) }
     }
 
-    /// The class's plan is made (`planning`) or written: in checks builds the pool takes nothing while the plan is made
+    /// The class's plan is made (`planning`) or written: the pool takes nothing while the plan is made
     /// (a constant interned then would move the pool's order).
     pub(super) fn plan_phase(&mut self, planning: bool) {
-        self.cw.cp.plan_frozen = planning && cfg!(debug_assertions);
+        self.cw.cp.plan_frozen = planning;
     }
 
     /// A def's body lowered (`Gen::write_method_body`); the def loops where it calls itself in tail position and
