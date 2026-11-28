@@ -1,0 +1,636 @@
+# These qualified-super observations differ from scalac and are not yet mended. None is a mapping.
+# cell	target	class	teq	scalac
+qs_class_A_b_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_b_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_c_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_d_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_e_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_f_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_A_g_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_U_b_def0	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_def0	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_def0	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_def1	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_def1	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_def1	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_generic	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_generic	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_generic	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_overload	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_overload	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_b_overload	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_def0	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_def0	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_def0	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_def1	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_def1	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_def1	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_generic	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_generic	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_generic	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_overload	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_overload	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_c_overload	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_def0	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_def0	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_def0	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_def1	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_def1	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_def1	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_generic	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_generic	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_generic	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_overload	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_overload	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_d_overload	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_def0	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_def0	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_def0	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_def1	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_def1	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_def1	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_generic	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_generic	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_generic	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_overload	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_overload	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_e_overload	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_def0	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_def0	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_def0	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_def1	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_def1	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_def1	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_generic	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_generic	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_generic	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_overload	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_overload	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_f_overload	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_def0	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_def0	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_def0	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_def1	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_def1	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_def1	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_generic	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_generic	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_generic	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_overload	interp	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_overload	js	refused	not supported yet: B.super from a class nested in B	U
+qs_class_U_g_overload	jvm	refused	not supported yet: B.super from a class nested in B	U
+qs_class_none_b_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_b_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_c_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_d_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_e_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_f_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_def0	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_def0	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_def0	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_def1	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_def1	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_def1	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_generic	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_generic	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_generic	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_overload	interp	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_overload	js	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_g_overload	jvm	refused	not supported yet: B.super from a class nested in B	A
+qs_class_none_h_def0	interp	crash	interp: exit 3 B$$anon$12t8tmc_181 has no member m	A
+qs_class_none_h_def0	js	differs	node: exit 1 out.js:214	A
+qs_class_none_h_def0	jvm	refused	jvm backend: g_qs_class_none_h_def0/B$$anon$12t8tmc_181.get: not supported on the JVM yet: this super call	A
+qs_class_none_h_def1	interp	crash	interp: exit 3 B$$anon$12t8tmc_197 has no member m	A
+qs_class_none_h_def1	js	differs	node: exit 1 out.js:214	A
+qs_class_none_h_def1	jvm	refused	jvm backend: g_qs_class_none_h_def1/B$$anon$12t8tmc_197.get: not supported on the JVM yet: this super call	A
+qs_class_none_i_def0	interp	crash	interp: exit 3 B$$anon$12t8tmc_187 has no member m	A
+qs_class_none_i_def0	js	differs	node: exit 1 out.js:214	A
+qs_class_none_i_def0	jvm	refused	jvm backend: g_qs_class_none_i_def0/B$$anon$12t8tmc_187.apply: not supported on the JVM yet: this super call	A
+qs_class_none_i_def1	interp	crash	interp: exit 3 B$$anon$12t8tmc_203 has no member m	A
+qs_class_none_i_def1	js	differs	node: exit 1 out.js:214	A
+qs_class_none_i_def1	jvm	refused	jvm backend: g_qs_class_none_i_def1/B$$anon$12t8tmc_203.apply: not supported on the JVM yet: this super call	A
+qs_class_plain_h_def0	interp	crash	interp: exit 3 B$$anon$12t8tmc_182 has no member m	A
+qs_class_plain_h_def0	js	differs	node: exit 1 out.js:214	A
+qs_class_plain_h_def0	jvm	refused	jvm backend: g_qs_class_plain_h_def0/B$$anon$12t8tmc_182.get: not supported on the JVM yet: this super call	A
+qs_class_plain_h_def1	interp	crash	interp: exit 3 B$$anon$12t8tmc_198 has no member m	A
+qs_class_plain_h_def1	js	differs	node: exit 1 out.js:214	A
+qs_class_plain_h_def1	jvm	refused	jvm backend: g_qs_class_plain_h_def1/B$$anon$12t8tmc_198.get: not supported on the JVM yet: this super call	A
+qs_class_plain_i_def0	interp	crash	interp: exit 3 B$$anon$12t8tmc_188 has no member m	A
+qs_class_plain_i_def0	js	differs	node: exit 1 out.js:214	A
+qs_class_plain_i_def0	jvm	refused	jvm backend: g_qs_class_plain_i_def0/B$$anon$12t8tmc_188.apply: not supported on the JVM yet: this super call	A
+qs_class_plain_i_def1	interp	crash	interp: exit 3 B$$anon$12t8tmc_204 has no member m	A
+qs_class_plain_i_def1	js	differs	node: exit 1 out.js:214	A
+qs_class_plain_i_def1	jvm	refused	jvm backend: g_qs_class_plain_i_def1/B$$anon$12t8tmc_204.apply: not supported on the JVM yet: this super call	A
+qs_object_A_b_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_b_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_c_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_d_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_e_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_f_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_A_g_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_b_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_c_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_d_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_e_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_f_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_def0	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_def0	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_def0	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_def1	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_def1	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_def1	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_generic	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_generic	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_generic	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_overload	interp	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_overload	js	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_g_overload	jvm	refused	not supported yet: O.super from a class nested in O	A
+qs_object_none_h_def0	interp	crash	interp: exit 3 O$$anon$12t8tmc_183 has no member m	A
+qs_object_none_h_def0	js	differs	node: exit 1 out.js:219	A
+qs_object_none_h_def0	jvm	refused	jvm backend: g_qs_object_none_h_def0/O$$anon$12t8tmc_183.get: not supported on the JVM yet: this super call	A
+qs_object_none_h_def1	interp	crash	interp: exit 3 O$$anon$12t8tmc_199 has no member m	A
+qs_object_none_h_def1	js	differs	node: exit 1 out.js:219	A
+qs_object_none_h_def1	jvm	refused	jvm backend: g_qs_object_none_h_def1/O$$anon$12t8tmc_199.get: not supported on the JVM yet: this super call	A
+qs_object_none_i_def0	interp	crash	interp: exit 3 O$$anon$12t8tmc_189 has no member m	A
+qs_object_none_i_def0	js	differs	node: exit 1 out.js:219	A
+qs_object_none_i_def0	jvm	refused	jvm backend: g_qs_object_none_i_def0/O$$anon$12t8tmc_189.apply: not supported on the JVM yet: this super call	A
+qs_object_none_i_def1	interp	crash	interp: exit 3 O$$anon$12t8tmc_205 has no member m	A
+qs_object_none_i_def1	js	differs	node: exit 1 out.js:219	A
+qs_object_none_i_def1	jvm	refused	jvm backend: g_qs_object_none_i_def1/O$$anon$12t8tmc_205.apply: not supported on the JVM yet: this super call	A
+qs_object_plain_h_def0	interp	crash	interp: exit 3 O$$anon$12t8tmc_184 has no member m	A
+qs_object_plain_h_def0	js	differs	node: exit 1 out.js:219	A
+qs_object_plain_h_def0	jvm	refused	jvm backend: g_qs_object_plain_h_def0/O$$anon$12t8tmc_184.get: not supported on the JVM yet: this super call	A
+qs_object_plain_h_def1	interp	crash	interp: exit 3 O$$anon$12t8tmc_200 has no member m	A
+qs_object_plain_h_def1	js	differs	node: exit 1 out.js:219	A
+qs_object_plain_h_def1	jvm	refused	jvm backend: g_qs_object_plain_h_def1/O$$anon$12t8tmc_200.get: not supported on the JVM yet: this super call	A
+qs_object_plain_i_def0	interp	crash	interp: exit 3 O$$anon$12t8tmc_190 has no member m	A
+qs_object_plain_i_def0	js	differs	node: exit 1 out.js:219	A
+qs_object_plain_i_def0	jvm	refused	jvm backend: g_qs_object_plain_i_def0/O$$anon$12t8tmc_190.apply: not supported on the JVM yet: this super call	A
+qs_object_plain_i_def1	interp	crash	interp: exit 3 O$$anon$12t8tmc_206 has no member m	A
+qs_object_plain_i_def1	js	differs	node: exit 1 out.js:219	A
+qs_object_plain_i_def1	jvm	refused	jvm backend: g_qs_object_plain_i_def1/O$$anon$12t8tmc_206.apply: not supported on the JVM yet: this super call	A
+qs_pin_A_a_def0	jvm	refused	jvm backend: g_qs_pin_A_a_def0/T.f: not supported on the JVM yet: this super call	Mid
+qs_pin_A_b_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_pin_A_b_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_pin_A_b_def0	jvm	refused	not supported yet: T.super from a class nested in T	Mid
+qs_trait_A_a_def0	jvm	refused	jvm backend: g_qs_trait_A_a_def0/T.f: not supported on the JVM yet: this super call	A
+qs_trait_A_a_def1	jvm	refused	jvm backend: g_qs_trait_A_a_def1/T.f: not supported on the JVM yet: this super call	A
+qs_trait_A_a_generic	jvm	refused	jvm backend: g_qs_trait_A_a_generic/T.f: not supported on the JVM yet: this super call	A
+qs_trait_A_a_overload	jvm	refused	jvm backend: g_qs_trait_A_a_overload/T.f: not supported on the JVM yet: this super call	A
+qs_trait_A_b_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_b_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_c_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_d_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_e_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_f_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_A_g_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_b_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_c_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_d_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_e_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_f_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_def0	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_def0	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_def0	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_def1	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_def1	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_def1	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_generic	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_generic	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_generic	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_overload	interp	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_overload	js	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_g_overload	jvm	refused	not supported yet: T.super from a class nested in T	A
+qs_trait_none_h_def0	interp	crash	interp: exit 3 T$$anon$12t8tmc_181 has no member m	A
+qs_trait_none_h_def0	js	differs	node: exit 1 out.js:217	A
+qs_trait_none_h_def0	jvm	differs	java: exit 1 Exception in thread "main" java.lang.ClassCastException: class g_qs_trait_none_h_def0.T$$anon$12t8tmc_181 cannot be cast to class g_qs_trait_none_h_def0.A (g_qs_trait_none_h_def0.T$$anon$12t8tmc_181 and g_qs_trait_none_h_def0.A are in unnamed module of loader 'app')	A
+qs_trait_none_h_def1	interp	crash	interp: exit 3 T$$anon$12t8tmc_197 has no member m	A
+qs_trait_none_h_def1	js	differs	node: exit 1 out.js:217	A
+qs_trait_none_h_def1	jvm	differs	java: exit 1 Exception in thread "main" java.lang.ClassCastException: class g_qs_trait_none_h_def1.T$$anon$12t8tmc_197 cannot be cast to class g_qs_trait_none_h_def1.A (g_qs_trait_none_h_def1.T$$anon$12t8tmc_197 and g_qs_trait_none_h_def1.A are in unnamed module of loader 'app')	A
+qs_trait_none_i_def0	interp	crash	interp: exit 3 T$$anon$12t8tmc_187 has no member m	A
+qs_trait_none_i_def0	js	differs	node: exit 1 out.js:217	A
+qs_trait_none_i_def0	jvm	differs	java: exit 1 Exception in thread "main" java.lang.ClassCastException: class g_qs_trait_none_i_def0.T$$anon$12t8tmc_187 cannot be cast to class g_qs_trait_none_i_def0.A (g_qs_trait_none_i_def0.T$$anon$12t8tmc_187 and g_qs_trait_none_i_def0.A are in unnamed module of loader 'app')	A
+qs_trait_none_i_def1	interp	crash	interp: exit 3 T$$anon$12t8tmc_203 has no member m	A
+qs_trait_none_i_def1	js	differs	node: exit 1 out.js:217	A
+qs_trait_none_i_def1	jvm	differs	java: exit 1 Exception in thread "main" java.lang.ClassCastException: class g_qs_trait_none_i_def1.T$$anon$12t8tmc_203 cannot be cast to class g_qs_trait_none_i_def1.A (g_qs_trait_none_i_def1.T$$anon$12t8tmc_203 and g_qs_trait_none_i_def1.A are in unnamed module of loader 'app')	A
+qs_trait_plain_h_def0	interp	crash	interp: exit 3 T$$anon$12t8tmc_182 has no member m	A
+qs_trait_plain_h_def0	js	differs	node: exit 1 out.js:217	A
+qs_trait_plain_h_def0	jvm	differs	java: exit 1 Exception in thread "main" java.lang.ClassCastException: class g_qs_trait_plain_h_def0.T$$anon$12t8tmc_182 cannot be cast to class g_qs_trait_plain_h_def0.A (g_qs_trait_plain_h_def0.T$$anon$12t8tmc_182 and g_qs_trait_plain_h_def0.A are in unnamed module of loader 'app')	A
+qs_trait_plain_h_def1	interp	crash	interp: exit 3 T$$anon$12t8tmc_198 has no member m	A
+qs_trait_plain_h_def1	js	differs	node: exit 1 out.js:217	A
+qs_trait_plain_h_def1	jvm	differs	java: exit 1 Exception in thread "main" java.lang.ClassCastException: class g_qs_trait_plain_h_def1.T$$anon$12t8tmc_198 cannot be cast to class g_qs_trait_plain_h_def1.A (g_qs_trait_plain_h_def1.T$$anon$12t8tmc_198 and g_qs_trait_plain_h_def1.A are in unnamed module of loader 'app')	A
+qs_trait_plain_i_def0	interp	crash	interp: exit 3 T$$anon$12t8tmc_188 has no member m	A
+qs_trait_plain_i_def0	js	differs	node: exit 1 out.js:217	A
+qs_trait_plain_i_def0	jvm	differs	java: exit 1 Exception in thread "main" java.lang.ClassCastException: class g_qs_trait_plain_i_def0.T$$anon$12t8tmc_188 cannot be cast to class g_qs_trait_plain_i_def0.A (g_qs_trait_plain_i_def0.T$$anon$12t8tmc_188 and g_qs_trait_plain_i_def0.A are in unnamed module of loader 'app')	A
+qs_trait_plain_i_def1	interp	crash	interp: exit 3 T$$anon$12t8tmc_204 has no member m	A
+qs_trait_plain_i_def1	js	differs	node: exit 1 out.js:217	A
+qs_trait_plain_i_def1	jvm	differs	java: exit 1 Exception in thread "main" java.lang.ClassCastException: class g_qs_trait_plain_i_def1.T$$anon$12t8tmc_204 cannot be cast to class g_qs_trait_plain_i_def1.A (g_qs_trait_plain_i_def1.T$$anon$12t8tmc_204 and g_qs_trait_plain_i_def1.A are in unnamed module of loader 'app')	A
+qw_badrebind	interp	refused-other	not supported yet: C.super from a class nested in C	REFUSED\tclass Fail cannot be defined due to a conflict between its parents when
+qw_badrebind	js	refused-other	not supported yet: C.super from a class nested in C	REFUSED\tclass Fail cannot be defined due to a conflict between its parents when
+qw_badrebind	jvm	refused-other	not supported yet: C.super from a class nested in C	REFUSED\tclass Fail cannot be defined due to a conflict between its parents when
+qw_badrebindtwin	interp	accepted	X@41c67ea6	REFUSED\tclass Fail cannot be defined due to a conflict between its parents when
+qw_badrebindtwin	js	accepted	X@1	REFUSED\tclass Fail cannot be defined due to a conflict between its parents when
+qw_badrebindtwin	jvm	accepted	java: exit 1 Exception in thread "main" java.lang.ClassCastException: class X cannot be cast to class Y (X and Y are in unnamed module of loader 'app')	REFUSED\tclass Fail cannot be defined due to a conflict between its parents when
+qw_bothmodes	interp	refused	not supported yet: Both.super from a class nested in Both	Mid,A
+qw_bothmodes	js	refused	not supported yet: Both.super from a class nested in Both	Mid,A
+qw_bothmodes	jvm	refused	not supported yet: Both.super from a class nested in Both	Mid,Mid
+qw_bothmodes	jvm-members	refused	not supported yet: Both.super from a class nested in Both	bothmodes.Both\npublic abstract java.lang.String bothmodes$Both$$m$super$A();\ndescriptor: ()Ljava/lang/String;\npublic abstract java.lang.String bothmodes$Both$$super$m();\ndescriptor: ()Ljava/lang/String;\nbothmodes.C\npublic java.lang.String bothmodes$Both$$m$super$A();\ndescriptor: ()Ljava/lang/String;\npublic java.lang.String bothmodes$Both$$super$m();\ndescriptor: ()Ljava/lang/String;
+qw_collision	jvm-members	refused	not supported yet: B.super from a class nested in B	B\npublic java.lang.String super$m();\ndescriptor: ()Ljava/lang/String;\npublic java.lang.String super$m();\ndescriptor: ()Ljava/lang/String;
+qw_ctor	interp	refused	super can be used only in a class, object, or template	A
+qw_ctor	js	refused	super can be used only in a class, object, or template	A
+qw_ctor	jvm	refused	super can be used only in a class, object, or template	A
+qw_default	interp	refused	not supported yet: B.super from a class nested in B	A
+qw_default	js	refused	not supported yet: B.super from a class nested in B	A
+qw_default	jvm	refused	not supported yet: B.super from a class nested in B	A
+qw_default	jvm-members	refused	not supported yet: B.super from a class nested in B	B\npublic java.lang.String super$m$default$1();\ndescriptor: ()Ljava/lang/String;\npublic java.lang.String super$m(java.lang.String);\ndescriptor: (Ljava/lang/String;)Ljava/lang/String;
+qw_identity	interp	refused	not supported yet: B.super from a class nested in B	(int,str,g,c,bb,v,n)\nU
+qw_identity	js	refused	not supported yet: B.super from a class nested in B	(int,str,g,c,bb,v,n)\nU
+qw_identity	jvm	refused	not supported yet: B.super from a class nested in B	(int,str,g,c,bb,v,n)\nU
+qw_identity	jvm-members	refused	not supported yet: B.super from a class nested in B	identity.B\npublic java.lang.String super$m(int);\ndescriptor: (I)Ljava/lang/String;\npublic java.lang.String super$m(java.lang.String);\ndescriptor: (Ljava/lang/String;)Ljava/lang/String;\npublic java.lang.Object super$g(java.lang.Object);\ndescriptor: (Ljava/lang/Object;)Ljava/lang/Object;\npublic java.lang.String super$c(int, java.lang.String);\ndescriptor: (ILjava/lang/String;)Ljava/lang/String;\npublic java.lang.String super$b(scala.Function0);\ndescriptor: (Lscala/Function0;)Ljava/lang/String;\npublic java.lang.String super$v(scala.collection.immutable.Seq);\ndescriptor: (Lscala/collection/immutable/Seq;)Ljava/lang/String;\npublic java.lang.String super$named(int);\ndescriptor: (I)Ljava/lang/String;\nidentity.T\npublic abstract java.lang.String identity$T$$m$super$U(int);\ndescriptor: (I)Ljava/lang/String;\nidentity.C\npublic java.lang.String identity$T$$m$super$U(int);\ndescriptor: (I)Ljava/lang/String;
+qw_inheritedaccessor	interp	refused-other	not supported yet: B.super from a class nested in B	REFUSED\terror overriding method super$m in class B of type (): String;
+qw_inheritedaccessor	js	refused-other	not supported yet: B.super from a class nested in B	REFUSED\terror overriding method super$m in class B of type (): String;
+qw_inheritedaccessor	jvm	refused-other	not supported yet: B.super from a class nested in B	REFUSED\terror overriding method super$m in class B of type (): String;
+qw_inheritedmix	interp	refused-other	not supported yet: B.super from a class nested in B	REFUSED\tMember method U of mixin class B is missing a concrete super implementation in class B.
+qw_inheritedmix	js	refused-other	not supported yet: B.super from a class nested in B	REFUSED\tMember method U of mixin class B is missing a concrete super implementation in class B.
+qw_inheritedmix	jvm	refused-other	not supported yet: B.super from a class nested in B	REFUSED\tMember method U of mixin class B is missing a concrete super implementation in class B.
+qw_inlinetarget	interp	refused	not supported yet: B.super from a class nested in B	A
+qw_inlinetarget	js	refused	not supported yet: B.super from a class nested in B	A
+qw_inlinetarget	jvm	refused	not supported yet: B.super from a class nested in B	A
+qw_javacases	jvm	refused	not supported yet: JB.super from a class nested in JB	JavaBase\nJavaDefault\nS\nbridge
+qw_javacases	jvm-members	refused	not supported yet: JB.super from a class nested in JB	JB\npublic java.lang.String super$m();\ndescriptor: ()Ljava/lang/String;\nJD\npublic java.lang.String super$m();\ndescriptor: ()Ljava/lang/String;\nSB\npublic java.lang.String super$m();\ndescriptor: ()Ljava/lang/String;\nBG\npublic java.lang.String super$m(java.lang.String);\ndescriptor: (Ljava/lang/String;)Ljava/lang/String;
+qw_nestedlambda	interp	refused	not supported yet: B.super from a class nested in B	A
+qw_nestedlambda	js	refused	not supported yet: B.super from a class nested in B	A
+qw_nestedlambda	jvm	refused	not supported yet: B.super from a class nested in B	A
+qw_sites	interp	refused	not supported yet: B.super from a class nested in B	A,A,A,A,A,A,A,A\nA,A,A,A,A,A,A,A,A,A,A
+qw_sites	js	refused	not supported yet: B.super from a class nested in B	A,A,A,A,A,A,A,A\nA,A,A,A,A,A,A,A,A,A,A
+qw_sites	jvm	refused	not supported yet: B.super from a class nested in B	A,A,A,A,A,A,A,A\nA,A,A,A,A,A,A,A,A,A,A
+qw_stack	interp	refused	not supported yet: T.super from a class nested in T	V\nU\nMid\nMid\nMid\nA
+qw_stack	js	refused	not supported yet: T.super from a class nested in T	V\nU\nMid\nMid\nMid\nA
+qw_stack	jvm	refused	not supported yet: T.super from a class nested in T	V\nU\nMid\nMid\nMid\nMid
+qw_stack	jvm-members	refused	not supported yet: T.super from a class nested in T	stack.T\npublic abstract java.lang.String stack$T$$super$m();\ndescriptor: ()Ljava/lang/String;\nstack.Pin\npublic abstract java.lang.String stack$Pin$$m$super$A();\ndescriptor: ()Ljava/lang/String;\nstack.C1\npublic java.lang.String stack$T$$super$m();\ndescriptor: ()Ljava/lang/String;\nstack.C2\npublic java.lang.String stack$T$$super$m();\ndescriptor: ()Ljava/lang/String;\nstack.C3\npublic java.lang.String stack$T$$super$m();\ndescriptor: ()Ljava/lang/String;\nstack.C4\npublic java.lang.String stack$Pin$$m$super$A();\ndescriptor: ()Ljava/lang/String;
+qw_value	jvm-members	differs	V	V\npublic boolean super$equals(java.lang.Object);\ndescriptor: (Ljava/lang/Object;)Z
+qw_valuetarget	interp	refused-other	not supported yet: T.super from a class nested in T	REFUSED\terror overriding value m in class C of type String;
+qw_valuetarget	js	refused-other	not supported yet: T.super from a class nested in T	REFUSED\terror overriding value m in class C of type String;
+qw_valuetarget	jvm	refused-other	not supported yet: T.super from a class nested in T	REFUSED\terror overriding value m in class C of type String;
+qw_valuetarget2	interp	refused-other	not supported yet: T.super from a class nested in T	REFUSED\tparent trait T has a super call which binds to the value V.m. Super calls can only target methods.
+qw_valuetarget2	js	refused-other	not supported yet: T.super from a class nested in T	REFUSED\tparent trait T has a super call which binds to the value V.m. Super calls can only target methods.
+qw_valuetarget2	jvm	refused-other	not supported yet: T.super from a class nested in T	REFUSED\tparent trait T has a super call which binds to the value V.m. Super calls can only target methods.

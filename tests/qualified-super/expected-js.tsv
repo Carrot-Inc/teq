@@ -15,3 +15,124 @@ qs_trait_A_b_generic	A
 qs_trait_A_b_overload	A
 qs_pin_A_a_def0	A
 qs_pin_A_b_def0	A
+qs_class_plain_h_def0	A
+qs_class_plain_h_def1	A
+qs_class_plain_i_def0	A
+qs_class_plain_i_def1	A
+qs_class_plain_j_def0	A
+qs_class_plain_j_def1	A
+qs_class_plain_k_def0	A
+qs_class_plain_k_def1	A
+qs_class_none_h_def0	A
+qs_class_none_h_def1	A
+qs_class_none_i_def0	A
+qs_class_none_i_def1	A
+qs_class_none_j_def0	A
+qs_class_none_j_def1	A
+qs_class_none_k_def0	A
+qs_class_none_k_def1	A
+qs_trait_plain_h_def0	A
+qs_trait_plain_h_def1	A
+qs_trait_plain_i_def0	A
+qs_trait_plain_i_def1	A
+qs_trait_plain_j_def0	A
+qs_trait_plain_j_def1	A
+qs_trait_plain_k_def0	A
+qs_trait_plain_k_def1	A
+qs_trait_none_h_def0	A
+qs_trait_none_h_def1	A
+qs_trait_none_i_def0	A
+qs_trait_none_i_def1	A
+qs_trait_none_j_def0	A
+qs_trait_none_j_def1	A
+qs_trait_none_k_def0	A
+qs_trait_none_k_def1	A
+qs_object_plain_h_def0	A
+qs_object_plain_h_def1	A
+qs_object_plain_i_def0	A
+qs_object_plain_i_def1	A
+qs_object_plain_j_def0	A
+qs_object_plain_j_def1	A
+qs_object_plain_k_def0	A
+qs_object_plain_k_def1	A
+qs_object_none_h_def0	A
+qs_object_none_h_def1	A
+qs_object_none_i_def0	A
+qs_object_none_i_def1	A
+qs_object_none_j_def0	A
+qs_object_none_j_def1	A
+qs_object_none_k_def0	A
+qs_object_none_k_def1	A
+qs_class_plain_l_def0	A
+qs_class_plain_l_def1	A
+qs_class_plain_m_def0	A
+qs_class_plain_m_def1	A
+qs_class_plain_n_def0	A
+qs_class_plain_n_def1	A
+qs_class_plain_o_def0	A
+qs_class_plain_o_def1	A
+qs_class_none_l_def0	A
+qs_class_none_l_def1	A
+qs_class_none_m_def0	A
+qs_class_none_m_def1	A
+qs_class_none_n_def0	A
+qs_class_none_n_def1	A
+qs_class_none_o_def0	A
+qs_class_none_o_def1	A
+qs_trait_plain_l_def0	A
+qs_trait_plain_l_def1	A
+qs_trait_plain_m_def0	A
+qs_trait_plain_m_def1	A
+qs_trait_plain_n_def0	A
+qs_trait_plain_n_def1	A
+qs_trait_plain_o_def0	A
+qs_trait_plain_o_def1	A
+qs_trait_none_l_def0	A
+qs_trait_none_l_def1	A
+qs_trait_none_m_def0	A
+qs_trait_none_m_def1	A
+qs_trait_none_n_def0	A
+qs_trait_none_n_def1	A
+qs_trait_none_o_def0	A
+qs_trait_none_o_def1	A
+qs_object_plain_l_def0	A
+qs_object_plain_l_def1	A
+qs_object_plain_m_def0	A
+qs_object_plain_m_def1	A
+qs_object_plain_n_def0	A
+qs_object_plain_n_def1	A
+qs_object_plain_o_def0	A
+qs_object_plain_o_def1	A
+qs_object_none_l_def0	A
+qs_object_none_l_def1	A
+qs_object_none_m_def0	A
+qs_object_none_m_def1	A
+qs_object_none_n_def0	A
+qs_object_none_n_def1	A
+qs_object_none_o_def0	A
+qs_object_none_o_def1	A
+qw_abstract	REFUSED	method m in class A is accessed from super. It may not be abstract unless it is overridden by a member declared `abstract' and `override'
+qw_badrebind	REFUSED	class Fail cannot be defined due to a conflict between its parents when
+qw_badrebindtwin	REFUSED	class Fail cannot be defined due to a conflict between its parents when
+qw_bothmodes	Mid,A
+qw_collision	PIN	Exception in thread "main" org.scalajs.linker.frontend.optimizer.OptimizerCore$OptimizeException: The Scala.js optimizer crashed while optimizing B.super$m;Ljava.lang.String: java.lang.AssertionError: could not find method ClassName<A>.MethodName<m;Ljava.lang.String>
+qw_collisiontwin	A
+qw_ctor	A
+qw_default	A
+qw_functionvalues	A\nA\nA\nA\nA\nA
+qw_identity	(int,str,g,c,bb,v,n)\nU
+qw_inheritedaccessor	REFUSED	error overriding method super$m in class B of type (): String;
+qw_inheritedmix	REFUSED	Member method U of mixin class B is missing a concrete super implementation in class B.
+qw_inline	REFUSED	Super call not allowed in inlineable method f
+qw_inlinelocal	PIN	Referring to non-existent method ilocal.Lib$I$B$1.super$m()java.lang.String
+qw_inlinetarget	A
+qw_javacases	PIN	Referring to non-existent method JavaDefault.m()java.lang.String
+qw_lambdas	A\nA
+qw_manualpin	A
+qw_nestedlambda	A
+qw_plainonly	A\nA\nA\nA\nA\nA\nA\nA
+qw_sites	A,A,A,A,A,A,A,A\nA,A,A,A,A,A,A,A,A,A,A
+qw_stack	V\nU\nMid\nMid\nMid\nA
+qw_value	false
+qw_valuetarget	REFUSED	error overriding value m in class C of type String;
+qw_valuetarget2	REFUSED	parent trait T has a super call which binds to the value V.m. Super calls can only target methods.

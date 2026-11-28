@@ -77,6 +77,10 @@ modules.2/2 642
 modules.2/2@16 471
 right-assoc 110
 right-assoc-readers 1
+# estimated: qualified-super on eight CPUs and on sixteen, from its 32 s on the agent host's sixteen (run.py --check 6 s,
+# products.py --check 26 s) by the kinds' ratios to that host, 1.63 and 0.79
+qualified-super 52
+qualified-super@16 25
 # estimated: default-getters on eight CPUs and on sixteen, from its 49 s at --jobs 6 and 27 s at --jobs 16 on the agent host
 default-getters 56
 tasty-exec 74

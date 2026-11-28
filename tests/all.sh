@@ -114,6 +114,7 @@ suite init-view     ./tests/init-view.sh
 suite modules       ./tests/modules.sh
 suite right-assoc   ./tests/right-assoc/run.sh
 suite right-assoc-readers python3 tests/right-assoc/readers.py
+suite qualified-super ./tests/qualified-super/check.sh
 suite tasty-exec    ./teq interp tests/tasty-exec.scala
 suite analysis-bytes ./tests/analysis-bytes.sh
 suite classfile     ./teq interp tests/classfile.scala

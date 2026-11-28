@@ -3,7 +3,9 @@
 (default ~/.cache/coursier/v1). Compile the generated packages together, dropping
 refusals batch by batch. Run each remaining @main on the JVM. A refusal records
 the first line of the scalac message. A JVM verification failure records VERIFY and
-the first VerifyError line. JOBS controls concurrent mains (default 8)."""
+the first VerifyError line. Compile the witnesses individually with scala-cli and
+record their stdout, refusal or runtime failure, and selected javap listings.
+JOBS controls concurrent mains (default 8)."""
 from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
@@ -12,6 +14,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+from witnesses import MEMBER_CLASSES, field, member_listing, witness_names
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE.parents[1] / "out" / "qualified-super"
@@ -74,6 +78,34 @@ def compile_rows(work, names):
     return remaining, refused
 
 
+def record_witness(row):
+    classes = row / "classes"
+    java = sorted(row.glob("*.java"))
+    result = subprocess.run(["scala-cli", "compile", "-S", "3.8.4", "--server=false", "-color:never",
+                             "-d", classes, "Main.scala", *java],
+                            cwd=row, capture_output=True, text=True, timeout=360)
+    if result.returncode:
+        log = result.stderr + result.stdout
+        messages = refusal_messages(log)
+        if row.name not in messages:
+            raise ValueError(f"{row.name}: unexpected scalac failure\n{log}")
+        return "REFUSED\t" + field(messages[row.name]), None
+    cp = f"{classes}{os.pathsep}{LIB}"
+    if java:
+        subprocess.run(["javac", "-classpath", cp, "-d", classes, *java], check=True, timeout=120)
+    listing = member_listing(classes, row.name) if row.name in MEMBER_CLASSES else None
+    main, = classes.rglob("run.class")
+    main_class = ".".join(main.relative_to(classes).with_suffix("").parts)
+    result = subprocess.run(["java", "-XX:-UsePerfData", "-cp", cp, main_class],
+                            capture_output=True, text=True, timeout=120)
+    if result.returncode:
+        error = re.search(r'(?m)^Exception in thread "[^"]+" .*$', result.stderr)
+        if not error:
+            raise ValueError(f"{row.name}: unexpected JVM failure\n{result.stderr}")
+        return "PIN\t" + field(error[0]), listing
+    return field(result.stdout.removesuffix("\n")), listing
+
+
 def main():
     for jar in JARS:
         if not jar.is_file():
@@ -83,7 +115,8 @@ def main():
         work = Path(tmp)
         subprocess.run([sys.executable, HERE / "gen.py", work], check=True, stdout=subprocess.DEVNULL, timeout=60)
         names = (work / "rows.txt").read_text().splitlines()
-        remaining, refused = compile_rows(work, names)
+        witnesses = witness_names()
+        remaining, refused = compile_rows(work, [n for n in names if n not in witnesses])
 
         def run(name):
             result = subprocess.run(
@@ -99,11 +132,24 @@ def main():
 
         with ThreadPoolExecutor(int(os.environ.get("JOBS", "8"))) as pool:
             answers = dict(zip(remaining, pool.map(run, remaining)))
-    answers.update((n, f"REFUSED\t{message}") for n, message in refused.items())
+        answers.update((n, f"REFUSED\t{message}") for n, message in refused.items())
+        listings = {}
+        for name in witnesses:
+            answer, listing = record_witness(work / "rows" / name)
+            answers[name] = answer
+            if listing is not None:
+                listings[name] = field(listing)
+    if listings.keys() != MEMBER_CLASSES.keys():
+        raise ValueError("missing scalac JVM member listings")
+    member_lines = ["# program\tscalac 3.8.4 JVM members (javap -p -s)"]
+    member_lines.extend(f"{n}\t{listing}" for n, listing in listings.items())
+    (HERE / "expected-members.tsv").write_text("\n".join(member_lines) + "\n")
     lines = ["# program\tscalac 3.8.4 observable (output, REFUSED or VERIFY with the first error line)"]
     lines.extend(f"{n}\t{answers[n]}" for n in names)
     (HERE / "expected.tsv").write_text("\n".join(lines) + "\n")
-    print(f"record.py: {len(names)} programs, scalac compiles {len(remaining)} and refuses {len(refused)}; expected.tsv written")
+    refusals = sum(answer.startswith("REFUSED\t") for answer in answers.values())
+    print(f"record.py: {len(names)} programs, scalac compiles {len(names) - refusals} and refuses {refusals}; "
+          f"expected.tsv and {len(listings)} listings in expected-members.tsv written")
 
 
 if __name__ == "__main__":
