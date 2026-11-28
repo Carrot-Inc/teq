@@ -1189,6 +1189,15 @@ impl ClassDef {
 mod tests {
     use super::*;
 
+    /// The layout of a node on a 64-bit target: a payload that would widen it goes behind a pointer.
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn a_node_keeps_its_size() {
+        let sizes = (std::mem::size_of::<ErasedType>(), std::mem::size_of::<Kind>(), std::mem::size_of::<Node>());
+        println!("ErasedType {} Kind {} Node {}", sizes.0, sizes.1, sizes.2);
+        assert_eq!(sizes, (24, 64, 104));
+    }
+
     /// A method takes each role once: `repeated_role` finds a second instance, key, local or hidden value, and
     /// passes parameters that differ in their roles or are named by their position alone.
     #[test]
