@@ -809,11 +809,14 @@ impl<'a> Gen<'a> {
     fn has_lines(&self, roots: &[LirId]) -> bool {
         let prog = self.cx.input.prog;
         let mut stack: Vec<LirId> = roots.to_vec();
+        let mut buf = Vec::new();
         while let Some(id) = stack.pop() {
             if self.lir.node(id).of.is_some_and(|place| prog.span_of(place.expr).is_some_and(|(file, _)| file == self.line_file)) {
                 return true;
             }
-            stack.extend(self.lir.operands(id));
+            buf.clear();
+            self.lir.operands_into(id, &mut buf);
+            stack.extend(buf.iter().copied());
         }
         false
     }
@@ -829,12 +832,13 @@ impl<'a> Gen<'a> {
     fn super_calls(&self, roots: &[LirId], lines: bool) -> SuperCalls {
         let mut calls = Vec::new();
         let mut stack: Vec<(LirId, bool)> = roots.iter().rev().map(|&r| (r, false)).collect();
+        let mut buf = Vec::new();
         while let Some((id, operands_done)) = stack.pop() {
             if !operands_done {
                 stack.push((id, true));
-                let mut ops = self.lir.operands(id);
-                ops.reverse();
-                stack.extend(ops.into_iter().map(|o| (o, false)));
+                buf.clear();
+                self.lir.operands_into(id, &mut buf);
+                stack.extend(buf.iter().rev().map(|&o| (o, false)));
                 continue;
             }
             let (method, at) = match &self.lir.node(id).kind {
@@ -910,6 +914,7 @@ impl<'a> Gen<'a> {
     fn ask_lifted(&mut self, root: LirId) {
         self.hold_lines(root);
         let mut stack = vec![(root, false)];
+        let mut buf = Vec::new();
         while let Some((id, operands_asked)) = stack.pop() {
             let kind = &self.lir.node(id).kind;
             if operands_asked {
@@ -936,9 +941,9 @@ impl<'a> Gen<'a> {
                 }
                 _ => {}
             }
-            let mut held = self.lir.operands(id);
-            held.reverse();
-            stack.extend(held.into_iter().map(|o| (o, false)));
+            buf.clear();
+            self.lir.operands_into(id, &mut buf);
+            stack.extend(buf.iter().rev().map(|&o| (o, false)));
         }
     }
 
@@ -949,6 +954,7 @@ impl<'a> Gen<'a> {
     fn hold_lines(&mut self, root: LirId) {
         let prog = self.cx.input.prog;
         let mut stack: Vec<(LirId, Option<(TExprId, crate::source::Span)>)> = vec![(root, None)];
+        let mut buf = Vec::new();
         while let Some((id, around)) = stack.pop() {
             let mut inner = around;
             if let Some(place) = self.lir.node(id).of {
@@ -969,9 +975,9 @@ impl<'a> Gen<'a> {
                     }
                 }
             }
-            let mut ops = self.lir.operands(id);
-            ops.reverse();
-            stack.extend(ops.into_iter().map(|o| (o, inner)));
+            buf.clear();
+            self.lir.operands_into(id, &mut buf);
+            stack.extend(buf.iter().rev().map(|&o| (o, inner)));
         }
     }
 

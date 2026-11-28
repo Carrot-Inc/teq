@@ -685,11 +685,9 @@ impl Body {
         self.lists()[list.start as usize..(list.start + list.len) as usize].iter().copied()
     }
 
-    /// The nodes the node evaluates, in the order it lists them: a closure's captures (its body is
-    /// another method's). Every kind is listed, so that
-    /// a new one is classified.
-    pub fn operands(&self, id: LirId) -> Vec<LirId> {
-        let mut out = Vec::new();
+    /// Appends the nodes the node evaluates in the order it lists them. A closure evaluates its
+    /// captures (its body is another method's). Every kind is listed so that a new one is classified.
+    pub fn operands_into(&self, id: LirId, out: &mut Vec<LirId>) {
         match &self.node(id).kind {
             Kind::Int(_) | Kind::Long(_) | Kind::Float(_) | Kind::Double(_) | Kind::Bool(_) | Kind::Char(_) | Kind::Str(_) | Kind::Unit | Kind::Null => {}
             Kind::Local(_) | Kind::Param(_) | Kind::Module(_) | Kind::ClassOf(_) | Kind::This | Kind::StaticField { .. } => {}
@@ -745,6 +743,11 @@ impl Body {
                 out.push(*default);
             }
         }
+    }
+
+    pub fn operands(&self, id: LirId) -> Vec<LirId> {
+        let mut out = Vec::new();
+        self.operands_into(id, &mut out);
         out
     }
 
