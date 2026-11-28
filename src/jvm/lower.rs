@@ -108,7 +108,7 @@ impl<'a> Gen<'a> {
             receiver.map_or(span.start, |recv| cx.point_after(file, span, prog.span_of(recv)))
         });
         let call = matches!(prog.expr(e), TExpr::CallMethod(..) | TExpr::CallStatic(..) | TExpr::CallClosure(..) | TExpr::New(..) | TExpr::NewVia(..));
-        self.lir.node_mut(id).of = Some(Place { expr: e, point, call });
+        self.lir.node_mut(id).of = Some(Place { expr: e, point, call, held: false });
     }
 
     /// A form the target has no translation of, refused where it stands (`Kind::Refused`): no

@@ -241,12 +241,15 @@ pub struct Node {
 /// Where a node's code takes its line: the expression of the typed IR the node is the whole of,
 /// whose span is the position; the point of the span whose line it is (a selection's member's
 /// name, past its receiver); and whether it is a call, whose arguments the typer made, which
-/// have the call's span, take the line of its end.
+/// have the call's span, take the line of its end. `held`: the node is such an argument of the
+/// call around it: its `point` is that call's end, and nothing under it takes a line of its own
+/// (`Gen::hold_lines`).
 #[derive(Clone, Copy)]
 pub struct Place {
     pub expr: TExprId,
     pub point: u32,
     pub call: bool,
+    pub held: bool,
 }
 
 #[derive(Clone)]

@@ -916,6 +916,7 @@ impl<'a> Gen<'a> {
     /// once the call's operands are visited, after the bodies its arguments ask for; asked while a round of lifted
     /// bodies is lowered, it is queued for the next round.
     fn ask_lifted(&mut self, root: LirId) {
+        self.hold_lines(root);
         let mut stack = vec![(root, false)];
         while let Some((id, operands_asked)) = stack.pop() {
             let kind = &self.lir.node(id).kind;
@@ -946,6 +947,39 @@ impl<'a> Gen<'a> {
             let mut held = self.lir.operands(id);
             held.reverse();
             stack.extend(held.into_iter().map(|o| (o, false)));
+        }
+    }
+
+    /// The lines of a held tree that its calls decide (`lir::Place::held`): under the nearest node placed as a call in
+    /// the class's file, a node placed in that file with the call's span and of another expression is an argument the
+    /// typer made (a given, a default): it takes the line of the call's end, where scalac places it, and nothing under
+    /// it takes another; a call of another span decides for the nodes under it.
+    fn hold_lines(&mut self, root: LirId) {
+        let prog = self.cx.input.prog;
+        let mut stack: Vec<(LirId, Option<(TExprId, crate::source::Span)>)> = vec![(root, None)];
+        while let Some((id, around)) = stack.pop() {
+            let mut inner = around;
+            if let Some(place) = self.lir.node(id).of {
+                if place.held {
+                    continue;
+                }
+                if let Some((file, span)) = prog.span_of(place.expr) {
+                    if file == self.line_file {
+                        if let Some((call, call_span)) = around {
+                            if call != place.expr && call_span == span {
+                                self.lir.node_mut(id).of = Some(crate::lir::Place { point: span.end.saturating_sub(1), held: true, ..place });
+                                continue;
+                            }
+                        }
+                        if place.call {
+                            inner = Some((place.expr, span));
+                        }
+                    }
+                }
+            }
+            let mut ops = self.lir.operands(id);
+            ops.reverse();
+            stack.extend(ops.into_iter().map(|o| (o, inner)));
         }
     }
 

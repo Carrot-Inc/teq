@@ -49,7 +49,7 @@ impl<'a> Gen<'a> {
     fn write_at(&mut self, id: LirId, falls: bool) {
         let node = self.lir.node(id);
         let (kind, ty, of) = (node.kind.clone(), node.ty.clone(), node.of);
-        let lines = (self.line_floor, self.line_hold);
+        let hold = self.line_hold;
         if let Some(place) = of {
             self.mark_line(place);
         }
@@ -449,7 +449,7 @@ impl<'a> Gen<'a> {
             Kind::Refused(refusal) => self.unsupported(&refusal.message()),
         }
         self.code.in_node -= 1;
-        (self.line_floor, self.line_hold) = lines;
+        self.line_hold = hold;
     }
 
     /// A loop as dotty's `genWhileDo` writes it (BCodeBodyBuilder.scala 677-705): the head; with no
@@ -482,7 +482,7 @@ impl<'a> Gen<'a> {
     /// where a condition holds keeps its own form.
     fn write_to(&mut self, id: LirId, dest: Label) {
         debug_assert!(*self.lir.ty(id) == ErasedType::V, "a value written to a jump");
-        let lines = (self.line_floor, self.line_hold);
+        let hold = self.line_hold;
         if let Some(place) = self.lir.node(id).of {
             self.mark_line(place);
         }
@@ -523,7 +523,7 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        (self.line_floor, self.line_hold) = lines;
+        self.line_hold = hold;
     }
 
     /// Whether the code of the node goes on after it, as dotty's `genLoadTo` tells by the destination a tree leaves
@@ -827,7 +827,7 @@ impl<'a> Gen<'a> {
             // The statements, then the result's jump, as scalac's `genCond` pushes the decision
             // into a block.
             Kind::Block { stmts, result } => {
-                let lines = (self.line_floor, self.line_hold);
+                let hold = self.line_hold;
                 if let Some(place) = self.lir.node(id).of {
                     self.mark_line(place);
                 }
@@ -838,7 +838,7 @@ impl<'a> Gen<'a> {
                 }
                 self.write_cond(result, target, jump_if);
                 self.code.locals_release(mark);
-                (self.line_floor, self.line_hold) = lines;
+                self.line_hold = hold;
             }
             // The loop's jump (`&&`'s or `||`'s right operand under a `return`) leaves: no branch
             // follows it, and the dead code after it is verified against the operands under it.

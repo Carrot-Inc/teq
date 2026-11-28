@@ -11,7 +11,7 @@ use super::{Cx, Unit};
 use crate::ast::{mods, ListRef};
 use crate::classfile::ACC_STATIC;
 use crate::intern::{FxMap, Name};
-use crate::source::{FileId, Span};
+use crate::source::FileId;
 use crate::symbols::*;
 use crate::tir::*;
 use crate::typer::loader::javaclass::JMember;
@@ -674,9 +674,7 @@ pub struct Gen<'a> {
     pub abstract_class: bool,
     /// The source file of the class being written, whose lines the line table counts.
     pub line_file: FileId,
-    /// The call whose arguments are being written, with its last offset (`mark_line`).
-    pub line_floor: Option<(TExprId, FileId, Span, u32)>,
-    /// Inside an argument the typer made, whose line holds through it (`mark_line`).
+    /// Inside an argument the typer made, whose line holds through it (`Place::held`).
     pub line_hold: bool,
     pub pending: Vec<Pending>,
     /// The default getters' bodies a hold asks for while a round of the class's lifted bodies is lowered
@@ -816,7 +814,6 @@ impl<'a> Gen<'a> {
             is_interface: false,
             abstract_class: false,
             line_file: FileId(u32::MAX),
-            line_floor: None,
             line_hold: false,
             pending: Vec::new(),
             pending_next: Vec::new(),
@@ -3611,8 +3608,8 @@ impl<'a> Gen<'a> {
     /// Records the source line of a node's place for the code that follows, as scalac does: the
     /// line of its point (`Place`), so that a chain of calls over several lines attributes each
     /// call to its own line. An expression of another file (an inlined body) keeps the line of
-    /// the call around it; an argument the typer made (a given, a default) spans the call it is
-    /// in and takes the line of the call's end, where scalac places it, through its whole tree: a
+    /// the call around it; an argument the typer made (a given, a default) takes the line of the
+    /// call's end, which the node holds (`Place::held`, `Gen::hold_lines`), through its whole tree: a
     /// given's copy keeps the spans of the site that searched first, which a worker may have
     /// made at another line.
     pub(super) fn mark_line(&mut self, place: Place) {
@@ -3620,23 +3617,12 @@ impl<'a> Gen<'a> {
         if self.line_hold {
             return;
         }
-        let Some((file, span)) = cx.input.prog.span_of(place.expr) else { return };
+        let Some((file, _)) = cx.input.prog.span_of(place.expr) else { return };
         if file != self.line_file {
             return;
         }
-        let point = match self.line_floor {
-            Some((call, f, s, end)) if call != place.expr && (f, s) == (file, span) => {
-                self.line_hold = true;
-                end
-            }
-            _ => {
-                if place.call {
-                    self.line_floor = Some((place.expr, file, span, span.end.saturating_sub(1)));
-                }
-                place.point
-            }
-        };
-        self.code.line(cx.line_of(file, point));
+        self.line_hold = place.held;
+        self.code.line(cx.line_of(file, place.point));
     }
 
     /// `try`/`catch`/`finally` through the exception table, as dotty's `genLoadTry` lays it out
