@@ -292,12 +292,10 @@ impl<'a> Gen<'a> {
                     None => self.invoke_mref(&method),
                 }
             }
-            Kind::SuperCall { method, receiver, args, order, place } => {
+            Kind::SuperCall { method, receiver, args, order, .. } => {
                 self.write(receiver);
                 self.write_arguments(args, order.as_deref());
-                self.super_call_at = place.filter(|&(file, _)| file == self.line_file).map(|(_, end)| end);
                 self.invoke_mref(&method);
-                self.super_call_at = None;
             }
             Kind::ArrayOf { items } => {
                 self.iconst(items.len as i32);

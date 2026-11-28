@@ -341,7 +341,7 @@ pub enum Kind {
     /// `super.m(..)`: the method `method` names, the named class's own, called on the receiver
     /// with no dispatch on its class; receiver and arguments as `Call` has them. `place` is the
     /// end of the call in its source file, which orders the interfaces a class file lists for
-    /// the super calls of its code (`Gen::super_call_place`); a NIR writer reads none.
+    /// the super calls of its code (the class's interface step, `super_call_key`); a NIR writer reads none.
     SuperCall { method: Rc<MethodRef>, receiver: LirId, args: List, order: Option<Rc<[usize]>>, place: Option<(FileId, u32)> },
     /// A value class's underlying value selected on a value of the class: `value`, which the
     /// lowering brought to the underlying type.
@@ -1140,8 +1140,8 @@ pub struct ClassDef {
     /// The interfaces its parents give it, in their order: the traits it extends that no other
     /// of them brings, then those its kind gives it (a case class's `Product`, a mirror's). A
     /// class file names more: a module class's `java/io/Serializable`, and each interface a
-    /// `super` call of the class's code goes to (`Gen::super_targets`), which the class-file
-    /// writer adds once the code is written.
+    /// `super` call of the class's code goes to, which the class's walk adds from its held trees' calls before it
+    /// writes any (`Gen::write_entries`).
     pub interfaces: Vec<Rc<str>>,
     /// The name of the source file it is written from, where it has one.
     pub source: Option<Rc<str>>,

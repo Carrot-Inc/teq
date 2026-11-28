@@ -164,18 +164,25 @@ pub(super) struct HeldMethod {
     first_line: Option<u32>,
     /// Where in its class the method was held: what its write reads of the class being made (`Gen::write_held`).
     under: HeldUnder,
+    super_calls: SuperCalls,
     m: MethodCx,
     lir: crate::lir::MethodStart,
     code: HeldCode,
 }
 
 /// What a method's write reads of its class's maker, as the maker stood where the method was held: the member named in a
-/// refusal (`Gen::context`) and the order its super calls' targets take among the class's (`Gen::super_call_place`):
-/// constructor code, a lifted body's text, whether it has a line of its own.
+/// refusal (`Gen::context`).
 struct HeldUnder {
     context: String,
+}
+
+/// The interface targets of a held method's `invokespecial`s and what orders them among the class's
+/// (`super_call_key`): its calls in the order they are written, each with its call's end; the body's text where it is a
+/// lifted body (set where the class's rounds hold it); whether it is constructor code; whether it has a line of its own.
+struct SuperCalls {
+    calls: Vec<(Rc<str>, u32)>,
+    lifted: Option<(u32, u32)>,
     ctor_code: bool,
-    lifted_body: Option<(u32, u32)>,
     lines: bool,
 }
 
@@ -192,12 +199,12 @@ pub(super) enum Entry {
     /// A method with the code its maker lowered (`Gen::hold_method`): the next of the class's held methods
     /// (`Gen::held_methods`), which stand in their entries' order.
     Held,
-    /// The class file's interfaces, after every method of the class's code (`Gen::write_interfaces`).
+    /// The class file's interfaces, after every method of the class's code (`Gen::interfaces_of`).
     Interfaces(InterfaceStep),
 }
 
-/// What a class file's interfaces are made of beside the targets of the super calls its code writes
-/// (`Gen::write_interfaces`), decided when the class's maker ends: its direct traits in their order, each with whether
+/// What a class file's interfaces are made of beside the targets of the super calls its held trees hold
+/// (`Gen::interfaces_of`), decided when the class's maker ends: its direct traits in their order, each with whether
 /// another of them brings it; its parents' other interfaces; those a module class lists last; the Java interfaces its
 /// super accessors call, in their accessors' order; its bases, among which every target is.
 pub(super) struct InterfaceStep {
@@ -461,9 +468,8 @@ impl<'a> Gen<'a> {
     /// whose code could not be written refuses its class (false): an internal error, at which the class's walk stops.
     /// The code of a method the class holds already (`Gen::enter_plan`'s repeat) is dropped, after it was written
     /// for all that writing it leaves in the class: the constants and the bootstrap methods its
-    /// instructions name, the interfaces its `super` calls go to
-    /// (`super_targets`), the function arities it names and what it reports. It asks for no
-    /// second writing of the class with wide jumps (`overflow`).
+    /// instructions name, the function arities it names and what it reports. The class's interface step also counts
+    /// its held super calls. It asks for no second writing of the class with wide jumps (`overflow`).
     fn end_method(&mut self, m: MethodDef, desc: &str, entered: bool, attributes: Option<Rc<JarAttributes>>) -> bool {
         self.method_open = false;
         let at = self.m.at;
@@ -512,7 +518,7 @@ impl<'a> Gen<'a> {
             held.sort_by_key(|(h, _)| h.method.place().map_or((1, 0), |place| (0, place)));
             let held = self.refuse_second_methods(held);
             for (mut h, span) in held {
-                h.under.lifted_body = Some(span);
+                h.super_calls.lifted = Some(span);
                 self.enter_plan(*h);
             }
         }
@@ -737,11 +743,10 @@ impl<'a> Gen<'a> {
         for r in self.held_roots(&code) {
             self.ask_lifted(r);
         }
-        let lines = {
-            let roots = self.held_roots(&code);
-            self.has_lines(&roots)
-        };
-        Box::new(self.hold_method(if lazy { "local lazy val's method" } else { "lifted method" }, code, lines))
+        let roots = self.held_roots(&code);
+        let lines = self.has_lines(&roots);
+        let super_calls = self.super_calls(&roots, lines);
+        Box::new(self.hold_method(if lazy { "local lazy val's method" } else { "lifted method" }, code, super_calls))
     }
 
     /// The held method entering the class's plan, unless the class holds one of its name and signature already: the
@@ -759,14 +764,14 @@ impl<'a> Gen<'a> {
     /// The planned method held with the code its maker has just lowered: the method, its context and its tree's
     /// place in the class's store, to be written later by `Gen::write_held`. The locals its lowering declared end
     /// with the lowering: the writer stores its own.
-    fn hold_method(&mut self, what: &'static str, code: HeldCode, lines: bool) -> HeldMethod {
+    fn hold_method(&mut self, what: &'static str, code: HeldCode, super_calls: SuperCalls) -> HeldMethod {
         let method = self.planned.take().expect("a planned method is held");
         let attributes = self.planned_attributes.take();
         let desc = method_desc(&method.param_types(), method.ret());
         let (m, lir) = (std::mem::take(&mut self.m), self.lir.start);
         self.lower_declared.clear();
-        let under = HeldUnder { context: self.context.clone(), ctor_code: self.ctor_code, lifted_body: self.lifted_body, lines };
-        HeldMethod { method, desc, attributes, entered: false, what, first_line: None, under, m, lir, code }
+        let under = HeldUnder { context: self.context.clone() };
+        HeldMethod { method, desc, attributes, entered: false, what, first_line: None, under, super_calls, m, lir, code }
     }
 
     /// A member of the class whose body is the tree `compose` lowers, held where a writer would have begun it: its
@@ -821,6 +826,39 @@ impl<'a> Gen<'a> {
         false
     }
 
+    /// The interface an `invokespecial` of `m` names among the class's (`initJClass`'s `superCallTargets`): none for any
+    /// other call, nor for the class's own method.
+    fn super_call_target<'m>(&self, m: &'m MethodRef) -> Option<&'m Rc<str>> {
+        (m.owner_is_interface && matches!(m.kind, Invoke::Special) && *m.owner != *self.this_name).then_some(&m.owner)
+    }
+
+    /// The interface targets of the calls under `roots` in the order the walk writes them (a node after its operands),
+    /// each with its call's end in the class's file (`SuperCall`'s place; `u32::MAX` for a call without one).
+    fn super_calls(&self, roots: &[LirId], lines: bool) -> SuperCalls {
+        let mut calls = Vec::new();
+        let mut stack: Vec<(LirId, bool)> = roots.iter().rev().map(|&r| (r, false)).collect();
+        while let Some((id, operands_done)) = stack.pop() {
+            if !operands_done {
+                stack.push((id, true));
+                let mut ops = self.lir.operands(id);
+                ops.reverse();
+                stack.extend(ops.into_iter().map(|o| (o, false)));
+                continue;
+            }
+            let (method, at) = match &self.lir.node(id).kind {
+                Kind::SuperCall { method, place, .. } => (method, place.as_ref().filter(|(file, _)| *file == self.line_file).map_or(u32::MAX, |(_, end)| *end)),
+                Kind::Call { method, at: None, .. } | Kind::StaticCall { method, .. } | Kind::LiftedCall { method, .. } | Kind::Helper { method, .. } => (method, u32::MAX),
+                Kind::New { ctor, .. } | Kind::InitCall { ctor, .. } => (ctor, u32::MAX),
+                Kind::Compare { how: Comparing::Ordering(m) | Comparing::Equality(m), .. } => (m, u32::MAX),
+                _ => continue,
+            };
+            if let Some(t) = self.super_call_target(method) {
+                calls.push((t.clone(), at));
+            }
+        }
+        SuperCalls { calls, lifted: None, ctor_code: self.ctor_code, lines }
+    }
+
     /// A def's member in the context `held_context` made: its body lowered (`Gen::lower_method_body`), asked as
     /// `hold_tree` asks and held, its code starting at `first_line` where the class's walk writes it.
     pub(super) fn hold_def(&mut self, what: &'static str, first_line: u32, (sym, params, body): (SymId, &[SymId], TExprId)) {
@@ -828,7 +866,8 @@ impl<'a> Gen<'a> {
         for r in self.held_roots(&code) {
             self.ask_lifted(r);
         }
-        let mut held = self.hold_method(what, code, true);
+        let super_calls = self.super_calls(&self.held_roots(&code), true);
+        let mut held = self.hold_method(what, code, super_calls);
         held.first_line = Some(first_line);
         self.enter_plan(held);
     }
@@ -839,7 +878,8 @@ impl<'a> Gen<'a> {
         let tree = self.lowering(compose);
         self.ask_lifted(tree);
         let lines = self.has_lines(&[tree]);
-        let held = self.hold_method(what, HeldCode::Tree(tree), lines);
+        let super_calls = self.super_calls(&[tree], lines);
+        let held = self.hold_method(what, HeldCode::Tree(tree), super_calls);
         self.enter_plan(held);
     }
 
@@ -960,6 +1000,24 @@ impl<'a> Gen<'a> {
             self.refuse_written("internal error: a lifted body queued after the class's last round", None);
             return false;
         }
+        let mut recorded: Vec<(String, SuperPlace)> = Vec::new();
+        let mut held = self.held_methods.iter();
+        for entry in &self.entries {
+            let Entry::Held = entry else { continue };
+            let h = held.next().expect("a held method for each method entry");
+            for (t, at) in &h.super_calls.calls {
+                let key = super_call_key(h.super_calls.lifted, h.super_calls.ctor_code, h.super_calls.lines, *at);
+                match recorded.iter_mut().find(|(name, _)| name == t.as_ref()) {
+                    Some((_, first)) => *first = (*first).min(key),
+                    None => recorded.push((t.to_string(), key)),
+                }
+            }
+        }
+        let mut interfaces: Option<Vec<String>> = self.entries.iter().find_map(|e| match e {
+            Entry::Interfaces(step) => Some(step),
+            _ => None,
+        }).and_then(|step| self.interfaces_of(step, recorded));
+
         self.plan_phase(false);
         let mut whole = true;
         let mut held = std::mem::take(&mut self.held_methods).into_iter();
@@ -975,7 +1033,11 @@ impl<'a> Gen<'a> {
                 }
                 Entry::Abstract(m, desc) => self.cw.method(method_access(m.flags()), m.name(), &desc, None),
                 Entry::Held => whole = self.write_held(held.next().expect("a held method for each method entry")),
-                Entry::Interfaces(step) => self.write_interfaces(step),
+                Entry::Interfaces(_) => {
+                    if let Some(list) = interfaces.take() {
+                        self.cw.set_interfaces(&list);
+                    }
+                }
             }
             if !whole {
                 break;
@@ -987,13 +1049,7 @@ impl<'a> Gen<'a> {
 
     /// The class's maker as it stood where a method was held, set for its write; the maker's own given back.
     fn enter_held_under(&mut self, under: HeldUnder) -> HeldUnder {
-        let HeldUnder { context, ctor_code, lifted_body, lines } = under;
-        HeldUnder {
-            context: std::mem::replace(&mut self.context, context),
-            ctor_code: std::mem::replace(&mut self.ctor_code, ctor_code),
-            lifted_body: std::mem::replace(&mut self.lifted_body, lifted_body),
-            lines: std::mem::replace(&mut self.entry_lines, lines),
-        }
+        HeldUnder { context: std::mem::replace(&mut self.context, under.context) }
     }
 
     /// The class's plan is made (`planning`) or written: in checks builds the pool takes nothing while the plan is made
@@ -1895,7 +1951,7 @@ impl<'a> Gen<'a> {
         // `directlyInheritedTraits`, the traits before the superclass), those no other of them
         // brings, as `BCodeSkelBuilder.initJClass` lists them. The ones it leaves out, the traits
         // another brings or the superclass does, are no interfaces of the class unless one of its
-        // super calls names them: those join the list at the class's end (`super_targets`). A
+        // super calls names them: those join the list at the class's end (the class's interface step). A
         // library class the std's stands for (`link_library_class`) goes by the same name.
         let before_super = info.base_types.iter().position(|&(b, _)| Some(b) == enum_class.or(superclass)).unwrap_or(info.base_types.len());
         let mut traits: Vec<(ClassId, bool)> = Vec::new();
@@ -1950,8 +2006,6 @@ impl<'a> Gen<'a> {
         let flags = self.class_flags(c);
         let path = &cx.input.sources[info.file.0 as usize].path;
         self.begin_class(&name, flags, &super_name, &interfaces[..declared], &interfaces[declared..], Some(path.rsplit(std::path::is_separator).next().unwrap_or(path)), Some((info.file, info.span)));
-        self.super_targets.clear();
-        self.lifted_body = None;
         self.ctor_code = false;
 
         self.this_name = name.clone();
@@ -2239,17 +2293,39 @@ impl<'a> Gen<'a> {
         self.entries.push(Entry::Interfaces(step));
         self.finish_class(&name)
     }
+}
 
-    /// The class file's interfaces, the last step of its writing: the targets of the super calls its code wrote
-    /// (`Gen::super_call_place`) are interfaces of it (`initJClass`): a direct trait another brings keeps its place among
+/// The key of a held super call, by which a class's targets are ordered: the
+/// order in which scalac's back end writes a class's bodies and so fills `superCallTargets`.
+/// First the members made for the class, a trait's super accessor among them
+/// (`ResolveSuper.transformTemplate` and `Mixin.transformTemplate` put them before the
+/// class's own), in the order written; then the primary constructor's code
+/// (`BCodeSkelBuilder.gen`: the constructor, then the body), the field initialisers and the
+/// body's statements; then the other members by their place in the source; last the
+/// lifted bodies, which `LambdaLift.transformTemplate` appends to the class, an inner one
+/// before the one around it: by the end of the body, the later start first. A body with no
+/// line of its own (a forwarder, a super accessor) stands with the members made for the
+/// class; inside any other body the calls stand by the call's end in the class's file
+/// (none last), which orders them as their lines do: a call in another's argument ends,
+/// and is written, first.
+fn super_call_key(lifted: Option<(u32, u32)>, ctor_code: bool, lines: bool, at: u32) -> SuperPlace {
+    match lifted {
+        Some((end, start)) => (3, end, u32::MAX - start, at),
+        None if !lines => (0, 0, 0, 0),
+        None => (if ctor_code { 1 } else { 2 }, at, 0, 0),
+    }
+}
+
+impl<'a> Gen<'a> {
+    /// The class file's interfaces, the last step of its writing: the targets of the super calls its held trees hold
+    /// (`Gen::super_calls`), ordered by their key (`super_call_key`), are interfaces of it (`initJClass`): a direct trait another brings keeps its place among
     /// the direct ones, any other target comes after the parents' list, in the order scalac's back end writes the
     /// class's bodies and so fills its set, a super accessor's Java target at its accessor's place. A call copied into a
     /// class that is no instance of the interface (a value class's method in its companion) names no interface of the
     /// class.
-    fn write_interfaces(&mut self, step: InterfaceStep) {
-        let mut recorded = std::mem::take(&mut self.super_targets);
+    fn interfaces_of(&self, step: &InterfaceStep, mut recorded: Vec<(String, SuperPlace)>) -> Option<Vec<String>> {
         if recorded.is_empty() {
-            return;
+            return None;
         }
         for (target, place) in recorded.iter_mut() {
             if place.0 == 0 {
@@ -2267,8 +2343,8 @@ impl<'a> Gen<'a> {
                 list.push(t);
             }
         }
-        list.extend(step.listed);
-        self.cw.set_interfaces(&list);
+        list.extend(step.listed.iter().cloned());
+        Some(list)
     }
 
     /// The `<clinit>` of an enum's class: its lazy members' handles, then the values, made
@@ -2917,10 +2993,9 @@ impl<'a> Gen<'a> {
         for s in self.held_roots(&code) {
             self.ask_lifted(s);
         }
-        let lines = {
-            let roots = self.held_roots(&code);
-            self.has_lines(&roots)
-        };
+        let roots = self.held_roots(&code);
+        let lines = self.has_lines(&roots);
+        let super_calls = self.super_calls(&roots, lines);
         if !init {
             // The `<clinit>` declares them where it meets them (`Gen::write_module_part`): a statement's before it, the
             // rest after the last.
@@ -2933,7 +3008,7 @@ impl<'a> Gen<'a> {
         let (lir, declared) = (std::mem::replace(&mut self.lir, class_lir), std::mem::take(&mut self.lower_declared));
         self.module_tree = Some(ModuleTree { lir, declared, root, fields });
         let what = if init { "object's constructor" } else { "object's static initialiser" };
-        let held = self.hold_method(what, code, lines);
+        let held = self.hold_method(what, code, super_calls);
         self.enter_plan(held);
     }
 

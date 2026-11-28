@@ -613,7 +613,7 @@ impl MethodCx {
 }
 
 /// Where a class first names a super call's target: the kind of body, then the place in it
-/// (`Gen::super_call_place`); the class's list takes its targets in this order.
+/// (`super_call_key`); the class's list takes its targets in this order.
 pub type SuperPlace = (u8, u32, u32, u32);
 
 pub struct Gen<'a> {
@@ -666,22 +666,8 @@ pub struct Gen<'a> {
     pub(super) walking: bool,
     /// The class's lifted methods by their unit's names and places, beside `plan` (`lifted::LiftedTable`).
     pub(super) lifted_table: super::lifted::LiftedTable,
-    /// The interfaces the class being written names in an `invokespecial`, each with the place
-    /// of its first call (`super_call_place`): the JVM wants each among the class's direct
-    /// superinterfaces, so the class's list takes them (dotty's `superCallTargets`). It is the
-    /// writer's: emptied where a class's writer is made, read at the class's end.
-    pub super_targets: Vec<(String, SuperPlace)>,
-    /// The end of the super call being written in the source, where its text is the class's
-    /// file's: an `invokespecial` is written after its call's arguments.
-    pub super_call_at: Option<u32>,
-    /// The end and the start of the lifted body being written (a lambda, a by-name argument, a
-    /// local def), none in a member's own code.
-    pub lifted_body: Option<(u32, u32)>,
-    /// Set while the primary constructor is written.
+    /// Set while the primary constructor is held.
     pub ctor_code: bool,
-    /// Whether the held method being written has a line of its own: its code starts at a line, or a node of it stands
-    /// in the class's file (`Gen::super_call_place`).
-    pub entry_lines: bool,
     pub this_name: Rc<str>,
     pub this_class: Option<ClassId>,
     pub is_interface: bool,
@@ -824,11 +810,7 @@ impl<'a> Gen<'a> {
             held_methods: Vec::new(),
             walking: false,
             lifted_table: Default::default(),
-            super_targets: Vec::new(),
-            super_call_at: None,
-            lifted_body: None,
             ctor_code: false,
-            entry_lines: false,
             this_name: Rc::from(""),
             this_class: None,
             is_interface: false,
@@ -3107,28 +3089,6 @@ impl<'a> Gen<'a> {
 
     /// Whether `c` is a Java-defined interface: one read from a class file, or one the std
     /// declares in a `java` package for the JDK's (`Cx::java_defined` of its members).
-    /// The place of the super call being written, by which a class's targets are ordered: the
-    /// order in which scalac's back end writes a class's bodies and so fills `superCallTargets`.
-    /// First the members made for the class, a trait's super accessor among them
-    /// (`ResolveSuper.transformTemplate` and `Mixin.transformTemplate` put them before the
-    /// class's own), in the order written; then the primary constructor's code
-    /// (`BCodeSkelBuilder.gen`: the constructor, then the body), the field initialisers and the
-    /// body's statements; then the other members by their place in the source; last the
-    /// lifted bodies, which `LambdaLift.transformTemplate` appends to the class, an inner one
-    /// before the one around it: by the end of the body, the later start first. A body with no
-    /// line of its own (a forwarder, a super accessor) stands with the members made for the
-    /// class; inside any other body the calls stand by the call's end in the class's file
-    /// (none last), which orders them as their lines do: a call in another's argument ends,
-    /// and is written, first.
-    fn super_call_place(&self) -> SuperPlace {
-        let at = self.super_call_at.unwrap_or(u32::MAX);
-        match self.lifted_body {
-            Some((end, start)) => (3, end, u32::MAX - start, at),
-            None if !self.entry_lines => (0, 0, 0, 0),
-            None => (if self.ctor_code { 1 } else { 2 }, at, 0, 0),
-        }
-    }
-
     pub(super) fn java_interface(&self, c: ClassId) -> bool {
         let cx = self.cx;
         let syms = cx.input.syms;
@@ -3159,17 +3119,6 @@ impl<'a> Gen<'a> {
     }
 
     pub fn invoke_desc(&mut self, kind: Invoke, owner: &str, owner_is_interface: bool, name: &str, desc: &str, n_params: usize, ret: &ErasedType) {
-        // An `invokespecial` of an interface's method links only where the interface is a direct
-        // superinterface of the class: every one written is recorded for the class's list
-        // (`BCodeBodyBuilder.genCallMethod` adds to `superCallTargets`). A trait's call of its
-        // own method names the trait itself, which is no interface of its own.
-        if owner_is_interface && matches!(kind, Invoke::Special) && owner != &*self.this_name {
-            let place = self.super_call_place();
-            match self.super_targets.iter_mut().find(|(t, _)| t == owner) {
-                Some((_, first)) => *first = (*first).min(place),
-                None => self.super_targets.push((owner.to_string(), place)),
-            }
-        }
         let index = if owner_is_interface {
             self.cw.cp.interface_method(owner, name, desc)
         } else {
