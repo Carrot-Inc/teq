@@ -300,6 +300,7 @@ cases/cast_unboxing_checked	pass	-
 cases/cast_unit_trait	pass	-	
 cases/cast_value_class	pass	-	
 cases/catch_all_reachability	pass	-	
+cases/catch_return	pass	-	
 cases/chain_receiver_extension	pass	-	
 cases/char_digits_numeric_values	pass	-	
 cases/char_literal_narrowing	pass	-	
@@ -752,6 +753,7 @@ cases/enum_value_receiver_effects	pass	-
 cases/enum_value_singleton_test	pass	-	
 cases/enumvalues	pass	-	
 cases/equality_default	pass	-	
+cases/equality_helper_initialization	pass	-	
 cases/equality_selection	pass	-	
 cases/equality_selection_alternatives	pass	-	
 cases/equals_trait	pass	-	
@@ -3431,6 +3433,7 @@ cases/unapply_selection_synthetic	pass	-
 cases/unapply_seq_direct	pass	-	
 cases/unapply_seq_product	pass	-	
 cases/unchecked_variance_local	pass	-	
+cases/underlying_line	pass	-	
 cases/union_erasure_bases	cannot run	-	no leg builds
 cases/union_join_lower_bound	pass	-	
 cases/union_joins	pass	-	
@@ -3550,6 +3553,7 @@ cases/views	pass	-
 cases/wait_extension_fallback	pass	-	
 cases/wait_extension_type_arguments	pass	-	
 cases/wait_notify_eta	pass	-	
+cases/wide_branch	pass	-	
 cases/widened_double_text	pass	-	
 cases/wildcard_bound_case_pattern	pass	-	
 cases/wildcard_bound_dependent_accepts	pass	-	

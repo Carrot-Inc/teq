@@ -30,6 +30,7 @@ callsyntax	missing '28:12: error: type mismatch: found (Int, Int, Int), required
 cases_end_match_after_catch_branch	exit code 0
 collection_seq_not_immutable.check	< tests/errors/collection_seq_not_immutable.scala:5:85: error: Found: (xs : scala.collection.Seq[Int])
 companion_apply_plain_class	missing '5:11: error: dummy term capture parameter method apply cannot be used as a value'
+concat_recipe_template	exit code 0: the template builds and prints 65536
 constant_cycle	missing '2:58: error: Cyclic reference involving val a'
 constructor_access_default_getter_beside_inline_val	a later phase's record is presented beside an earlier group's error; queued: the part "the phase gate" (rules' R-ISRUNNABLE)
 constructor_proxy_prefix	missing '8:26: error: Outer is not a valid class prefix, since it is not an immutable path'

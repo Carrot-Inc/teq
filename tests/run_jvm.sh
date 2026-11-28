@@ -26,6 +26,9 @@
 # A `// jars: <names>` line puts those jars on the class path (tests/support/jars.sh); a test with
 # one of them missing from the coursier cache is not run: no pass, `cannot run` on the board, and a line
 # naming it that the gate fails.
+# The concat recipe at the JVM string limit also builds from its errors fixture and runs with verification.
+# The underlying-value selection keeps its operand's line in the method's LineNumberTable (underlying_line/list.sh).
+# The wide branch in Wide.f skips its then arm with a wide jump (wide_branch/list.sh).
 # Several tests run at once (JOBS, by default the number of cores).
 # `--java-output-version=N` writes the class files for that Java release in the place of the
 # default, against the same list.
@@ -346,6 +349,23 @@ library_value_names() {
     fi
   done
 }
+concat_recipe_template() {
+  local src=tests/errors/concat_recipe_template.scala jar=$out/concat_recipe_template.jar
+  local lib=$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar
+  if ! timeout 60 "$TEQ" compiler build "$src" --target jvm --all-mains --classpath "$lib" -o "$jar"; then
+    echo "concat recipe: the template failed to build"
+    return 1
+  fi
+  timeout 30 java -Xverify:all -cp "$jar:$lib" Recipe > "$out/concat_recipe_template.actual" || return 1
+  diff -u <(echo 65536) "$out/concat_recipe_template.actual"
+}
+case_listing() {
+  local name=$1
+  local fixture=tests/support/$name
+  command -v javap > /dev/null || { aux_not_run "$name" "no javap"; return 0; }
+  bash "$fixture/list.sh" "$out/$name.jar" > "$out/$name.list" || return 1
+  diff -u "$fixture/$name.expected" "$out/$name.list"
+}
 final_select() {
   command -v javap > /dev/null || { aux_not_run final_select "no javap"; return 0; }
   local work=$out/final_select
@@ -428,6 +448,9 @@ elif [ -z "$VERSION" ]; then
   jar_companion_touch || status=1
   library_value_reads || status=1
   library_value_names || status=1
+  case_listing underlying_line || status=1
+  case_listing wide_branch || status=1
+  concat_recipe_template || status=1
   final_select || status=1
   byname_ctor || status=1
   synchronized_shape || status=1

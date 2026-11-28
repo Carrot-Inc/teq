@@ -1,0 +1,2 @@
+jvm backend: explicit_receiver_before_late_method$package$.late: the instruction bad_late of bad_late
+1 construct not supported by the JVM backend

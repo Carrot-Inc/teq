@@ -1,0 +1,2 @@
+jvm backend: default_receiver_before_late_method$package$.run: the operand stack model underflowed while writing run()V at line 6
+1 construct not supported by the JVM backend

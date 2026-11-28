@@ -130,6 +130,18 @@ def cells():
                     yield (f'{pname}_{pos}_{tname}', pname, pos, tname, branch, pdef.replace('{T}', T), vars_, reads, T, vals, tps)
 
 
+# Stored JVM types and first slots in store order (inner then outer, or b, a, d, c).
+# The middle column reserves the outer slot before its RHS, with scope-end reuse.
+SLOT_ROWS = {                 # types   teq           reserve first    scalac
+    'slot_int':       ('ii', (1, 1),       (2, 1),       (2, 1)),
+    'slot_reference': ('aa', (1, 1),       (2, 1),       (2, 1)),
+    'slot_long':      ('ll', (1, 1),       (3, 1),       (3, 1)),
+    'slot_double':    ('dd', (1, 1),       (3, 1),       (3, 1)),
+    'slot_unit':      ('ia', (1, 1),       (2, 1),       (2, 1)),
+    'slot_siblings':  ('iiii', (1, 1, 2, 2), (2, 1, 3, 2), (2, 1, 4, 3)),
+}
+
+
 def gen(d):
     os.makedirs(d, exist_ok=True)
     lines = ['final class V(val u: Int) extends AnyVal { override def toString = s"V($u)" }',
@@ -168,6 +180,11 @@ def gen(d):
         call_args = args(reads, vals)
         calls.append(f'    S.log.setLength(0); c_{cid}({call_args}); println("{cid}" + S.log)')
         listing.append(f'{cid} {pname} {pos} {tname} {branch}')
+    shutil.copyfile(os.path.join(os.path.dirname(__file__), 'patdef_local_slots.scala'),
+                    os.path.join(d, 'patdef_local_slots.scala'))
+    for cid in SLOT_ROWS:
+        calls.append(f'    S.log.setLength(0); S.out(LocalSlots.c_{cid}()); println("{cid}" + S.log)')
+        listing.append(f'{cid} locals tail {cid[5:]} Slots')
     lines.append('object PatDef {')
     lines += body
     lines.append('  def main(args: Array[String]): Unit = {')
@@ -509,6 +526,26 @@ def read_status(path):
     return int(m.group(1)) if m else None
 
 
+def check_slots(cid, side, code, types, slots):
+    actual = []
+    for _, op, arg in code:
+        m = STORE.fullmatch(op) or LOAD.fullmatch(op)
+        if m:
+            slot = int(m[2] or arg)
+            if slot != 0:  # slot zero is the receiver
+                actual.append((op.split('_')[0], slot))
+    if len(slots) == 2:
+        y, x = range(2)
+        order = [('store', y), ('load', y), ('load', y), ('store', x), ('load', x), ('load', x)]
+    else:
+        b, a, d, c = range(4)
+        order = [('store', b), ('load', b), ('load', b), ('store', a),
+                 ('store', d), ('load', d), ('load', d), ('store', c), ('load', a), ('load', c)]
+    expected = [(types[i] + op, slots[i]) for op, i in order]
+    if actual != expected:
+        return f'{cid} {side} local accesses: {actual}, expected {expected}'
+
+
 def judge(d):
     cells_ = [l.split() for l in open(os.path.join(d, 'cells.txt')) if l.strip()]
     o = os.path.join(d, 'out')
@@ -540,6 +577,14 @@ def judge(d):
             wrong.append(f'{cid}: listed twice')
             continue
         seen.add(cid)
+        if branch == 'Slots':
+            types, today, reserve_first, scalac = SLOT_ROWS[cid]
+            key = ('LocalSlots$', f'c_{cid}()')
+            for side, raw, slots in [('teq', traw, today), ('scalac', sraw, scalac)]:
+                difference = check_slots(cid, side, raw.get(key, []), types, slots)
+                if difference:
+                    wrong.append(difference)
+            lines.append(f'local slots {cid}: teq {today}, reserve first {reserve_first}, scalac {scalac}')
         sc, tc = of_cell(sm, cid, si, sb), of_cell(tm, cid, ti, tb)
         if not sc or not tc:
             wrong.append(f'{cid}: no code on the {"scalac" if not sc else "teq"} side')

@@ -1,0 +1,3 @@
+jvm backend: Probe$.f: the instruction bad_a of bad_a
+jvm backend: Probe$.f: the instruction bad_z of bad_z
+2 constructs not supported by the JVM backend

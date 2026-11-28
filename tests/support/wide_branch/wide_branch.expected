@@ -1,0 +1,2 @@
+1: ifne 9
+4: goto_w forward >32767

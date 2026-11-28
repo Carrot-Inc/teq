@@ -302,6 +302,7 @@ cast_unboxing_checked	pass	-
 cast_unit_trait	pass	-	
 cast_value_class	pass	-	
 catch_all_reachability	pass	-	
+catch_return	pass	-	
 cats_dispatch_rebuild	pass	-	
 chain_receiver_extension	pass	-	
 char_digits_numeric_values	pass	-	
@@ -760,6 +761,7 @@ enum_value_receiver_effects	fail	-	< lz
 enum_value_singleton_test	pass	-	
 enumvalues	pass	-	
 equality_default	pass	-	
+equality_helper_initialization	pass	-	
 equality_selection	pass	-	
 equality_selection_alternatives	pass	-	
 equals_trait	pass	-	
@@ -3502,6 +3504,7 @@ unapply_selection_synthetic	pass	-
 unapply_seq_direct	pass	-	
 unapply_seq_product	pass	-	
 unchecked_variance_local	pass	-	
+underlying_line	pass	-	
 union_erasure_bases	cannot run	-	the JVM's platform
 union_join_lower_bound	pass	-	
 union_joins	pass	-	
@@ -3626,6 +3629,7 @@ views	pass	-
 wait_extension_fallback	pass	-	
 wait_extension_type_arguments	pass	-	
 wait_notify_eta	pass	-	
+wide_branch	pass	-	
 widened_double_text	pass	-	
 wildcard_bound_case_pattern	pass	-	
 wildcard_bound_dependent_accepts	pass	-	

@@ -155,6 +155,9 @@ companion_apply_private_alias	pass	-
 companion_default_later_clause	pass	-	
 companion_proxy_access	pass	-	
 companion_proxy_prefix	pass	-	
+concat_recipe_literal	pass	-	
+concat_recipe_literal.check	pass	-	
+concat_recipe_template	fail	-	exit code 0
 condition_bracket_line_then_statement	pass	-	
 conflicting_bases	pass	-	
 conformance_extras	pass	-	
@@ -193,6 +196,8 @@ declared_signature_override	pass	-
 default_getter_companion_scope	pass	-	
 default_getter_prototypes	pass	-	
 default_getter_recursive	pass	-	
+default_receiver_before_late_method	pass	-	
+default_receiver_before_late_method.check	pass	-	
 deferred_inline_receiver	pass	-	
 dependent_constant_argument	pass	-	
 dependent_function_types	pass	-	
@@ -224,6 +229,8 @@ directive_test_scope	pass	-
 directive_unicode_order	fail	-	exit code 0
 directive_wconf_files	fail	-	exit code 0
 directive_werror_files	fail	-	exit code 0
+discard	pass	-	
+discard.check	pass	-	
 duplicates	pass	-	
 dynamic_applied_assignment_operator	pass	-	
 dynamic_eta_underscore	pass	-	
@@ -296,6 +303,8 @@ expanded_function_layout	pass	-
 expanded_function_layout.check	fail	-	< tests/errors/expanded_function_layout.scala:1:10: error: Missing parameter type
 expect_continuation_lines	pass	-	
 expected_last_list_union	pass	-	
+explicit_receiver_before_late_method	pass	-	
+explicit_receiver_before_late_method.check	pass	-	
 export_case_apply_omitted_default	fail	-	missing '14:18: error: missing argument for parameter x of method apply in object Z: (x: Int, y: Int): Pt'
 export_conflicts	pass	-	
 export_erroneous_path	pass	-	
@@ -439,6 +448,10 @@ givens_name_shadowing	pass	-
 givens_nested_ambiguity	pass	-	
 givens_nested_ambiguity_warm	pass	-	
 hard_union_inferred	pass	-	
+held-never	pass	-	
+held-never.check	pass	-	
+held-written	pass	-	
+held-written.check	pass	-	
 hidden_owner_private_nested_jvm	pass	-	
 hidden_owner_unwritable_jvm	pass	-	
 higher_kinded_display	pass	-	
@@ -960,10 +973,22 @@ refinement_overload_not_narrowed	pass	-
 refinement_structural_refusals	pass	-	
 refinement_target_name	pass	-	
 refinement_variance	pass	-	
+refused_calls_in_finally	pass	-	
+refused_calls_in_finally.check	pass	-	
+refused_calls_in_module_initializer	pass	-	
+refused_calls_in_module_initializer.check	pass	-	
+refused_calls_in_reverse_order	pass	-	
+refused_calls_in_reverse_order.check	pass	-	
+refused_calls_in_source_order	pass	-	
+refused_calls_in_source_order.check	pass	-	
+refused_calls_in_wide_branch	pass	-	
+refused_calls_in_wide_branch.check	pass	-	
 refutable_extractor_binding	pass	-	
 refutable_patterns	pass	-	
 return_block_then_arguments	pass	-	
 return_stmt	pass	-	
+right-assoc	pass	-	
+right-assoc.check	pass	-	
 right_assoc_ext	fail	-	missing '14:15: error: value *: is not a member of Int.'
 right_assoc_extension_calls	pass	-	
 right_assoc_extension_prefix	pass	-	
