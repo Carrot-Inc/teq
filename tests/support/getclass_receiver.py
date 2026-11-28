@@ -2,6 +2,7 @@
 import csv
 import json
 import re
+import subprocess
 import sys
 import tempfile
 from collections import Counter
@@ -15,7 +16,7 @@ SUPERS = dict(Number="java.lang.Number", Comparable="java.lang.Comparable[?]",
 FENCES = dict(value_class="Value", value_class_generic="Value", value_class_boxed="Value",
               string="String", array="Array", module="Module", case_class="Case")
 LEGS = ("jvm", "jvm-split", "js", "interp")
-VERDICTS = ("as scalac", "refuses", "throws", "wrong value", "timeout", "not valid")
+VERDICTS = ("as scalac", "held", "refuses", "throws", "wrong value", "timeout", "not valid")
 
 
 class Cell(NamedTuple):
@@ -26,6 +27,33 @@ class Cell(NamedTuple):
     call: str
     split: str
     js_repr: str
+
+    def legs(self):
+        if self.call == "watch":
+            return ("jvm", "js")
+        legs = LEGS[:2] if self.call == "reflection" else LEGS
+        return tuple(leg for leg in legs if leg != "jvm-split" or self.split == "yes")
+
+    def held_row(self, leg):
+        if self.primitive == "Unit" and self.place == "result" and self.kind in ("signature_AnyVal", "signature_Matchable"):
+            return "unit-intersection-result-descriptor"
+        if self.primitive == "Unit" and self.kind in ("alias", "matchable"):
+            return "unit-alias-representation"
+        if self.kind == "binder_Serializable" and leg == "js" and self.primitive == "Unit":
+            return "js-representation"
+        if self.kind == "array" and leg in ("js", "interp"):
+            return "js-representation"
+        if self.kind == "array_tag" and leg == "js":
+            return "js-representation"
+        return ""
+
+    def held_legs(self):
+        marks = []
+        for leg in self.legs():
+            row = self.held_row(leg)
+            if row:
+                marks.append(f"{leg}={row}")
+        return " ".join(marks)
 
 
 def kinds(p):
@@ -58,9 +86,49 @@ def cells():
                     yield Cell(f"gc_{p}_{kind}_{place}_{call}", kind, p, place, call,
                                "yes" if split else "no", "yes" if js else "no")
 
+    for p, parent in (("Unit", "AnyVal"), ("Int", "AnyVal"), ("Unit", "Matchable")):
+        for place in ("parameter", "result"):
+            yield Cell(f"gc_{p}_{parent}_signature_{place}", f"signature_{parent}", p,
+                       place, "reflection", "yes", "no")
+
+    for route in ("typing", "substitution", "stored", "macro", "imported", "resident", "bounds", "array_tag"):
+        yield Cell(f"gc_route_{route}", route, "Array" if route == "array_tag" else "Int", "route",
+                   "watch" if route == "resident" else "direct", "yes" if route == "imported" else "no", "no")
+
+
+def route_source(route):
+    lib = ""
+    if route == "typing":
+        lib = "object Lib { def cls(x: Int): Class[?] = x.getClass }"
+    elif route == "substitution":
+        lib = "object Lib { inline def cls(inline x: Any): Class[?] = x.getClass }"
+    elif route in ("stored", "imported"):
+        lib = "object Lib { inline def cls[T](x: T): Class[?] = x.getClass }"
+    elif route == "macro":
+        lib = """import scala.quoted.*
+object Lib:
+  inline def cls[T](inline x: T): Class[?] = ${ impl[T]('x) }
+  def impl[T: Type](x: Expr[T])(using Quotes): Expr[Class[?]] = '{ $x.getClass }
+"""
+    elif route == "resident":
+        lib = "object Lib { def cls(x: Int): Class[?] = x.getClass }"
+    elif route == "bounds":
+        bounds = ["T0 <: Int", *(f"T{i} <: T{i-1}" for i in range(1, 33))]
+        lib = f"object Lib {{ def cls[{', '.join(bounds)}](x: T32): Class[?] = x.getClass }}"
+    result = "Lib.cls(1)"
+    if route == "bounds":
+        result = f"Lib.cls[{', '.join(['Int'] * 33)}](1)"
+    elif route == "array_tag":
+        result = "summon[scala.reflect.ClassTag[Array[Unit] & Array[Any]]].runtimeClass"
+    caller = f"object Main {{ def main(args: Array[String]): Unit = println({result}) }}\n"
+    return lib, caller
+
+
 
 def source(cell):
     _, kind, p, place, call, split, _ = cell
+    if place == "route":
+        return route_source(kind)
     value = VALUES.get(p)
 
     def name(r):
@@ -98,6 +166,22 @@ def source(cell):
     elif kind == "singleton":
         prefix += "val s: p.type = p\n"
         result = name("s")
+    elif kind.startswith("signature_"):
+        ty = f"{p} & {kind.removeprefix('signature_')}"
+        if place == "parameter":
+            method, read = f"def f(x: {ty}): Unit = ()", "getParameterTypes()(0)"
+        else:
+            method, read = f"def f(): {ty} = {value}", "getReturnType"
+        caller = f'''@main def Main(): Unit = try {{
+  val methods = Class.forName("{cell.name}.M$").getDeclaredMethods
+  var i = 0
+  while methods(i).getName != "f" do i += 1
+  System.out.println(methods(i).{read}.getName)
+}} catch {{
+  case ex: Throwable => System.err.println(ex.toString); System.out.println("throw")
+}}
+'''
+        return f"object M {{ {method} }}", caller
     elif kind.startswith("opaque_"):
         inside = kind == "opaque_inside"
         method = f"\n  def read(o: O): String = {name('o')}" if inside else ""
@@ -157,6 +241,10 @@ def write_tsv(path, header, rows):
         writer.writerows(rows)
 
 
+def write_manifest(d, manifest):
+    write_tsv(d / "cells.tsv", (*Cell._fields, "held"), ((*c, c.held_legs()) for c in manifest))
+
+
 def gen(d):
     manifest = list(cells())
     for cell in manifest:
@@ -164,13 +252,47 @@ def gen(d):
         folder.mkdir(parents=True, exist_ok=True)
         package = f"package {cell.name}\n\n"
         upstream, main = source(cell)
+        if cell.kind in ("macro", "resident"):
+            (folder / "Lib.scala").write_text(package + upstream + "\n")
+            upstream = ""
         (folder / "Main.scala").write_text(package + (upstream + "\n\n" if upstream else "") + main)
         if cell.split == "yes":
             (folder / "split").mkdir(exist_ok=True)
             (folder / "split/Lib.scala").write_text(package + upstream + "\n")
             (folder / "split/Main.scala").write_text(package + main)
-    write_tsv(d / "cells.tsv", Cell._fields, manifest)
+    write_manifest(d, manifest)
     print(f"getclass-receiver: {len(manifest)} cells")
+
+def watch(folder, binary, output, flags):
+    src = output.parent / "src"
+    src.mkdir()
+    main = src / "Main.scala"
+    final = (folder / main.name).read_bytes()
+    initial = final.replace(b"Lib.cls(1)", b"Lib.cls(2)")
+    if initial == final:
+        raise ValueError("watch edit is empty")
+    main.write_bytes(initial)
+    (src / "Lib.scala").write_bytes((folder / "Lib.scala").read_bytes())
+    edit = f"text {main} {len(final)}\n".encode() + final + b"build\nquit\n"
+    args = [str(src), *flags, "-o"]
+    result = subprocess.run([binary, "compiler", "watch", *args, str(output)], input=edit,
+                            stdout=subprocess.PIPE, check=True, timeout=120)
+    (output.parent / "responses.jsonl").write_bytes(result.stdout)
+    first, step = map(json.loads, result.stdout.splitlines())
+    if not (first["ok"] and step["ok"] and step["incremental"] and step["retyped"] == [str(main)]):
+        raise ValueError("watch step did not keep Lib.scala")
+    main.write_bytes(final)
+    fresh = output.with_name("fresh" + output.suffix)
+    subprocess.run([binary, "compiler", "build", *args, str(fresh)], check=True, timeout=120)
+
+    def contents(path):
+        if path.is_file():
+            return path.read_bytes()
+        return {p.relative_to(path): p.read_bytes() for p in path.rglob("*") if p.is_file()}
+
+    if not output.exists() or not fresh.exists() or contents(output) != contents(fresh):
+        raise ValueError("watch product differs from fresh build")
+
 
 
 def batch(d, attempt):
@@ -203,10 +325,11 @@ class Observation(NamedTuple):
     detail: str = ""
 
 
-def observe(path, leg):
+def observe(path, leg, cell):
     steps = {"scalac": ("build", "run"), "jvm": ("build", "run"), "jvm-split": ("upstream", "build", "run"),
              "js": ("build", "run"), "interp": ("run",)}
-    for stage in steps[leg]:
+    stages = steps["jvm-split"] if leg == "jvm" and cell.call == "reflection" else steps[leg]
+    for stage in stages:
         try:
             rc = int((path / f"{stage}.exit").read_text())
             out = (path / f"{stage}.out").read_bytes().decode()
@@ -235,6 +358,7 @@ class Row(NamedTuple):
     cell: Cell
     binary: str
     leg: str
+    held: str
     oracle: str
     verdict: str
     scalac: str
@@ -247,6 +371,9 @@ def compare(cell, side, leg, ref, base, actual, invalid=""):
     marked = leg == "js" and cell.js_repr == "yes"
     oracle = "base JS" if marked else "scalac"
     expected = base if marked else ref
+    held = cell.held_row(leg)
+    if held and base.status in ("value", "throws") and base[:2] != ref[:2]:
+        oracle, expected = "base or scalac", base
     detail = actual.detail
     if invalid:
         verdict, detail = "not valid", invalid
@@ -257,28 +384,37 @@ def compare(cell, side, leg, ref, base, actual, invalid=""):
             verdict = actual.status
         else:
             verdict, detail = "not valid", "missing successful base JS output"
-    elif actual.status == expected.status and actual.output == expected.output:
+    elif oracle == "base or scalac" and actual[:2] in (base[:2], ref[:2]):
+        verdict = "held"
+    elif actual[:2] == expected[:2]:
         verdict = "as scalac"
     elif actual.status == "value":
         verdict = "wrong value"
     else:
         verdict = actual.status
-    return Row(cell, side, leg, oracle, verdict, ref.output, expected.output, actual.output, detail)
+    return Row(cell, side, leg, held, oracle, verdict, ref.output, expected.output, actual.output, detail)
 
 
 def collect(d, manifest):
+    problems = {}
     with (d / "cells.tsv").open(newline="") as stream:
         reader = csv.reader(stream, delimiter="\t")
-        if next(reader) != list(Cell._fields):
+        header = next(reader)
+        if header not in (list(Cell._fields), [*Cell._fields, "held"]):
             raise ValueError("invalid cells.tsv header")
-        found = [Cell(*row) for row in reader]
+        found = []
+        for row in reader:
+            held = row.pop() if header[-1] == "held" else None
+            cell = Cell(*row)
+            if held is not None and held != cell.held_legs():
+                problems[cell.name] = "incorrect held row"
+            found.append(cell)
     counts = Counter(c.name for c in found)
     by_name = {c.name: c for c in found}
     expected = {c.name: c for c in manifest}
     sides = (d / "binaries").read_text().splitlines()
     if sides not in (["base"], ["base", "head"]):
         raise ValueError("invalid binaries file")
-    problems = {}
     for name in expected.keys() | by_name.keys():
         if name not in expected:
             problems[name] = "stray cell"
@@ -292,25 +428,23 @@ def collect(d, manifest):
     runs = d / "runs"
     rows = []
     for name, cell in (by_name | expected).items():
-        ref = observe(runs / "scalac" / name, "scalac")
-        for leg in LEGS:
-            if leg == "jvm-split" and cell.split == "no":
-                continue
-            base = observe(runs / "base" / leg / name, leg)
+        ref = observe(runs / "scalac" / name, "scalac", cell)
+        for leg in cell.legs():
+            base = observe(runs / "base" / leg / name, leg, cell)
             for side in sides:
-                actual = base if side == "base" else observe(runs / side / leg / name, leg)
+                actual = base if side == "base" else observe(runs / side / leg / name, leg, cell)
                 rows.append(compare(cell, side, leg, ref, base, actual, problems.get(name, "")))
     for side in ["scalac", *sides]:
         for leg in (["scalac"] if side == "scalac" else LEGS):
             path = runs / side if side == "scalac" else runs / side / leg
             for folder in path.glob("*/"):
                 cell = expected.get(folder.name)
-                if (cell is None and folder.name not in by_name) or (cell and leg == "jvm-split" and cell.split == "no"):
+                if (cell is None and folder.name not in by_name) or (cell and leg != "scalac" and leg not in cell.legs()):
                     stray = cell or Cell(folder.name, "unknown", "unknown", "unknown", "unknown", "no", "no")
                     targets = ("jvm", "js", "interp") if side == "scalac" else (leg,)
                     for target in targets:
                         for binary in sides if side == "scalac" else (side,):
-                            rows.append(Row(stray, binary, target, "scalac", "not valid", "", "", "", "stray run"))
+                            rows.append(Row(stray, binary, target, "", "scalac", "not valid", "", "", "", "stray run"))
     return rows
 
 
@@ -333,6 +467,13 @@ def summarize(rows, sides):
                 counts = Counter(("js repr" if r.oracle == "base JS" else r.leg, r.verdict) for r in group)
                 values = ["/".join(str(counts[col, v]) for v in verdicts) for col in columns]
                 lines.append("\t".join([key, str(len({r.cell.name for r in group})), *values]))
+        held = {}
+        for r in records:
+            if r.verdict == "held":
+                held.setdefault(r.held, []).append(r)
+        for row, group in sorted(held.items()):
+            lines.append(f"{side} held {row}: {len(group)}")
+            lines.extend(f"  {r.leg} {r.cell.name}" for r in group)
     regressions = []
     if "head" in sides:
         right = {(r.cell.name, r.leg) for r in rows if r.binary == "base" and r.verdict == "as scalac"}
@@ -342,9 +483,11 @@ def summarize(rows, sides):
             lines.append(f"{leg}: cells right on the base and not right on the head: {len(lost)}")
             lines.extend(f"  {r.cell.name}: {r.verdict}" for r in lost)
             regressions.extend(lost)
-    bad = sum(r.binary == "base" and r.verdict != "as scalac" for r in rows)
-    lines.append(f"getclass-receiver: {bad} base cell/leg differences")
-    return "\n".join(lines) + "\n", bool(bad or regressions)
+    differences = Counter(r.binary for r in rows if r.verdict not in ("as scalac", "held"))
+    for side in sides:
+        lines.append(f"getclass-receiver: {differences[side]} {side} cell/leg differences outside held rows")
+    failed = differences[sides[-1]] or regressions or any(r.verdict == "not valid" for r in rows)
+    return "\n".join(lines) + "\n", bool(failed)
 
 
 def judge(d):
@@ -352,7 +495,7 @@ def judge(d):
         selftest(Path(scratch))
     rows = collect(d, list(cells()))
     write_tsv(d / "table.tsv", (*Cell._fields, *Row._fields[1:]), (
-        (*r.cell, r.binary, r.leg, r.oracle, r.verdict, *(json.dumps(s) for s in r[5:8]), r.detail) for r in rows))
+        (*r.cell, r.binary, r.leg, r.held, r.oracle, r.verdict, *(json.dumps(s) for s in (r.scalac, r.expected, r.actual)), r.detail) for r in rows))
     summary, failed = summarize(rows, (d / "binaries").read_text().splitlines())
     (d / "summary.txt").write_text(summary)
     print(summary, end="")
@@ -364,8 +507,11 @@ def selftest(d):
     names = ("ok", "wrong", "refusal", "throwing", "no_status", "slow", "missing", "duplicate", "invalid", "repr")
     manifest = [Cell(n, "plain", "Int", "local", "direct", "yes" if n == "ok" else "no",
                      "yes" if n == "repr" else "no") for n in names]
-    write_tsv(d / "cells.tsv", Cell._fields, [c for c in manifest if c.name != "missing"] +
-              [manifest[names.index("duplicate")], manifest[0]._replace(name="stray")])
+    manifest[0] = manifest[0]._replace(kind="alias", primitive="Unit")
+    held_outputs = dict(held_base="base value\n", held_scalac="reference\n", held_neither="third value\n")
+    manifest += [Cell(n, "alias", "Unit", "local", "direct", "no", "no") for n in held_outputs]
+    write_manifest(d, [c for c in manifest if c.name != "missing"] +
+                   [manifest[names.index("duplicate")], manifest[0]._replace(name="stray")])
     (d / "binaries").write_text("base\nhead\n")
 
     def plant(directory, stage, output="", status=0, diagnostic=""):
@@ -378,7 +524,7 @@ def selftest(d):
         else:
             exit_file.write_text(str(status) + "\n")
 
-    for n in names:
+    for n in (*names, *held_outputs):
         ref = d / "runs/scalac" / n
         plant(ref, "build", status=int(n == "invalid"), diagnostic="Error: bad source")
         plant(ref, "run", "reference\n")
@@ -393,6 +539,8 @@ def selftest(d):
                     plant(path, "build", status=int(n == "refusal"), diagnostic="error: refused\nmore")
                 status = {"slow": 124, "no_status": None, "throwing": 1, "refusal": 1}.get(n, 0)
                 out = "different\n" if n == "wrong" or n == "repr" and leg == "js" and side == "base" else "reference\n"
+                if n in held_outputs:
+                    out = "base value\n" if side == "base" else held_outputs[n]
                 if (side, leg) == ("head", "jvm-split"):
                     out = "different\n"
                 plant(path, "run", out, status, "error: refused" if n == "refusal" else "Exception: thrown\ntrace")
@@ -405,6 +553,8 @@ def selftest(d):
                "invalid": "scalac refuses: Error: bad source"}
     for r in rows:
         verdict = want.get(r.cell.name, "wrong value" if (r.binary, r.leg) == ("head", "js") else "as scalac")
+        if r.cell.name in held_outputs:
+            verdict = "wrong value" if (r.cell.name, r.binary) == ("held_neither", "head") else "held"
         if (r.cell.name, r.binary, r.leg) == ("ok", "head", "jvm-split"):
             verdict = "wrong value"
         if r.verdict != verdict:
@@ -413,8 +563,12 @@ def selftest(d):
             raise ValueError(f"selftest diagnostic: {r}")
         if r.cell.name == "wrong" and (r.expected, r.actual) != ("reference\n", "different\n"):
             raise ValueError(f"selftest outputs: {r}")
-    if {r.cell.name for r in rows} != set(want) | {"repr"}:
+    if {r.cell.name for r in rows} != set(want) | {"repr", *held_outputs}:
         raise ValueError("selftest cell inventory")
+    for name in held_outputs:
+        summary, failed = summarize([r for r in rows if r.cell.name == name], ["base", "head"])
+        if failed != (name == "held_neither") or "base held unit-alias-representation: 3" not in summary:
+            raise ValueError(f"selftest held row: {name}")
     summary, failed = summarize(rows, ["base", "head"])
     if not failed:
         raise ValueError("selftest expected a failing table")
@@ -423,7 +577,7 @@ def selftest(d):
         if f"{leg}: cells right on the base and not right on the head: {loss}\n" not in summary:
             raise ValueError(f"selftest fence: {leg}")
     print("getclass-receiver selftest: wrong value, refusal, throw, missing status, timeout, missing, duplicate,"
-          " stray and scalac-refused cells found; base JS fence passed")
+          " stray and scalac-refused cells found; base JS fence passed; held base and scalac values passed, third value failed")
 
 
 if __name__ == "__main__":
@@ -431,6 +585,8 @@ if __name__ == "__main__":
     path = Path(directory).resolve()
     if verb == "gen":
         gen(path)
+    elif verb == "watch":
+        watch(path, sys.argv[3], Path(sys.argv[4]), sys.argv[5:])
     elif verb == "batch":
         batch(path, sys.argv[3])
     elif verb == "selftest":

@@ -3025,6 +3025,33 @@ impl<'a> Worker<'a> {
         self.types.lit(LitVal::Class(class))
     }
 
+    /// ConstFold.scala 43-45 folds on the widened type's class symbol. At erasure
+    /// `clsOf` keeps Unit's own reference (tpd.scala 1410-1414).
+    pub(super) fn fold_get_class(&mut self, recv: TExprId, recv_ty: TypeId) -> Option<(TExprId, TypeId)> {
+        let widened = self.widen_type(recv_ty);
+        let underlying = self.dealias(widened);
+        let symbol = self.class_symbol(underlying)?;
+        let class = if self.is_primitive_class(symbol) {
+            symbol
+        } else if symbol != self.b.unit {
+            return None;
+        } else if widened == self.b.t_unit {
+            self.b.unit
+        } else {
+            let super::site::Erased::Of(c, 0) = self.bound_erasure(widened, 0)? else { return None };
+            if c == self.b.unit { self.class_at(&["scala", "runtime", "BoxedUnit"])? } else { c }
+        };
+        let of = self.prog.add(TExpr::ClassOf(class, 0));
+        let class_ty = self.java_lang_class("Class")?;
+        let ty = self.applied_class(class_ty, &[widened]);
+        let ty = self.class_constant_type(ty);
+        self.mark_removed_made(recv);
+        let l = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
+        let te = self.prog.add(TExpr::Block(l, of));
+        self.end_chain(te, ty);
+        Some((te, ty))
+    }
+
     /// `widenTermRefExpr.normalized`'s constant (`Checking.checkAnnotArgs`, `Annotations.argumentConstant`): a path's
     /// type widened to what it stands for (`widen_path`), normalized, a literal type; an annotated one none
     /// (`normalized` keeps the annotation).
@@ -3982,19 +4009,7 @@ impl<'a> Worker<'a> {
                 Some((te, enum_ty))
             }
             names::GET_CLASS if no_args => {
-                // A receiver whose static type is a primitive has the primitive's class, as scalac
-                // rewrites it (`1.getClass` is `classOf[Int]`, `int` printed); it runs for its effects.
-                // A constant's is its class's (`classOf[Boolean]` for `true`).
-                let class = self.widen_lit(self.canon_head(recv_ty));
-                let primitive = self.is_numeric(class).is_some() || class == self.b.t_boolean || class == self.b.t_unit;
-                if primitive {
-                    // `ConstFold.Apply`'s `getClass` of a primitive value: the class constant (`Constant(qual.tpe.widen)`).
-                    let (of, ty) = self.type_class_of(class, span);
-                    let ty = self.class_constant_type(ty);
-                    self.mark_removed_made(recv);
-                    let l = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
-                    let te = self.prog.add(TExpr::Block(l, of));
-                    self.end_chain(te, ty);
+                if let Some((te, ty)) = self.fold_get_class(recv, recv_ty) {
                     return Some((self.builtin_member(te, name), ty));
                 }
                 let class = self.java_lang_class("Class")?;

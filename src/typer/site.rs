@@ -801,9 +801,9 @@ impl<'a> Worker<'a> {
         if let Some(order) = first(real(self, c1), real(self, c2)) {
             return order;
         }
-        if self.derives_from(c1, c2) {
+        if self.erased_sub(a, b) {
             Less
-        } else if self.derives_from(c2, c1) {
+        } else if self.erased_sub(b, a) {
             Greater
         } else {
             crate::text::utf16_units(&self.class_path(c1)).cmp(crate::text::utf16_units(&self.class_path(c2)))

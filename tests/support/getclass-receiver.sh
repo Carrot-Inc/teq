@@ -22,13 +22,18 @@ S=$HOME/.sbt/boot/scala-3.8.4
 sbts=("$S"/org.scala-sbt/sbt/*/)
 [[ -d ${sbts[0]} && -f $S/lib/scala3-compiler_3-3.8.4.jar ]] || { echo "missing scalac 3.8.4 in sbt boot" >&2; exit 2; }
 lib=$S/lib/scala-library.jar:$S/lib/scala3-library_3-3.8.4.jar
-scalac=(java -cp "$S/lib/*:${sbts[0]}*" dotty.tools.dotc.Main -classpath "$lib" -color:never -d)
+scalac_cp=$S/lib/*:${sbts[0]}*
 
 record() {
   local prefix=$1 seconds=$2 rc=0
   shift 2
   LC_ALL=C timeout -v -k 2 "$seconds" "$@" > "$prefix.out" 2> "$prefix.err" || rc=$?
   echo "$rc" > "$prefix.exit"
+}
+scalac_build() {
+  local prefix=$1 seconds=$2
+  shift 2
+  record "$prefix" "$seconds" java -XX:-UsePerfData -cp "$scalac_cp" dotty.tools.dotc.Main -color:never "$@"
 }
 checked() {
   local prefix=$1
@@ -51,31 +56,58 @@ while (( ${#pending[@]} )); do
   classes=$out/$path/classes
   mkdir -p "$classes"
   printf '%s\n' "${pending[@]}" > "$path/cells"
-  record "$path/build" 300 "${scalac[@]}" "$classes" "${pending[@]/%//Main.scala}"
+  sources=()
+  for cell in "${pending[@]}"; do sources+=("$cell"/*.scala); done
+  scalac_build "$path/build" 300 -classpath "$lib" -d "$classes" "${sources[@]}"
   checked "$path/attribute" 60 python3 -I "$py" batch "$out" "$attempt"
   mapfile -t pending < "$path/remaining"
 done
 
 jvm_cell() {
-  local source=$1 cp=$2
-  record "$r/build" 120 "$bin" compiler build "$source" --target jvm --std=scala-library --classpath "$cp" -o "$r/x.jar"
+  local source=$1 cp=$2 caller=$r/x.jar
+  if [[ $call == reflection ]]; then
+    caller=$r/caller
+    mkdir -p "$caller"
+    scalac_build "$r/build" 120 -classpath "$cp" -d "$caller" "$source"
+  else
+    record "$r/build" 120 "$bin" compiler build "$source" --target jvm --std=scala-library --classpath "$cp" -o "$caller"
+  fi
   if [[ $(< "$r/build.exit") == 0 ]]; then
-    record "$r/run" 60 java -Xverify:all -cp "$r/x.jar:$cp" "$cell.Main"
+    record "$r/run" 60 java -XX:-UsePerfData -Xverify:all -cp "$caller:$cp" "$cell.Main"
   fi
 }
 run_cell() {
   set -eu
-  local cell=$1 ref=$out/runs/scalac/$1 bin side r
+  local cell=$1 call=$2 ref=$out/runs/scalac/$1 bin side r
   cd "$out/$cell"
   if [[ $(< "$ref/build.exit") == 0 ]]; then
-    record "$ref/run" 60 java -Xverify:all -cp "$classes:$lib" "$cell.Main"
+    record "$ref/run" 60 java -XX:-UsePerfData -Xverify:all -cp "$classes:$lib" "$cell.Main"
   fi
+  local source=Main.scala
+  if [[ -f Lib.scala ]]; then source=.; fi
   while read -r side; do
     bin=$base
     if [[ $side == head ]]; then bin=$head; fi
     r=$out/runs/$side/jvm/$cell
     mkdir -p "$r"
-    jvm_cell Main.scala "$sl"
+    if [[ $call == watch ]]; then
+      record "$r/build" 300 python3 -I "$py" watch "$PWD" "$bin" "$r/classes" --target jvm --all-mains --std=scala-library --classpath "$sl"
+      if [[ $(< "$r/build.exit") == 0 ]]; then
+        record "$r/run" 60 java -XX:-UsePerfData -Xverify:all -cp "$r/classes:$sl" "$cell.Main"
+      fi
+      r=$out/runs/$side/js/$cell
+      mkdir -p "$r"
+      record "$r/build" 300 python3 -I "$py" watch "$PWD" "$bin" "$r/watch.js"
+      if [[ $(< "$r/build.exit") == 0 ]]; then record "$r/run" 60 node "$r/watch.js"; fi
+      continue
+    fi
+    if [[ $call == reflection ]]; then
+      record "$r/upstream" 120 "$bin" compiler build split/Lib.scala --target jvm --std=scala-library \
+        --all-mains --classpath "$sl" -o "$r/m.jar"
+      if [[ $(< "$r/upstream.exit") == 0 ]]; then jvm_cell split/Main.scala "$sl:$r/m.jar"; fi
+    else
+      jvm_cell "$source" "$sl"
+    fi
     if [[ -d split ]]; then
       r=$out/runs/$side/jvm-split/$cell
       mkdir -p "$r"
@@ -83,16 +115,17 @@ run_cell() {
         --products "$r/products" --sourceroot split --classpath "$sl"
       if [[ $(< "$r/upstream.exit") == 0 ]]; then jvm_cell split/Main.scala "$sl:$r/products"; fi
     fi
+    if [[ $call == reflection ]]; then continue; fi
     r=$out/runs/$side/js/$cell
     mkdir -p "$r"
-    record "$r/build" 120 "$bin" compiler build Main.scala -o "$r/x.js"
+    record "$r/build" 120 "$bin" compiler build "$source" -o "$r/x.js"
     if [[ $(< "$r/build.exit") == 0 ]]; then record "$r/run" 60 node "$r/x.js"; fi
     r=$out/runs/$side/interp/$cell
     mkdir -p "$r"
-    record "$r/run" 120 "$bin" interp Main.scala
+    record "$r/run" 120 "$bin" interp "$source"
   done < "$out/binaries"
 }
-export out classes lib base head sl
-export -f record jvm_cell run_cell
-printf '%s\n' "${cells[@]}" | xargs -P 8 -n 1 bash -c 'run_cell "$1"' _
+export py out classes lib base head sl scalac_cp
+export -f record scalac_build jvm_cell run_cell
+awk -F '\t' 'NR>1 {print $1, $5}' cells.tsv | xargs -P 8 -n 2 bash -c 'run_cell "$1" "$2"' _
 checked judge 60 python3 -I "$py" judge "$out"

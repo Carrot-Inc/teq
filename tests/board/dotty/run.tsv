@@ -1352,7 +1352,7 @@ t5407.scala	pass	interp:pass
 t5530.scala	pass	interp:pass	
 t5532.scala	pass	interp:pass	
 t5552.scala	pass	interp:pass	
-t5568.scala	fail	interp:fail	output: line 5: the .check has 'class scala.runtime.BoxedUnit', the program printed 'void'
+t5568.scala	pass	interp:fail	
 t5588.scala	fail	interp:fail	t5588.scala:3:15: Not found: Value
 t5590.scala	pass	interp:fail	
 t5604.scala	pass	interp:pass	

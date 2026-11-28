@@ -2118,6 +2118,21 @@ impl<'a> Worker<'a> {
             Ok(tree) => {
                 self.static_this_as_module(tree);
                 self.expand_deferred_inlines(tree, deferred_mark, class_mark, span);
+                // InlineTyper.typedSplice retypes the returned expansion (Inliner.scala 962-967).
+                let mut roots = self.class_roots(&self.prog.classes[class_mark..]);
+                roots.push(tree);
+                for root in roots {
+                    let calls: Vec<_> = self.prog.descendants(root).filter_map(|e| match self.prog.expr(e) {
+                        TExpr::Js(s, args) if self.prog.strings[s.idx()] == "$getClass($0)" => Some((e, self.prog.expr_list(args)[0])),
+                        _ => None,
+                    }).collect();
+                    for (call, recv) in calls {
+                        if let Some((folded, ty)) = self.prog.type_or_aside(recv).and_then(|t| self.fold_get_class(recv, t)) {
+                            self.prog.rewrite(call, self.prog.expr(folded));
+                            self.prog.set_type(call, ty);
+                        }
+                    }
+                }
                 // Read by a JVM build of products alone, for an expansion whose runs made a class.
                 if self.open_world && self.quote.declaring != declaring_mark {
                     self.place_declared(tree, (unit_file, unit_span.start));
@@ -4097,6 +4112,14 @@ impl<'c> Copier<'c> {
             TExpr::ToStr(a, k) => TExpr::ToStr(self.expr(t, a), k),
             TExpr::Js(s, stored_args) => {
                 let args = self.list(t, stored_args);
+                if self.stored.is_some() && t.prog.strings[s.idx()] == "$getClass($0)" {
+                    let recv = t.prog.expr_list(args)[0];
+                    if let Some((folded, ty)) = self.copy_type(t, recv).and_then(|ty| t.fold_get_class(recv, ty)) {
+                        self.set_copy_type(t, folded, ty);
+                        t.prog.copy_span(e, folded);
+                        return folded;
+                    }
+                }
                 match self.stored {
                     Some(_) if t.prog.strings[s.idx()] == "$quote" => TExpr::Js(s, self.stored_quote(t, stored_args, args)),
                     _ => TExpr::Js(s, args),

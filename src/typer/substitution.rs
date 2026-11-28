@@ -1345,6 +1345,14 @@ impl<'a> Worker<'a> {
             }
             TExpr::Js(template, args) => {
                 self.walk_list(w, args);
+                if self.prog.strings[template.idx()] == "$getClass($0)" {
+                    let recv = self.prog.expr_list(args)[0];
+                    if let Some((folded, ty)) = self.fold_get_class(recv, self.walked_type(w, recv)) {
+                        self.set_walked_type(w, folded, ty);
+                        self.prog.copy_span(e, folded);
+                        return folded;
+                    }
+                }
                 self.register_template(template, args);
                 e
             }

@@ -130,9 +130,6 @@ pub(super) enum TemplateRoute {
     /// The typer's text for `x.synchronized(body)`, which it keeps for the JVM: the body under the
     /// monitor of the first argument.
     Synchronized,
-    /// The typer's text for `x.getClass` of a primitive receiver: the receiver evaluated for its
-    /// effects, then the primitive's class, the static `TYPE` of this box class.
-    PrimitiveClass(Rc<str>),
     /// The typer's text `($0 ?? $1)`: the first argument unboxed to the primitive the second is
     /// of, the second where the first is null (`Gen::lower_unbox`).
     Unbox,
@@ -257,13 +254,6 @@ impl<'a> Gen<'a> {
                 let made = self.lir.push(Kind::New { touch: None, ctor, args }, ErasedType::L(exception));
                 self.lir.push(Kind::Throw(made), ErasedType::V)
             }
-            TemplateRoute::PrimitiveClass(boxed) => {
-                let class = ErasedType::L(Rc::from("java/lang/Class"));
-                let dropped = self.lower_expr(args[0], &ErasedType::V);
-                let read = self.lir.push(Kind::StaticField { owner: boxed, name: Rc::from("TYPE") }, class.clone());
-                let stmts = self.lir.list(&[dropped]);
-                self.lir.push(Kind::Block { stmts, result: read }, class)
-            }
             TemplateRoute::Refused(refusal) => self.lower_refused(refusal),
         }
     }
@@ -282,11 +272,7 @@ impl<'a> Gen<'a> {
         Some(match text {
             "$hashCode($0)" if !args.is_empty() => TemplateRoute::ObjectMember(named(Invoke::Virtual, OBJECT, "hashCode", Vec::new(), ErasedType::I)),
             "$equals($0, $1)" if args.len() >= 2 => TemplateRoute::ObjectMember(named(Invoke::Virtual, OBJECT, "equals", vec![object], ErasedType::Z)),
-            "$getClass($0)" if !args.is_empty() => match self.primitive_receiver(args[0]) {
-                None => TemplateRoute::ObjectMember(named(Invoke::Virtual, OBJECT, "getClass", Vec::new(), ErasedType::L(Rc::from("java/lang/Class")))),
-                Some(ErasedType::V) => TemplateRoute::PrimitiveClass(Rc::from("java/lang/Void")),
-                Some(erased) => TemplateRoute::PrimitiveClass(Rc::from(erased.box_class())),
-            },
+            "$getClass($0)" if !args.is_empty() => TemplateRoute::ObjectMember(named(Invoke::Virtual, OBJECT, "getClass", Vec::new(), ErasedType::L(Rc::from("java/lang/Class")))),
             "$productPrefix($0)" if !args.is_empty() => TemplateRoute::Member(named(Invoke::Interface, PRODUCT, "productPrefix", Vec::new(), ErasedType::L(Rc::from(STRING)))),
             "$synchronized($0, $1)" if args.len() >= 2 => TemplateRoute::Synchronized,
             UNBOX if args.len() >= 2 => TemplateRoute::Unbox,
@@ -364,15 +350,6 @@ impl<'a> Gen<'a> {
             Owner::Class(c) => Some(self.class_name(c)),
             _ => None,
         }
-    }
-
-    /// The primitive a receiver of `getClass` is where its static type is one: its class is
-    /// the primitive's, as scalac rewrites it (`1.getClass` prints `int`, `().getClass`
-    /// `void`). A value class's is its box's, which the receiver is boxed into.
-    pub(super) fn primitive_receiver(&mut self, r: TExprId) -> Option<ErasedType> {
-        let t = self.recorded_type(r).filter(|_| self.expr_value_class(r).is_none())?;
-        let erased = self.erase(t);
-        (!matches!(erased, ErasedType::L(_))).then_some(erased)
     }
 
     /// The companion an enum's lookup is made on, the first argument, and its enum.

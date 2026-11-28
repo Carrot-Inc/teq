@@ -369,7 +369,6 @@ t4536.scala	t4536.scala:25:7: applyDynamic is a member of a JS trait, which can 
 t4570.scala	t4570.scala:2:13: not found: Value
 t4859.scala	output: line 8: the .check has 'About to reference O.N.apply()', the program printed nothing
 t4871.scala	output: line 1: the .check has 'class Test$C', the program printed 'null'
-t5568.scala	output: line 5: the .check has 'class scala.runtime.BoxedUnit', the program printed 'void'
 t5588.scala	t5588.scala:3:15: not found: Value
 t5612.scala	t5612.scala:2:25: not found: Value
 t6090.scala	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed

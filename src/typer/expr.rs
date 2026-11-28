@@ -2007,7 +2007,7 @@ impl<'a> Worker<'a> {
         self.is_ref(t, super::check::RefSym::Class(null))
     }
 
-    /// `Type.classSymbol` (`core/Types.scala`) as the lossy-conversion test reads it: a class's; a proxy's supertype's
+    /// `Type.classSymbol` (`core/Types.scala` 629-659) as the lossy-conversion test reads it: a class's; a proxy's supertype's
     /// (a literal's class, a parameter's or an abstract member's bound, a path's widened type); of an intersection the
     /// side that derives from the other; of a union the side beside `Nothing`, else its join's, which is either side's
     /// class only where both have it (none otherwise: a final class like `Float` is no join of another).
@@ -2058,8 +2058,8 @@ impl<'a> Worker<'a> {
             Type::Inter(a, b) => {
                 let (x, y) = (self.class_symbol(a), self.class_symbol(b));
                 match (x, y) {
-                    (Some(l), Some(r)) if self.derives_from(l, r) => Some(l),
-                    (Some(l), Some(r)) if self.derives_from(r, l) => Some(r),
+                    (Some(l), Some(r)) if self.derives_from_with_value_classes(l, r) => Some(l),
+                    (Some(l), Some(r)) if self.derives_from_with_value_classes(r, l) => Some(r),
                     _ => None,
                 }
             }

@@ -4677,6 +4677,12 @@ impl<'a> Worker<'a> {
         self.typer_derives(c, base)
     }
 
+    pub(super) fn derives_from_with_value_classes(&mut self, c: ClassId, base: ClassId) -> bool {
+        self.derives_from(c, base)
+            || (self.is_primitive_class(c) || c == self.b.unit)
+                && (base == self.b.any_val || self.is_scala_class(base, "Matchable") || self.is_scala_class(base, "Any"))
+    }
+
     fn fresh_tparam_subst(&mut self, tparams: &[TParamId]) -> Subst {
         tparams.iter().map(|&tp| (tp, self.fresh_var())).collect()
     }
